@@ -1,10 +1,12 @@
 export const TIPOS = [
-  { key: "tarefa", label: "Tarefa", temStatusPrazo: true, cor: "var(--color-primary)" },
-  { key: "acompanhamento", label: "Acompanhamento", temStatusPrazo: true, cor: "var(--color-teal-light)" },
-  { key: "urgencia", label: "Urgência", temStatusPrazo: true, cor: "var(--color-orange)" },
-  { key: "consulta", label: "Consulta", temStatusPrazo: true, cor: "var(--color-gray)" },
-  { key: "status", label: "Status", temStatusPrazo: false, cor: "var(--color-gray)" },
-  { key: "acontecimento", label: "Acontecimento", temStatusPrazo: false, cor: "var(--color-gray-light)" },
+  { key: "tarefa", label: "Tarefa", plural: "Tarefas", temStatusPrazo: true, cor: "var(--color-primary)" },
+  { key: "acompanhamento", label: "Acompanhamento", plural: "Acompanhamentos", temStatusPrazo: true, cor: "var(--color-teal-light)" },
+  { key: "urgencia", label: "Urgência", plural: "Urgências", temStatusPrazo: true, cor: "var(--color-orange)" },
+  { key: "consulta", label: "Consulta", plural: "Consultas", temStatusPrazo: true, cor: "var(--color-gray)" },
+  // Reunião: tem recorrência e preparos próprios (campo `reuniao`), em vez de prazo/lembrete.
+  { key: "reuniao", label: "Reunião", plural: "Reuniões", temStatusPrazo: false, cor: "#1f4f8f" },
+  { key: "status", label: "Status", plural: "Status", temStatusPrazo: false, cor: "var(--color-gray)" },
+  { key: "acontecimento", label: "Acontecimento", plural: "Acontecimentos", temStatusPrazo: false, cor: "var(--color-gray-light)" },
 ];
 
 export const TIPO_POR_KEY = Object.fromEntries(TIPOS.map((t) => [t.key, t]));

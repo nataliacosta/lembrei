@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
 import AgendaRow from "../components/AgendaRow";
-import { GRUPOS, agruparAgenda, contratosPedindoAtencao, ehMeu } from "../lib/agenda";
+import { GRUPOS, agruparAgenda, contratosPedindoAtencao } from "../lib/agenda";
 import { CONTRATO_STATUS } from "../lib/constants";
 import { descreverVencimento, diaDaSemanaPorExtenso, diasAte, formatarData } from "../lib/datas";
 
@@ -35,8 +35,7 @@ export default function DashboardPage() {
     salvarFiltro(valor);
   }
 
-  const itens = filtro === "meus" ? itensAbertos.filter((i) => ehMeu(i, user.uid)) : itensAbertos;
-  const { grupos, semData } = agruparAgenda(itens);
+  const { grupos, semData } = agruparAgenda(itensAbertos, { uid: user.uid, soMeus: filtro === "meus" });
   const contratosAtencao = contratosPedindoAtencao(contratos);
   const podeEditar = (frenteId) => ["proprietario", "editor"].includes(papelNaFrente(frenteId));
   const totalAgenda = GRUPOS.reduce((soma, g) => soma + grupos[g.key].length, 0);
