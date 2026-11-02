@@ -1,0 +1,201 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function logado() {
+      return request.auth != null;
+    }
+
+    function papelNaFrente(frenteId) {
+      return get(/databases/$(database)/documents/frentes/$(frenteId)).data.membros[request.auth.uid];
+    }
+
+    // Usa o campo membrosUids que já fica copiado no próprio item (em vez de
+    // um get() na frente "pai"). Necessário pras buscas do painel geral
+    // (collectionGroup em "itens", que cruza várias frentes de uma vez) —
+    // ali a própria consulta já filtra por membrosUids, então o Firestore
+    // consegue confirmar que a regra é segura sem rodar por documento.
+    function ehMembroDoItem() {
+      return logado() && request.auth.uid in resource.data.membrosUids;
+    }
+
+    // Para listar TODOS os itens de uma frente (sem filtrar por membrosUids
+    // na própria consulta, como a tela da frente faz), o Firestore só aceita
+    // a leitura se conseguir provar a regra sem depender dos dados de cada
+    // documento — por isso aqui checamos a frente "pai" (get(), caminho
+    // fixo), e não o campo membrosUids do item (que poderia estar
+    // desatualizado e faria a consulta inteira ser negada).
+    function ehMembro(frenteId) {
+      return logado() && request.auth.uid in get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids;
+    }
+
+    function podeEditar(frenteId) {
+      return logado() && papelNaFrente(frenteId) in ['proprietario', 'editor'];
+    }
+
+    function ehProprietario(frenteId) {
+      return logado() && papelNaFrente(frenteId) == 'proprietario';
+    }
+
+    // Permite que a própria pessoa convidada se adicione à frente no primeiro
+    // login, sem precisar de Cloud Function: só pode acrescentar o próprio uid
+    // (nunca mudar outros membros), e só se o e-mail dela estiver na lista de
+    // convites pendentes, com papel editor ou visualizador (nunca proprietário).
+    function aceitandoConvite() {
+      return logado()
+        && !(request.auth.uid in resource.data.membrosUids)
+        && request.auth.token.email in resource.data.convitesPendentesEmails
+        && request.auth.uid in request.resource.data.membrosUids
+        && request.resource.data.membros[request.auth.uid] in ['editor', 'visualizador']
+        && request.resource.data.donoId == resource.data.donoId
+        && request.resource.data.membros.diff(resource.data.membros).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    // A frente "Contratos" (ID fixo) é padrão pra todo mundo: qualquer pessoa
+    // logada pode se auto-adicionar como editora, sem precisar de convite —
+    // mesma trava de "só o próprio uid" da função acima.
+    function entrandoNaFrentePadrao(frenteId) {
+      return logado()
+        && frenteId == 'contratos-padrao'
+        && !(request.auth.uid in resource.data.membrosUids)
+        && request.auth.uid in request.resource.data.membrosUids
+        && request.resource.data.membros[request.auth.uid] == 'editor'
+        && request.resource.data.donoId == resource.data.donoId
+        && request.resource.data.membros.diff(resource.data.membros).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    // Regra de leitura separada, no nível raiz, com curinga recursivo
+    // ({path=**}): é o padrão exigido pelo Firestore pra consultas
+    // collectionGroup (como a do painel geral, que cruza todas as frentes de
+    // uma vez) — uma regra "read" aninhada dentro de /frentes/{frenteId} não
+    // é aplicada nesse tipo de consulta.
+    match /{path=**}/itens/{itemId} {
+      allow read: if ehMembroDoItem();
+    }
+
+    // ---------- Contratos ----------
+
+    function papelNoContrato(contratoId) {
+      return get(/databases/$(database)/documents/contratos/$(contratoId)).data.membros[request.auth.uid];
+    }
+
+    function podeEditarContrato(contratoId) {
+      return logado() && papelNoContrato(contratoId) in ['proprietario', 'editor'];
+    }
+
+    function ehProprietarioContrato(contratoId) {
+      return logado() && papelNoContrato(contratoId) == 'proprietario';
+    }
+
+    function aceitandoConviteContrato() {
+      return logado()
+        && !(request.auth.uid in resource.data.membrosUids)
+        && request.auth.token.email in resource.data.convitesPendentesEmails
+        && request.auth.uid in request.resource.data.membrosUids
+        && request.resource.data.membros[request.auth.uid] in ['editor', 'visualizador']
+        && request.resource.data.donoId == resource.data.donoId
+        && request.resource.data.membros.diff(resource.data.membros).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    // Mesma lógica de ehMembroDoItem/ehMembro, aplicada a aditivos: a versão
+    // por campo (collectionGroup, usada pelo painel geral) e a versão por
+    // get() na frente "pai" (listagem direta de todos os aditivos de UM
+    // contrato, na tela do contrato).
+    function ehMembroDoAditivo() {
+      return logado() && request.auth.uid in resource.data.membrosUids;
+    }
+
+    function ehMembroContrato(contratoId) {
+      return logado() && request.auth.uid in get(/databases/$(database)/documents/contratos/$(contratoId)).data.membrosUids;
+    }
+
+    match /{path=**}/aditivos/{aditivoId} {
+      allow read: if ehMembroDoAditivo();
+    }
+
+    match /contratos/{contratoId} {
+      allow read: if logado() && request.auth.uid in resource.data.membrosUids;
+      allow create: if logado()
+        && request.auth.uid == request.resource.data.donoId
+        && request.auth.uid in request.resource.data.membrosUids;
+      allow update: if ehProprietarioContrato(contratoId)
+        || (podeEditarContrato(contratoId)
+            && request.resource.data.membros == resource.data.membros
+            && request.resource.data.membrosUids == resource.data.membrosUids
+            && request.resource.data.donoId == resource.data.donoId)
+        || aceitandoConviteContrato();
+      allow delete: if ehProprietarioContrato(contratoId);
+
+      match /aditivos/{aditivoId} {
+        allow read: if ehMembroContrato(contratoId);
+        allow create, update, delete: if podeEditarContrato(contratoId);
+
+        match /comentarios/{comentarioId} {
+          allow read: if ehMembroContrato(contratoId);
+          allow create: if logado()
+            && ehMembroContrato(contratoId)
+            && request.resource.data.autorId == request.auth.uid;
+          allow update: if logado()
+            && request.auth.uid == resource.data.autorId
+            && request.resource.data.autorId == resource.data.autorId;
+          allow delete: if logado() && request.auth.uid == resource.data.autorId;
+        }
+      }
+
+      match /cancelamentos/{cancelamentoId} {
+        allow read: if ehMembroContrato(contratoId);
+        allow create, update, delete: if podeEditarContrato(contratoId);
+      }
+    }
+
+    match /usuarios/{uid} {
+      allow read: if logado();
+      allow write: if logado() && request.auth.uid == uid;
+    }
+
+    match /frentes/{frenteId} {
+      // A frente "Contratos" é visível pra qualquer pessoa logada (é o ponto
+      // de partida pra ela virar membro — ver entrandoNaFrentePadrao acima).
+      allow read: if logado()
+        && (frenteId == 'contratos-padrao' || request.auth.uid in resource.data.membrosUids);
+      allow create: if logado()
+        && request.auth.uid == request.resource.data.donoId
+        && request.auth.uid in request.resource.data.membrosUids;
+      allow update: if ehProprietario(frenteId)
+        || (podeEditar(frenteId)
+            && request.resource.data.membros == resource.data.membros
+            && request.resource.data.membrosUids == resource.data.membrosUids
+            && request.resource.data.donoId == resource.data.donoId)
+        || aceitandoConvite()
+        || entrandoNaFrentePadrao(frenteId);
+      // A frente "Contratos" nunca pode ser excluída — é nela que caem os
+      // itens criados a partir da tela de um contrato (ver criarItem na
+      // tela de contrato e watchItensDoContrato).
+      allow delete: if ehProprietario(frenteId) && frenteId != 'contratos-padrao';
+
+      match /itens/{itemId} {
+        allow read: if ehMembro(frenteId);
+        allow create: if podeEditar(frenteId);
+        // Qualquer membro pode sincronizar só o campo membrosUids (usado nas
+        // consultas do painel geral); qualquer outra mudança exige edição.
+        allow update: if podeEditar(frenteId)
+          || (ehMembroDoItem() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membrosUids']));
+        allow delete: if podeEditar(frenteId);
+
+        match /comentarios/{comentarioId} {
+          // Qualquer pessoa com acesso à frente comenta e lê comentários,
+          // mesmo quem só pode visualizar.
+          allow read: if logado() && request.auth.uid in get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids;
+          allow create: if logado()
+            && request.auth.uid in get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids
+            && request.resource.data.autorId == request.auth.uid;
+          allow update: if logado()
+            && request.auth.uid == resource.data.autorId
+            && request.resource.data.autorId == resource.data.autorId;
+          allow delete: if logado() && request.auth.uid == resource.data.autorId;
+        }
+      }
+    }
+  }
+}

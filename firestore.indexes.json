@@ -1,0 +1,40 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "itens",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "membrosUids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "concluido", "order": "ASCENDING" },
+        { "fieldPath": "prazo", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "frentes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "membrosUids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "atualizadoEm", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "contratos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "membrosUids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "vencimento", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "aditivos",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "membrosUids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "pendenteEm", "order": "ASCENDING" },
+        { "fieldPath": "finalizado", "order": "ASCENDING" },
+        { "fieldPath": "dataSolicitacao", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

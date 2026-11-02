@@ -1,0 +1,316 @@
+:root {
+  --color-primary: #009992;
+  --color-accent: #c3ff24;
+  --color-dark: #00332d;
+  --color-teal-light: #00d4c0;
+  --color-orange: #ee731b;
+  --color-gray: #7f7f7f;
+  --color-gray-light: #cdcdcd;
+  --color-white: #ffffff;
+  --color-bg-soft: #f7f7f7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", system-ui, sans-serif;
+  color: var(--color-dark);
+  background: var(--color-white);
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-dark);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--color-dark);
+  border: 1px solid var(--color-gray-light);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-dark);
+  margin-bottom: 6px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
+.btn-outline {
+  background: var(--color-white);
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--color-gray-light);
+  color: var(--color-dark);
+}
+
+.card {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-light);
+  border-radius: 12px;
+}
+
+.pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-chip {
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(0, 153, 146, 0.12);
+  color: var(--color-primary);
+  padding: 4px 9px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.top-bar {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--color-gray-light);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.avatar {
+  border-radius: 50%;
+  background: var(--color-dark);
+  color: var(--color-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+.empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--color-gray);
+  font-size: 14px;
+}
+
+.spinner-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  color: var(--color-gray);
+  font-size: 14px;
+}
+
+/* ---------- Layout responsivo ---------- */
+
+.page-shell {
+  padding-left: 40px;
+  padding-right: 40px;
+}
+
+.top-bar {
+  padding-left: 32px;
+  padding-right: 32px;
+}
+
+.dashboard-layout {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.dashboard-sidebar {
+  width: 260px;
+  flex: 0 0 260px;
+}
+
+.dashboard-aside {
+  width: 340px;
+  flex: 0 0 340px;
+  border-left: 1px solid var(--color-gray-light);
+}
+
+/* Toda página agora vive dentro do .dashboard-layout (ao lado do menu
+   lateral fixo). Qualquer filho direto que não seja o próprio menu ou o
+   aside de lembretes deve ocupar o espaço restante, e não encolher pro
+   tamanho do conteúdo (senão a página perde a largura cheia que tinha
+   quando não vivia dentro de um flex). */
+.dashboard-layout > *:not(.dashboard-sidebar):not(.dashboard-aside) {
+  flex: 1 1 560px;
+  min-width: 0;
+}
+
+.field-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.field-row > * {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
+}
+
+/* Evita que o "min-content" de algo lá no fundo (como a tabela rolável)
+   empurre a largura de toda a coluna flex pai acima dele. */
+.page-shell > * {
+  min-width: 0;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 2.4fr 1.6fr 0.9fr 1fr 0.8fr;
+  gap: 12px;
+  min-width: 560px;
+}
+
+.modal-overlay {
+  padding: 48px 16px;
+}
+
+.modal-body-pad {
+  padding-left: 32px;
+  padding-right: 32px;
+}
+
+@media (max-width: 760px) {
+  .page-shell {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .top-bar {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .dashboard-layout {
+    flex-direction: column;
+  }
+
+  .dashboard-layout > * {
+    width: 100% !important;
+  }
+
+  .dashboard-sidebar,
+  .dashboard-aside {
+    flex: 0 0 auto !important;
+  }
+
+  .dashboard-layout > .page-shell {
+    flex: 1 1 auto !important;
+  }
+
+  .dashboard-aside {
+    border-left: none;
+    border-top: 1px solid var(--color-gray-light);
+  }
+
+  .meta-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .modal-overlay {
+    padding: 0 !important;
+  }
+
+  .modal-overlay > form,
+  .modal-overlay > div.card {
+    max-width: 100% !important;
+    min-height: 100vh;
+    border-radius: 0 !important;
+  }
+
+  .modal-body-pad {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .meta-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sub-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+}
