@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import AguardandoPriorizacao from "../components/AguardandoPriorizacao";
 import ExportarFila from "../components/ExportarFila";
 import { IconeCheck } from "../components/Icones";
 import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
-import { alterarCapacidade, atualizarDemanda, concluirDemanda, salvarOrdem, watchDemandas, watchFila } from "../lib/filas";
+import { alterarCapacidade, atualizarDemanda, concluirDemanda, priorizarDemanda, salvarOrdem, watchDemandas, watchFila } from "../lib/filas";
 import { diasAte, formatarData, formatarDataRelativa, inicioDoDia, paraDate } from "../lib/datas";
 import {
   calcularPrevisao,
   compararPrevisoes,
+  demandasAguardando,
+  temEstimativa,
   formatarEstimativa,
   formatarHoras,
   horasRestantes,
@@ -61,6 +64,7 @@ export default function DemandasPage() {
   const [erro, setErro] = useState("");
   const [ordemSimulada, setOrdemSimulada] = useState(null);
   const [arrastando, setArrastando] = useState(null);
+  const [arrastandoNova, setArrastandoNova] = useState(null);
   const [alvo, setAlvo] = useState(null);
   const [aviso, setAviso] = useState("");
   const [exportando, setExportando] = useState(false);
@@ -83,6 +87,7 @@ export default function DemandasPage() {
   const capacidade = fila?.capacidadeHoras || 6;
 
   const filaSalva = useMemo(() => ordenarFila(fila?.ordem, demandas), [fila?.ordem, demandas]);
+  const aguardando = useMemo(() => demandasAguardando(fila?.ordem, demandas), [fila?.ordem, demandas]);
   const ordemAtual = ordemSimulada || filaSalva.map((d) => d.id);
   const porId = Object.fromEntries(filaSalva.map((d) => [d.id, d]));
   const filaExibida = ordemAtual.map((id) => porId[id]).filter(Boolean);
@@ -118,6 +123,21 @@ export default function DemandasPage() {
     const difs = compararPrevisoes(previsaoSalva, novaPrevisao);
     await salvarOrdem(donoId, nova);
     setAviso(resumirImpacto(difs));
+  }
+
+  // Cartão de "Aguardando priorização" solto numa posição da fila.
+  async function soltarNova(posicao) {
+    const id = arrastandoNova;
+    setArrastandoNova(null);
+    setAlvo(null);
+    if (!id) return;
+    const d = demandas.find((x) => x.id === id);
+    if (!d || !temEstimativa(d)) {
+      setAviso("Informe a estimativa da demanda antes de priorizá-la.");
+      return;
+    }
+    await priorizarDemanda(donoId, fila.ordem || [], id, posicao);
+    setAviso(`“${d?.titulo || "Demanda"}” entrou na ${posicao + 1}ª posição da fila.`);
   }
 
   async function salvarSimulacao() {
@@ -162,7 +182,7 @@ export default function DemandasPage() {
   const abas = [{ id: user.uid, nome: "Minha fila" }, ...filasCompartilhadas.map((f) => ({ id: f.id, nome: `Fila de ${f.donoNome || "outra pessoa"}` }))];
 
   return (
-    <div className="page-shell" style={{ paddingTop: 28, paddingBottom: 60, maxWidth: 1240 }}>
+    <div className="page-shell" style={{ paddingTop: 28, paddingBottom: 60, maxWidth: 1480 }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>Demandas</h1>
@@ -268,6 +288,8 @@ export default function DemandasPage() {
         </div>
       )}
 
+      <div className="demandas-colunas">
+      <div className="demandas-principal">
       {!ordemSimulada && filaSalva.length > 0 && (
         <div className="tiles" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
           <div className="tile">
@@ -289,7 +311,7 @@ export default function DemandasPage() {
         <div className="empty-state" style={{ color: "var(--color-orange)" }}>Não deu pra carregar: {erro}</div>
       ) : filaExibida.length === 0 ? (
         <div className="lista-card empty-state" style={{ marginTop: 16 }}>
-          Nenhuma demanda na fila.
+          {aguardando.length > 0 ? "Nenhuma demanda priorizada ainda. Priorize as que estão aguardando, ao lado." : "Nenhuma demanda na fila."}
           {podeEditar && (
             <div style={{ marginTop: 12 }}>
               <Link to={`/demandas/nova${ehMinha ? "" : `?fila=${donoId}`}`} className="btn btn-primary">
@@ -326,19 +348,23 @@ export default function DemandasPage() {
             return (
               <div
                 key={d.id}
-                className={`fila-linha ${andamento ? "andamento" : ""} ${arrastando === i ? "arrastando" : ""} ${alvo === i && arrastando !== i ? "alvo" : ""}`}
+                className={`fila-linha ${andamento ? "andamento" : ""} ${arrastando === i ? "arrastando" : ""} ${alvo === i && (arrastandoNova || arrastando !== i) ? "alvo" : ""}`}
                 draggable={podeEditar}
                 onDragStart={(e) => {
                   setArrastando(i);
                   e.dataTransfer.effectAllowed = "move";
                 }}
                 onDragOver={(e) => {
-                  if (arrastando === null) return;
+                  if (arrastando === null && !arrastandoNova) return;
                   e.preventDefault();
                   setAlvo(i);
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
+                  if (arrastandoNova) {
+                    soltarNova(i);
+                    return;
+                  }
                   if (arrastando !== null) reordenar(arrastando, i);
                   setArrastando(null);
                   setAlvo(null);
@@ -472,11 +498,49 @@ export default function DemandasPage() {
         </div>
       )}
 
+      {arrastandoNova && (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setAlvo("fim");
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            soltarNova(filaSalva.length);
+          }}
+          style={{
+            marginTop: 10,
+            padding: 16,
+            borderRadius: 12,
+            border: `2px dashed ${alvo === "fim" ? "var(--color-primary)" : "var(--color-gray-light)"}`,
+            textAlign: "center",
+            fontSize: 13,
+            color: "var(--color-gray)",
+          }}
+        >
+          Solte aqui para colocar no fim da fila (ou sobre uma demanda para entrar no lugar dela)
+        </div>
+      )}
+      </div>
+
+      <AguardandoPriorizacao
+        aguardando={aguardando}
+        fila={filaSalva}
+        capacidade={capacidade}
+        podeEditar={podeEditar && !ordemSimulada}
+        donoId={donoId}
+        ordem={fila.ordem || []}
+        onPriorizado={setAviso}
+        onArrastar={setArrastandoNova}
+      />
+      </div>
+
       {exportando && (
         <ExportarFila
           fila={fila}
           previsao={previsao}
           comparacao={ordemSimulada ? { previsaoSalva, diferencas } : null}
+          aguardando={aguardando}
           onFechar={() => setExportando(false)}
         />
       )}

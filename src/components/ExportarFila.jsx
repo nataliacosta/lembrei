@@ -49,7 +49,7 @@ function escaparHtml(t) {
   return String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 }
 
-export default function ExportarFila({ fila, previsao, comparacao, onFechar }) {
+export default function ExportarFila({ fila, previsao, comparacao, aguardando = [], onFechar }) {
   const [formato, setFormato] = useState("texto");
   const [solicitante, setSolicitante] = useState(true);
   const [prazo, setPrazo] = useState(true);
@@ -60,7 +60,12 @@ export default function ExportarFila({ fila, previsao, comparacao, onFechar }) {
   const fim = previsao.itens.length ? formatarData(previsao.itens[previsao.itens.length - 1].fim) : "";
   const titulo = `Fila de demandas — ${fila.donoNome || ""} (${hojePorExtenso()})`;
   const cabecalho = `${titulo}\nCapacidade: ${formatarHoras(fila.capacidadeHoras || 6)} por dia útil${comparar && comparacao ? "\nProposta de nova ordem (comparada com a atual)" : ""}`;
-  const texto = `${cabecalho}\n\n${linhas.map((l) => l.texto).join("\n")}\n\nFila zerada em ${fim} se a prioridade não mudar.`;
+  const blocoAguardando = aguardando.length
+    ? `\n\nAguardando priorização (${aguardando.length}):\n${aguardando
+        .map((d) => `• ${d.titulo}${solicitante && d.solicitante ? ` · ${d.solicitante}` : ""}${d.estimativaHoras ? ` — ${formatarEstimativa(d)}` : " — sem estimativa"}${prazo && d.prazoPedido ? ` (pedido: ${formatarData(d.prazoPedido)})` : ""}`)
+        .join("\n")}`
+    : "";
+  const texto = `${cabecalho}\n\n${linhas.map((l) => l.texto).join("\n")}\n\nFila zerada em ${fim} se a prioridade não mudar.${blocoAguardando}`;
 
   async function copiar() {
     try {
