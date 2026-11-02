@@ -100,3 +100,16 @@ firebase deploy --only hosting,firestore:rules,firestore:indexes
 ```
 
 (`firebase.json` já aponta o Hosting pra pasta `dist/`.)
+
+**Endereço do app:** use **https://lembrei-c3915.firebaseapp.com**. O domínio
+`lembrei-c3915.web.app` também é publicado, mas o login com Google (`signInWithRedirect`) não
+funciona nele, porque o `authDomain` é o `firebaseapp.com` e o retorno do redirecionamento se
+perde entre os dois domínios.
+
+**Numa sessão nova (container limpo):**
+
+1. Crie o `.firebaserc` (ignorado pelo Git) com `{"projects":{"default":"lembrei-c3915"}}`.
+2. Logue no CLI: `npx firebase login --no-localhost`, abra o link, autorize e rode
+   `npx firebase login <código>`.
+3. Gere o `.env` (também ignorado), que o build precisa, com a config do app web `lembrei-web`:
+   `npx firebase apps:sdkconfig WEB` e copie os valores para as variáveis do `.env.example`.
