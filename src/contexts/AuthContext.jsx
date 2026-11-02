@@ -9,6 +9,7 @@ import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, firebaseConfigurado, googleProvider } from "../firebase";
 import { garantirFrenteContratosPadrao, resgatarConvitesPendentes } from "../lib/firestore";
 import { resgatarConvitesPendentesContratos } from "../lib/contratos";
+import { garantirFila, resgatarConvitesPendentesFilas } from "../lib/filas";
 
 const AuthContext = createContext(null);
 
@@ -66,6 +67,12 @@ export function AuthProvider({ children }) {
           await garantirFrenteContratosPadrao(firebaseUser.uid);
         } catch (e) {
           console.error("Falha ao garantir a frente padrão de contratos:", e);
+        }
+        try {
+          await garantirFila(firebaseUser);
+          await resgatarConvitesPendentesFilas(firebaseUser.uid, firebaseUser.email);
+        } catch (e) {
+          console.error("Falha ao preparar a fila de demandas:", e);
         }
       }
       setUser(firebaseUser);

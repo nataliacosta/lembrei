@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
 import { CONTRATO_STATUS } from "../lib/constants";
 import { situacaoDoContrato } from "../lib/agenda";
-import { IconeLista } from "./Icones";
+import { IconeFila, IconeLista } from "./Icones";
 
 function lerPreferencia(chave, padrao) {
   try {
@@ -26,7 +26,8 @@ function salvarPreferencia(chave, valor) {
 
 export default function Sidebar() {
   const { user } = useAuth();
-  const { frentes, contratos, contagemPorFrente } = useDados();
+  const { frentes, contratos, contagemPorFrente, minhaFila, minhasDemandas } = useDados();
+  const naFila = minhaFila ? minhasDemandas.filter((d) => !d.concluida).length : 0;
   const [mostrarNovaFrente, setMostrarNovaFrente] = useState(false);
   const [frentesAbertas, setFrentesAbertas] = useState(() => lerPreferencia("lembrei:sidebarFrentes", true));
   const [contratosAbertos, setContratosAbertos] = useState(() => lerPreferencia("lembrei:sidebarContratos", true));
@@ -72,6 +73,19 @@ export default function Sidebar() {
         {totalAtrasados > 0 && (
           <span className="sidebar-badge alerta" title={`${totalAtrasados} atrasados`}>
             {totalAtrasados}
+          </span>
+        )}
+      </NavLink>
+      <NavLink
+        to="/demandas"
+        className={classeLink}
+        style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 24px", color: "#fff", fontSize: 14, fontWeight: 700 }}
+      >
+        <IconeFila size={16} />
+        Demandas
+        {naFila > 0 && (
+          <span className="sidebar-badge" title={`${naFila} na fila`}>
+            {naFila}
           </span>
         )}
       </NavLink>
