@@ -3,7 +3,16 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
 import { useVoltar } from "../contexts/HistoricoContext";
-import { atualizarDemanda, concluirDemanda, criarDemanda, excluirDemanda, reabrirDemanda, watchDemandas, watchFila } from "../lib/filas";
+import {
+  atualizarDemanda,
+  concluirDemanda,
+  criarDemanda,
+  despriorizarDemanda,
+  excluirDemanda,
+  reabrirDemanda,
+  watchDemandas,
+  watchFila,
+} from "../lib/filas";
 import { deInputDate, formatarData, formatarDataRelativa, inicioDoDia, paraDate, paraInputDate } from "../lib/datas";
 import { calcularPrevisao, formatarHoras, ordenarFila, paraHoras } from "../lib/previsao";
 
@@ -35,7 +44,6 @@ export default function DemandaFormPage() {
   const [prazo, setPrazo] = useState("");
   const [descricao, setDescricao] = useState("");
   const [horasFeitas, setHorasFeitas] = useState("0");
-  const [posicao, setPosicao] = useState("fim"); // "fim" | "topo" | número (índice)
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => watchFila(donoId, setFila), [donoId]);
@@ -61,29 +69,12 @@ export default function DemandaFormPage() {
   const horas = paraHoras(valor, unidade, capacidade);
   const prazoData = prazo ? inicioDoDia(deInputDate(prazo)) : null;
 
-  // Previsão da demanda em cada posição possível (só ao criar).
-  const simulacao = useMemo(() => {
-    if (editando || !horas) return null;
-    const nova = { id: "__nova__", titulo, estimativaHoras: horas, horasFeitas: 0 };
-    const fimEm = (i) => {
-      const lista = [...filaAtual];
-      lista.splice(i, 0, nova);
-      const p = calcularPrevisao(lista, capacidade);
-      return { fim: p.itens[i].fim, atrasa: p.itens.slice(i + 1).length };
-    };
-    const indice = posicao === "fim" ? filaAtual.length : posicao === "topo" ? 0 : Number(posicao);
-    const escolhida = fimEm(indice);
-    let posicaoMaxima = null;
-    if (prazoData && escolhida.fim > prazoData) {
-      for (let i = indice; i >= 0; i--) {
-        if (fimEm(i).fim <= prazoData) {
-          posicaoMaxima = i;
-          break;
-        }
-      }
-    }
-    return { indice, ...escolhida, posicaoMaxima, atrasariam: posicaoMaxima !== null ? filaAtual.length - posicaoMaxima : 0 };
-  }, [editando, horas, titulo, filaAtual, capacidade, posicao, prazoData]);
+  // Só para informar: quando ficaria pronta se entrasse no fim da fila hoje.
+  const previsaoNoFim = useMemo(() => {
+    if (!horas) return null;
+    const lista = [...filaAtual.filter((d) => d.id !== demandaId), { id: "__nova__", estimativaHoras: horas, horasFeitas: 0 }];
+    return calcularPrevisao(lista, capacidade).itens.at(-1).fim;
+  }, [horas, filaAtual, capacidade, demandaId]);
 
   if (fila === undefined || demandas === undefined || (editando && !carregado && original !== null)) {
     return <div className="spinner-wrap">Carregando...</div>;
@@ -97,13 +88,13 @@ export default function DemandaFormPage() {
 
   async function salvar(e) {
     e?.preventDefault();
-    if (!titulo.trim() || !horas || salvando || !podeEditar) return;
+    if (!titulo.trim() || salvando || !podeEditar) return;
     setSalvando(true);
     const dados = {
       titulo: titulo.trim(),
       solicitante: solicitante.trim(),
       frenteId: frenteId || null,
-      estimativaValor: Number(String(valor).replace(",", ".")),
+      estimativaValor: horas ? Number(String(valor).replace(",", ".")) : null,
       estimativaUnidade: unidade,
       estimativaHoras: horas,
       prazoPedido: prazo ? deInputDate(prazo) : null,
@@ -113,7 +104,7 @@ export default function DemandaFormPage() {
       if (editando) {
         await atualizarDemanda(donoId, demandaId, { ...dados, horasFeitas: Math.min(horas, Math.max(0, Number(String(horasFeitas).replace(",", ".")) || 0)) });
       } else {
-        await criarDemanda(donoId, ordem, dados, simulacao?.indice ?? null, user.uid);
+        await criarDemanda(donoId, dados, user.uid);
       }
       voltar();
     } catch (erro) {
@@ -126,6 +117,11 @@ export default function DemandaFormPage() {
   async function concluirOuReabrir() {
     if (original.concluida) await reabrirDemanda(donoId, demandaId, ordem);
     else await concluirDemanda(donoId, demandaId, ordem);
+    voltar();
+  }
+
+  async function tirarDaFila() {
+    await despriorizarDemanda(donoId, ordem, demandaId);
     voltar();
   }
 
@@ -173,6 +169,14 @@ export default function DemandaFormPage() {
             />
           </label>
 
+          {editando && !original.concluida && posicaoNaFila < 0 && (
+            <div style={{ marginTop: 14, fontSize: 14 }}>
+              <b>Aguardando priorização.</b>{" "}
+              <span style={{ color: "var(--color-gray)" }}>
+                {horas ? "Priorize na tela da fila, escolhendo onde ela entra." : "Informe a estimativa para poder priorizar."}
+              </span>
+            </div>
+          )}
           {editando && previsaoEdicao && (
             <div style={{ marginTop: 14, fontSize: 14 }}>
               <b>{posicaoNaFila + 1}º da fila</b> · {posicaoNaFila === 0 ? "em andamento" : `começa ${formatarDataRelativa(previsaoEdicao.inicio).toLowerCase()}`} · pronta{" "}
@@ -202,7 +206,7 @@ export default function DemandaFormPage() {
           </div>
 
           <div style={{ marginTop: 20 }}>
-            <Rotulo>Estimativa</Rotulo>
+            <Rotulo>Estimativa{editando ? "" : " (pode deixar para depois)"}</Rotulo>
             <div className="chips-row">
               <input
                 type="number"
@@ -211,7 +215,6 @@ export default function DemandaFormPage() {
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}
                 aria-label="Quanto tempo"
-                required
                 disabled={!podeEditar}
                 style={{ width: 96 }}
               />
@@ -229,7 +232,7 @@ export default function DemandaFormPage() {
             </div>
           </div>
 
-          {editando && !original.concluida && (
+          {editando && !original.concluida && posicaoNaFila >= 0 && (
             <label style={{ display: "block", marginTop: 16 }}>
               <Rotulo>Horas já feitas</Rotulo>
               <input
@@ -250,70 +253,15 @@ export default function DemandaFormPage() {
           </label>
 
           {!editando && (
-            <div style={{ marginTop: 20, padding: "14px 16px", borderRadius: 12, background: "rgba(0,212,192,0.08)", border: "1px solid rgba(0,212,192,0.4)" }}>
-              <Rotulo>Onde entra na fila</Rotulo>
-              <div className="chips-row">
-                <button type="button" className="chip" aria-pressed={posicao === "fim"} onClick={() => setPosicao("fim")}>
-                  No fim da fila
-                </button>
-                <button type="button" className="chip" aria-pressed={posicao === "topo"} onClick={() => setPosicao("topo")}>
-                  Em 1º (agora)
-                </button>
-                {filaAtual.length > 1 && (
-                  <select
-                    value={typeof posicao === "string" && /^\d+$/.test(posicao) ? posicao : ""}
-                    onChange={(e) => e.target.value && setPosicao(e.target.value)}
-                    aria-label="Depois de qual demanda"
-                    style={{ width: "auto", borderRadius: 17, padding: "7px 12px", fontSize: 13 }}
-                  >
-                    <option value="">Depois de…</option>
-                    {filaAtual.slice(0, -1).map((d, i) => (
-                      <option key={d.id} value={String(i + 1)}>
-                        {i + 1}. {d.titulo}
-                      </option>
-                    ))}
-                  </select>
-                )}
+            <div style={{ marginTop: 20, padding: "12px 16px", borderRadius: 12, background: "var(--color-bg-soft)", border: "1px solid var(--color-border)" }}>
+              <div style={{ fontSize: 14 }}>
+                <b>Vai para “Aguardando priorização”.</b> Você (ou quem pode editar a fila) escolhe depois onde ela entra.
               </div>
-              {simulacao ? (
-                <>
-                  <div style={{ fontSize: 14, marginTop: 12 }}>
-                    <b>Previsão: pronta {formatarDataRelativa(simulacao.fim).toLowerCase()}</b>
-                    {prazoData &&
-                      (simulacao.fim > prazoData ? (
-                        <span className="texto-alerta" style={{ fontWeight: 600 }}>
-                          {" "}
-                          · depois do prazo pedido ({formatarData(prazoData)})
-                        </span>
-                      ) : (
-                        <span style={{ color: "var(--color-primary-dark)", fontWeight: 600 }}> · dentro do prazo pedido</span>
-                      ))}
-                    {simulacao.indice < filaAtual.length && (
-                      <span style={{ color: "var(--color-gray)" }}>
-                        {" "}
-                        · atrasa {filaAtual.length - simulacao.indice} {filaAtual.length - simulacao.indice === 1 ? "demanda" : "demandas"}
-                      </span>
-                    )}
-                  </div>
-                  {simulacao.posicaoMaxima !== null && (
-                    <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 4 }}>
-                      Para ficar pronta até {formatarData(prazoData)}, ela precisaria entrar até a {simulacao.posicaoMaxima + 1}ª posição — o que atrasa{" "}
-                      {simulacao.atrasariam} {simulacao.atrasariam === 1 ? "demanda" : "demandas"}.{" "}
-                      <button
-                        type="button"
-                        onClick={() => setPosicao(simulacao.posicaoMaxima === 0 ? "topo" : String(simulacao.posicaoMaxima))}
-                        style={{ background: "none", border: "none", padding: 0, color: "var(--color-primary)", fontWeight: 600, fontSize: 13 }}
-                      >
-                        Usar essa posição
-                      </button>
-                    </div>
-                  )}
-                  {simulacao.posicaoMaxima === null && prazoData && simulacao.fim > prazoData && (
-                    <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 4 }}>Nem em 1º lugar dá para entregar até {formatarData(prazoData)}.</div>
-                  )}
-                </>
-              ) : (
-                <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 12 }}>Informe a estimativa para ver a previsão.</div>
+              {previsaoNoFim && (
+                <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 4 }}>
+                  Se entrar no fim da fila hoje, ficaria pronta {formatarDataRelativa(previsaoNoFim).toLowerCase()}
+                  {prazoData && (previsaoNoFim > prazoData ? " — depois do prazo pedido." : " — dentro do prazo pedido.")}
+                </div>
               )}
             </div>
           )}
@@ -341,6 +289,11 @@ export default function DemandaFormPage() {
                 <button type="button" className="btn btn-ghost" onClick={concluirOuReabrir}>
                   {original.concluida ? "Reabrir" : "Concluir"}
                 </button>
+                {posicaoNaFila >= 0 && (
+                  <button type="button" className="btn btn-ghost" onClick={tirarDaFila} title="Volta para Aguardando priorização">
+                    Tirar da fila
+                  </button>
+                )}
                 <button type="button" className="btn btn-ghost" onClick={excluir} style={{ color: "var(--color-orange)", borderColor: "var(--color-orange-border)" }}>
                   Excluir
                 </button>
@@ -352,8 +305,8 @@ export default function DemandaFormPage() {
               {podeEditar ? "Cancelar" : "Fechar"}
             </button>
             {podeEditar && (
-              <button type="submit" disabled={salvando || !titulo.trim() || !horas} className="btn btn-primary">
-                {salvando ? "Salvando..." : editando ? "Salvar" : "Adicionar à fila"}
+              <button type="submit" disabled={salvando || !titulo.trim()} className="btn btn-primary">
+                {salvando ? "Salvando..." : editando ? "Salvar" : "Criar demanda"}
               </button>
             )}
           </span>

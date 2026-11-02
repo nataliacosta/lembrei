@@ -86,9 +86,9 @@ export async function alterarCapacidade(donoId, capacidadeHoras) {
   return updateDoc(filaRef(donoId), { capacidadeHoras, atualizadoEm: serverTimestamp() });
 }
 
-// Cria a demanda e a coloca na posição pedida (0 = topo; null = fim da fila).
-export async function criarDemanda(donoId, ordemAtual, dados, posicao, uid) {
-  const ref = await addDoc(demandasRef(donoId), {
+// Demanda nova vai para "Aguardando priorização" (fora do array de ordem).
+export async function criarDemanda(donoId, dados, uid) {
+  return addDoc(demandasRef(donoId), {
     ...dados,
     horasFeitas: 0,
     concluida: false,
@@ -97,11 +97,21 @@ export async function criarDemanda(donoId, ordemAtual, dados, posicao, uid) {
     criadoEm: serverTimestamp(),
     atualizadoEm: serverTimestamp(),
   });
-  const ordem = [...ordemAtual];
-  if (posicao === null || posicao === undefined || posicao >= ordem.length) ordem.push(ref.id);
-  else ordem.splice(Math.max(0, posicao), 0, ref.id);
+}
+
+// Coloca uma demanda que estava aguardando na posição pedida (0 = topo).
+export async function priorizarDemanda(donoId, ordemAtual, demandaId, posicao) {
+  const ordem = ordemAtual.filter((id) => id !== demandaId);
+  ordem.splice(Math.max(0, Math.min(posicao, ordem.length)), 0, demandaId);
   await salvarOrdem(donoId, ordem);
-  return ref;
+}
+
+// Tira da fila e devolve para "Aguardando priorização".
+export async function despriorizarDemanda(donoId, ordemAtual, demandaId) {
+  await salvarOrdem(
+    donoId,
+    ordemAtual.filter((id) => id !== demandaId)
+  );
 }
 
 export async function atualizarDemanda(donoId, demandaId, dados) {
@@ -117,8 +127,12 @@ export async function concluirDemanda(donoId, demandaId, ordemAtual) {
 }
 
 export async function reabrirDemanda(donoId, demandaId, ordemAtual) {
+  // Volta para "Aguardando priorização", para alguém decidir onde ela entra.
   await atualizarDemanda(donoId, demandaId, { concluida: false, concluidaEm: null });
-  await salvarOrdem(donoId, [...ordemAtual.filter((id) => id !== demandaId), demandaId]);
+  await salvarOrdem(
+    donoId,
+    ordemAtual.filter((id) => id !== demandaId)
+  );
 }
 
 export async function excluirDemanda(donoId, demandaId, ordemAtual) {

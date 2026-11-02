@@ -27,7 +27,8 @@ function salvarPreferencia(chave, valor) {
 export default function Sidebar() {
   const { user } = useAuth();
   const { frentes, contratos, contagemPorFrente, minhaFila, minhasDemandas } = useDados();
-  const naFila = minhaFila ? minhasDemandas.filter((d) => !d.concluida).length : 0;
+  const naFila = minhaFila ? minhasDemandas.filter((d) => !d.concluida && (minhaFila.ordem || []).includes(d.id)).length : 0;
+  const aguardandoPriorizacao = minhaFila ? minhasDemandas.filter((d) => !d.concluida && !(minhaFila.ordem || []).includes(d.id)).length : 0;
   const [mostrarNovaFrente, setMostrarNovaFrente] = useState(false);
   const [frentesAbertas, setFrentesAbertas] = useState(() => lerPreferencia("lembrei:sidebarFrentes", true));
   const [contratosAbertos, setContratosAbertos] = useState(() => lerPreferencia("lembrei:sidebarContratos", true));
@@ -83,11 +84,15 @@ export default function Sidebar() {
       >
         <IconeFila size={16} />
         Demandas
-        {naFila > 0 && (
+        {aguardandoPriorizacao > 0 ? (
+          <span className="sidebar-badge alerta" title={`${aguardandoPriorizacao} aguardando priorização`}>
+            {aguardandoPriorizacao}
+          </span>
+        ) : naFila > 0 ? (
           <span className="sidebar-badge" title={`${naFila} na fila`}>
             {naFila}
           </span>
-        )}
+        ) : null}
       </NavLink>
 
       <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)" }}>

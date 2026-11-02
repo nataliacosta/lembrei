@@ -1,4 +1,4 @@
-import { inicioDoDia, somarDias } from "./datas";
+import { inicioDoDia, paraDate, somarDias } from "./datas";
 
 // Previsão da fila de demandas: percorre a fila em ordem, gastando a
 // capacidade de cada dia útil (seg a sex, fora feriados nacionais) com as
@@ -131,14 +131,44 @@ export function formatarHoras(h) {
   return `${String(n).replace(".", ",")}h`;
 }
 
-// Demandas abertas na ordem da fila. Alguma demanda aberta que não esteja no
-// array de ordem (ex.: criada por outra pessoa ao mesmo tempo) vai para o fim.
+// Demandas abertas na ordem da fila (as priorizadas). Quem não está no array
+// de ordem ainda está aguardando priorização.
 export function ordenarFila(ordem = [], demandas = []) {
-  const abertas = demandas.filter((d) => !d.concluida);
-  const porId = Object.fromEntries(abertas.map((d) => [d.id, d]));
-  const naOrdem = ordem.map((id) => porId[id]).filter(Boolean);
-  const fora = abertas.filter((d) => !ordem.includes(d.id)).sort((a, b) => (a.criadoEm?.seconds || 0) - (b.criadoEm?.seconds || 0));
-  return [...naOrdem, ...fora];
+  const porId = Object.fromEntries(demandas.filter((d) => !d.concluida).map((d) => [d.id, d]));
+  return ordem.map((id) => porId[id]).filter(Boolean);
+}
+
+export function demandasAguardando(ordem = [], demandas = []) {
+  const naFila = new Set(ordem);
+  return demandas
+    .filter((d) => !d.concluida && !naFila.has(d.id))
+    .sort((a, b) => (a.criadoEm?.seconds || 0) - (b.criadoEm?.seconds || 0));
+}
+
+export function temEstimativa(demanda) {
+  return Number(demanda.estimativaHoras) > 0;
+}
+
+// Previsão de uma demanda em cada posição da fila, e a posição mais baixa que
+// ainda cumpre o prazo pedido (null se nenhuma cumpre ou se não há prazo).
+export function opcoesDePosicao(fila, demanda, capacidadeHoras) {
+  const simular = (i) => {
+    const lista = [...fila];
+    lista.splice(i, 0, demanda);
+    return calcularPrevisao(lista, capacidadeHoras).itens[i].fim;
+  };
+  const prazo = demanda.prazoPedido ? inicioDoDia(paraDate(demanda.prazoPedido)) : null;
+  const fimNoFim = simular(fila.length);
+  let posicaoPrazo = null;
+  if (prazo && fimNoFim > prazo) {
+    for (let i = fila.length; i >= 0; i--) {
+      if (simular(i) <= prazo) {
+        posicaoPrazo = i;
+        break;
+      }
+    }
+  }
+  return { simular, prazo, fimNoFim, posicaoPrazo };
 }
 
 // Quantos dias úteis há depois de `de` até `ate` (inclusive). 0 se ate <= de.

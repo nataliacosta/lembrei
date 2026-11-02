@@ -898,7 +898,7 @@ label {
 
 .fila-linha {
   display: grid;
-  grid-template-columns: 30px 26px minmax(0, 1fr) 92px 150px minmax(260px, 420px);
+  grid-template-columns: 30px 26px minmax(0, 1fr) 84px 140px minmax(180px, 300px);
   gap: 10px;
   align-items: center;
   padding: 10px 16px 10px 6px;
@@ -1060,5 +1060,30 @@ label {
 
   .aviso-flutuante {
     bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
+
+.demandas-colunas {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.demandas-principal {
+  flex: 999 1 640px;
+  min-width: 0;
+}
+
+.coluna-aguardando {
+  flex: 1 1 280px;
+  max-width: 340px;
+  padding-top: 16px;
+}
+
+@media (max-width: 760px) {
+  .coluna-aguardando {
+    order: -1;
+    max-width: none;
   }
 }
