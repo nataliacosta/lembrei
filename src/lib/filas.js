@@ -15,6 +15,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { avisarConviteResgatado } from "./notificacoes";
 
 // Fila de demandas: um documento por pessoa em filas/{uid} (o id é o uid do
 // dono), com a capacidade diária, a ordem da fila (array de ids) e quem tem
@@ -187,6 +188,13 @@ export async function resgatarConvitesPendentesFilas(uid, email) {
       membrosUids: Array.from(new Set([...(fila.membrosUids || []), uid])),
       convitesPendentes: arrayRemove(convite),
       convitesPendentesEmails: arrayRemove(email),
+    });
+    await avisarConviteResgatado({
+      donoId: filaDoc.id,
+      contexto: "a",
+      alvo: "fila de demandas",
+      linkConvidada: `/demandas?fila=${filaDoc.id}`,
+      linkDona: "/demandas/compartilhar",
     });
   }
 }

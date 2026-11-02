@@ -18,6 +18,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { avisarConviteResgatado, proprietarioDe } from "./notificacoes";
 import { FRENTE_CONTRATOS_ID } from "./constants";
 
 function frentesRef() {
@@ -127,6 +128,13 @@ export async function resgatarConvitesPendentes(uid, email) {
       convitesPendentesEmails: arrayRemove(email),
     });
     await sincronizarMembrosNosItens(frenteDoc.id, novosMembrosUids);
+    await avisarConviteResgatado({
+      donoId: frente.donoId || proprietarioDe(frente.membros),
+      contexto: "a frente",
+      alvo: frente.nome,
+      linkConvidada: `/frentes/${frenteDoc.id}`,
+      linkDona: `/frentes/${frenteDoc.id}/compartilhar`,
+    });
   }
 }
 

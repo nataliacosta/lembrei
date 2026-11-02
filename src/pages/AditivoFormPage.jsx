@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useVoltar } from "../contexts/HistoricoContext";
 
 import { atualizarAditivo, atualizarContrato, criarAditivo, watchAditivo, watchContrato } from "../lib/contratos";
+import { notificar } from "../lib/notificacoes";
 import { ADITIVO_TIPOS, PENDENTE_EM_OPCOES } from "../lib/constants";
 import { deInputDate, paraInputDate } from "../lib/datas";
 
@@ -82,6 +83,13 @@ export default function AditivoFormPage() {
       else navigate(`/contratos/${contratoId}/aditivos/${aditivoId}`, { replace: true });
     } else {
       const ref = await criarAditivo(contratoId, { ...dados, uid: user.uid, membrosUids: contrato.membrosUids });
+      notificar(contrato.membrosUids || [], {
+        tipo: "aditivo",
+        alvo: tipos.join(", "),
+        contexto: contrato.titulo,
+        trecho: dados.motivo,
+        link: `/contratos/${contratoId}/aditivos/${ref.id}`,
+      });
       navigate(`/contratos/${contratoId}/aditivos/${ref.id}`, { replace: true });
     }
     setSalvando(false);

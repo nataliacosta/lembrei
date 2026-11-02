@@ -7,6 +7,7 @@ import { useUsuarios } from "../hooks/useUsuarios";
 import { CAMPO_CONTRATO_LABEL, FRENTE_CONTRATOS_ID, TIPOS, STATUS_OPCOES, TIPO_POR_KEY } from "../lib/constants";
 import { deInputDate, inicioDoDia, paraInputDate, somarDias } from "../lib/datas";
 import { atualizarItem, criarItem, watchFrente, watchItem } from "../lib/firestore";
+import { notificar } from "../lib/notificacoes";
 import { watchContrato } from "../lib/contratos";
 import TagInput from "../components/TagInput";
 import CustomFieldsEditor from "../components/CustomFieldsEditor";
@@ -195,9 +196,22 @@ export default function ItemFormPage() {
       reuniao: ehReuniao ? formularioParaReuniao(reuniao, { original: itemOriginal?.reuniao, nomeDe }) : null,
     };
 
+    // Avisa a nova pessoa responsável (só quando muda para alguém da frente).
+    const avisarAtribuicao = (id) => {
+      if (respId && respId !== user.uid && respId !== itemOriginal?.responsavelId) {
+        notificar([respId], {
+          tipo: "atribuido",
+          alvo: dados.titulo,
+          contexto: frente.nome,
+          link: `/frentes/${frenteId}/itens/${id}`,
+        });
+      }
+    };
+
     try {
       if (editando) {
         await atualizarItem(frenteId, itemId, dados);
+        avisarAtribuicao(itemId);
         // Volta para o detalhe de onde veio (sem empilhar o formulário).
         if (temAnterior) voltar();
         else navigate(`/frentes/${frenteId}/itens/${itemId}`, { replace: true });
@@ -208,6 +222,7 @@ export default function ItemFormPage() {
           membrosUids: frente.membrosUids,
           contratoVinculado: viaContrato ? contratoId : null,
         });
+        avisarAtribuicao(ref.id);
         if (escolheFrente) salvarUltimaFrente(frenteId);
         // Criado a partir do contrato: volta para ele. Senão, abre o item
         // novo no lugar do formulário — o "voltar" dele leva para onde a

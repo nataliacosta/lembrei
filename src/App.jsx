@@ -18,6 +18,7 @@ import AditivoDetailPage from "./pages/AditivoDetailPage";
 import CancelamentoFormPage from "./pages/CancelamentoFormPage";
 import FrentesListPage from "./pages/FrentesListPage";
 import ContaPage from "./pages/ContaPage";
+import NotificacoesPage from "./pages/NotificacoesPage";
 import BuscaPage from "./pages/BuscaPage";
 import DemandasPage from "./pages/DemandasPage";
 import DemandaFormPage from "./pages/DemandaFormPage";
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/frentes" element={<FrentesListPage />} />
         <Route path="/buscar" element={<BuscaPage />} />
         <Route path="/conta" element={<ContaPage />} />
+        <Route path="/notificacoes" element={<NotificacoesPage />} />
         <Route path="/frentes/:frenteId" element={<FrentePage />} />
         <Route path="/frentes/:frenteId/novo" element={<ItemFormPage />} />
         <Route path="/frentes/:frenteId/itens/:itemId" element={<ItemDetailPage />} />

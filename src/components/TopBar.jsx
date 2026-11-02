@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import Busca from "./Busca";
 import { IconeBusca } from "./Icones";
 import Avatar from "./Avatar";
+import Sino from "./Sino";
 import { LogoMarca, LogoNome } from "./Logo";
 
 export default function TopBar() {
@@ -10,12 +11,12 @@ export default function TopBar() {
 
   return (
     <div className="top-bar" style={{ gap: 24, background: "var(--color-white)", borderBottomColor: "var(--color-border)" }}>
-      <Link to="/dashboard" className="logo" style={{ color: "inherit", flex: "0 0 auto", minWidth: 200 }}>
+      <Link to="/dashboard" className="logo top-bar-logo" style={{ color: "inherit", flex: "0 0 auto", minWidth: 200 }}>
         <LogoMarca tamanho={32} />
         <LogoNome tamanho={18} />
       </Link>
       <Busca />
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>
+      <div className="top-bar-acoes" style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>
         <Link to="/novo" className="btn btn-primary so-desktop">
           + Novo item
         </Link>
@@ -29,6 +30,7 @@ export default function TopBar() {
             <IconeBusca size={22} />
           </span>
         </Link>
+        <Sino />
         <Avatar className="so-desktop" nome={user?.displayName || user?.email} url={user?.photoURL} tamanho={36} />
         <Link to="/conta" className="so-mobile" aria-label="Conta" style={{ width: 44, height: 44 }}>
           <span style={{ display: "flex", width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>

@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
 import { useVoltar } from "../contexts/HistoricoContext";
+import { notificarFila } from "../lib/notificacoes";
 import {
   atualizarDemanda,
   concluirDemanda,
@@ -104,7 +105,13 @@ export default function DemandaFormPage() {
       if (editando) {
         await atualizarDemanda(donoId, demandaId, { ...dados, horasFeitas: Math.min(horas, Math.max(0, Number(String(horasFeitas).replace(",", ".")) || 0)) });
       } else {
-        await criarDemanda(donoId, dados, user.uid);
+        const ref = await criarDemanda(donoId, dados, user.uid);
+        notificarFila(donoId, fila, {
+          tipo: "demanda_criada",
+          alvo: dados.titulo,
+          trecho: "Aguardando priorização",
+          link: `/demandas/${donoId}/${ref.id}`,
+        });
       }
       voltar();
     } catch (erro) {

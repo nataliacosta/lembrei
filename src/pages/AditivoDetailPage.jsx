@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Comentarios from "../components/Comentarios";
 import { useAuth } from "../contexts/AuthContext";
+import { useUsuarios } from "../hooks/useUsuarios";
 import { BotaoVoltar } from "../contexts/HistoricoContext";
 import { PAPEIS } from "../lib/constants";
 import { formatarData } from "../lib/datas";
@@ -22,6 +23,8 @@ export default function AditivoDetailPage() {
     const unsub = watchAditivo(contratoId, aditivoId, setAditivo);
     return unsub;
   }, [contratoId, aditivoId]);
+
+  const membros = useUsuarios(contrato?.membrosUids || []);
 
   if (contrato === undefined || aditivo === undefined) return <div className="spinner-wrap">Carregando...</div>;
   if (!contrato || !aditivo) return <div className="spinner-wrap">Aditivo não encontrado.</div>;
@@ -79,7 +82,17 @@ export default function AditivoDetailPage() {
           </div>
         )}
 
-        <Comentarios caminhoPai={["contratos", contratoId, "aditivos", aditivoId]} />
+        <Comentarios
+          caminhoPai={["contratos", contratoId, "aditivos", aditivoId]}
+          aviso={{
+            alvo: `aditivo de ${(aditivo.tipo || []).join(", ") || "contrato"}`,
+            contexto: contrato.titulo,
+            link: `/contratos/${contratoId}/aditivos/${aditivoId}`,
+            interessados: [aditivo.criadoPor],
+          }}
+          usuarios={membros}
+          papeis={contrato.membros}
+        />
       </div>
   );
 }
