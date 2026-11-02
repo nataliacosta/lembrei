@@ -115,7 +115,11 @@ service cloud.firestore {
     }
 
     match /contratos/{contratoId} {
-      allow read: if logado() && request.auth.uid in resource.data.membrosUids;
+      // Quem foi convidado (por e-mail) também lê, para conseguir aceitar o
+      // convite no próximo login (ver resgatarConvitesPendentesContratos).
+      allow read: if logado()
+        && (request.auth.uid in resource.data.membrosUids
+            || request.auth.token.email in resource.data.convitesPendentesEmails);
       allow create: if logado()
         && request.auth.uid == request.resource.data.donoId
         && request.auth.uid in request.resource.data.membrosUids;
@@ -129,7 +133,13 @@ service cloud.firestore {
 
       match /aditivos/{aditivoId} {
         allow read: if ehMembroContrato(contratoId);
-        allow create, update, delete: if podeEditarContrato(contratoId);
+        allow create, delete: if podeEditarContrato(contratoId);
+        // Mesma regra de sincronização dos itens de frente: qualquer membro
+        // pode copiar a lista de membros do contrato para o aditivo.
+        allow update: if podeEditarContrato(contratoId)
+          || (ehMembroContrato(contratoId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membrosUids'])
+              && request.resource.data.membrosUids == get(/databases/$(database)/documents/contratos/$(contratoId)).data.membrosUids);
 
         match /comentarios/{comentarioId} {
           allow read: if ehMembroContrato(contratoId);
@@ -157,8 +167,12 @@ service cloud.firestore {
     match /frentes/{frenteId} {
       // A frente "Contratos" é visível pra qualquer pessoa logada (é o ponto
       // de partida pra ela virar membro — ver entrandoNaFrentePadrao acima).
+      // Quem foi convidado (por e-mail) também lê, para conseguir aceitar o
+      // convite no próximo login (ver resgatarConvitesPendentes).
       allow read: if logado()
-        && (frenteId == 'contratos-padrao' || request.auth.uid in resource.data.membrosUids);
+        && (frenteId == 'contratos-padrao'
+            || request.auth.uid in resource.data.membrosUids
+            || request.auth.token.email in resource.data.convitesPendentesEmails);
       allow create: if logado()
         && request.auth.uid == request.resource.data.donoId
         && request.auth.uid in request.resource.data.membrosUids;
@@ -177,10 +191,14 @@ service cloud.firestore {
       match /itens/{itemId} {
         allow read: if ehMembro(frenteId);
         allow create: if podeEditar(frenteId);
-        // Qualquer membro pode sincronizar só o campo membrosUids (usado nas
-        // consultas do painel geral); qualquer outra mudança exige edição.
+        // Qualquer membro da frente pode sincronizar só o campo membrosUids
+        // (usado nas consultas do painel geral), e só copiando a lista atual
+        // da frente — é o que acontece quando alguém aceita um convite, mesmo
+        // com acesso "Pode visualizar". Qualquer outra mudança exige edição.
         allow update: if podeEditar(frenteId)
-          || (ehMembroDoItem() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membrosUids']));
+          || (ehMembro(frenteId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membrosUids'])
+              && request.resource.data.membrosUids == get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids);
         allow delete: if podeEditar(frenteId);
 
         match /comentarios/{comentarioId} {
