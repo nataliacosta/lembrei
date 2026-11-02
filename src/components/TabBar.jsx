@@ -1,7 +1,7 @@
 import { NavLink, useMatch } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { IconeDocumento, IconeLista, IconeMais, IconePasta } from "./Icones";
-import { iniciais } from "./TopBar";
+import Avatar from "./Avatar";
 
 // Navegação inferior, visível só no celular (ver .tab-bar no CSS).
 export default function TabBar() {
@@ -30,13 +30,7 @@ export default function TabBar() {
         Contratos
       </NavLink>
       <NavLink to="/conta" className={classe}>
-        <span
-          className="avatar"
-          style={{ width: 24, height: 24, fontSize: 10 }}
-          aria-hidden="true"
-        >
-          {iniciais(user?.displayName || user?.email)}
-        </span>
+        <Avatar nome={user?.displayName || user?.email} url={user?.photoURL} tamanho={24} decorativo />
         Conta
       </NavLink>
     </nav>
