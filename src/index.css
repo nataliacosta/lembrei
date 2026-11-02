@@ -852,3 +852,44 @@ label {
     padding-bottom: 80px !important;
   }
 }
+
+/* ---------- Reuniões ---------- */
+
+.pill-reuniao {
+  background: #e3eefc;
+  color: #1f4f8f;
+}
+
+.pill-preparo {
+  background: #ede7fb;
+  color: #5b3fa3;
+}
+
+.agenda-row.reuniao {
+  background: #fafbfb;
+}
+
+.caixa-reuniao {
+  background: #f7f9fe;
+  border: 1px solid #c9dbf3;
+  border-radius: 12px;
+}
+
+.check-quadrado {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 2px solid #9aa5a4;
+  background: var(--color-white);
+  color: var(--color-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.check-quadrado[aria-pressed="true"] {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}

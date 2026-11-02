@@ -10,9 +10,17 @@ import { excluirFrente, watchFrente, watchItens } from "../lib/firestore";
 import { agruparItensDaFrente, ehMeu } from "../lib/agenda";
 import { FRENTE_CONTRATOS_ID, STATUS_OPCOES, TIPOS } from "../lib/constants";
 import { paraDate } from "../lib/datas";
+import { preparosDaOcorrencia, proximaOcorrencia } from "../lib/reunioes";
 
 // A data que aparece na linha do item: a mais próxima entre prazo e lembrete.
 function entradaDoItem(item) {
+  if (item.tipo === "reuniao" && item.reuniao) {
+    const ocorrencia = proximaOcorrencia(item.reuniao);
+    if (ocorrencia) {
+      return { chave: item.id, tipo: "reuniao", item, data: ocorrencia, preparos: preparosDaOcorrencia(item.reuniao, ocorrencia) };
+    }
+    return { chave: item.id, tipo: "sem-data", item, data: null };
+  }
   const prazo = item.prazo ? paraDate(item.prazo) : null;
   const lembrete = item.lembrete?.ativo ? paraDate(item.lembrete.proximaVerificacao) : null;
   const data = [prazo, lembrete].filter(Boolean).sort((a, b) => a - b)[0] || null;
@@ -100,7 +108,7 @@ export default function FrentePage() {
 
   const opcoesCategoria = [
     { key: "abertos", label: "Abertos" },
-    ...TIPOS.filter((t) => contagens[t.key] > 0).map((t) => ({ key: t.key, label: t.label + "s" })),
+    ...TIPOS.filter((t) => contagens[t.key] > 0).map((t) => ({ key: t.key, label: t.plural })),
     { key: "concluido", label: "Concluídos" },
   ];
 

@@ -1,5 +1,6 @@
 import { TIPO_POR_KEY } from "./constants";
-import { alertaVencimento, diasAte, paraDate } from "./datas";
+import { alertaVencimento, diasAte, inicioDoDia, paraDate } from "./datas";
+import { preparosDaOcorrencia, proximaOcorrencia } from "./reunioes";
 
 // Monta a visão "O que fazer": cada item aberto vira uma ou duas entradas na
 // agenda — uma pelo prazo (tipos que têm prazo) e outra pelo lembrete ativo —
@@ -33,14 +34,40 @@ function temPrazo(item) {
   return Boolean(item.prazo) && TIPO_POR_KEY[item.tipo]?.temStatusPrazo !== false;
 }
 
+function ehReuniao(item) {
+  return item.tipo === "reuniao" && Boolean(item.reuniao);
+}
+
 function temLembreteAtivo(item) {
   return Boolean(item.lembrete?.ativo && item.lembrete.proximaVerificacao);
 }
 
-export function entradasDaAgenda(itens) {
+// No filtro "Meus", o preparo conta para quem foi escolhido para ele; o resto,
+// para quem é responsável pelo item. Uma reunião vira uma entrada no dia dela e
+// uma por preparo pendente, a partir dos dias de antecedência de cada um.
+export function entradasDaAgenda(itens, { uid, soMeus = false } = {}) {
   const entradas = [];
+  const doItem = (item) => !soMeus || ehMeu(item, uid);
   for (const item of itens) {
     if (item.concluido) continue;
+    if (ehReuniao(item)) {
+      const ocorrencia = proximaOcorrencia(item.reuniao);
+      if (!ocorrencia) continue;
+      const preparos = preparosDaOcorrencia(item.reuniao, ocorrencia);
+      if (doItem(item)) {
+        entradas.push({ chave: `${item.id}:reuniao`, tipo: "reuniao", item, data: ocorrencia, preparos });
+      }
+      const hoje = inicioDoDia();
+      for (const preparo of preparos) {
+        if (preparo.feito || preparo.comecaEm > hoje) continue;
+        const meu = preparo.responsavelId ? preparo.responsavelId === uid : ehMeu(item, uid);
+        if (soMeus && !meu) continue;
+        // Data do preparo = dia da reunião (meia-noite), para vir antes dela na lista.
+        entradas.push({ chave: `${item.id}:preparo:${preparo.id}`, tipo: "preparo", item, preparo, data: inicioDoDia(ocorrencia), ocorrencia });
+      }
+      continue;
+    }
+    if (!doItem(item)) continue;
     if (temPrazo(item)) {
       entradas.push({ chave: `${item.id}:prazo`, tipo: "prazo", item, data: paraDate(item.prazo) });
     }
@@ -56,18 +83,23 @@ export function entradasDaAgenda(itens) {
   return entradas.sort((a, b) => a.data - b.data);
 }
 
-export function agruparAgenda(itens) {
+export function agruparAgenda(itens, opcoes = {}) {
   const grupos = Object.fromEntries(GRUPOS.map((g) => [g.key, []]));
-  for (const entrada of entradasDaAgenda(itens)) {
+  for (const entrada of entradasDaAgenda(itens, opcoes)) {
     grupos[grupoDaData(entrada.data)].push(entrada);
   }
-  const semData = itens.filter((i) => !i.concluido && !temPrazo(i) && !temLembreteAtivo(i));
+  const semData = itens.filter(
+    (i) =>
+      !i.concluido &&
+      (!opcoes.soMeus || ehMeu(i, opcoes.uid)) &&
+      (ehReuniao(i) ? !proximaOcorrencia(i.reuniao) : !temPrazo(i) && !temLembreteAtivo(i))
+  );
   return { grupos, semData };
 }
 
 // Um item está "atrasado" se o prazo ou o lembrete já passou.
 export function itemAtrasado(item) {
-  if (item.concluido) return false;
+  if (item.concluido || ehReuniao(item)) return false;
   if (temPrazo(item) && diasAte(item.prazo) < 0) return true;
   if (temLembreteAtivo(item) && diasAte(item.lembrete.proximaVerificacao) < 0) return true;
   return false;
@@ -81,11 +113,13 @@ export function agruparItensDaFrente(itens) {
   const semData = [];
   for (const item of itens) {
     if (itemAtrasado(item)) atrasados.push(item);
-    else if (temPrazo(item) || temLembreteAtivo(item)) comData.push(item);
+    else if (ehReuniao(item) ? proximaOcorrencia(item.reuniao) : temPrazo(item) || temLembreteAtivo(item)) comData.push(item);
     else semData.push(item);
   }
   const proximaData = (i) =>
-    Math.min(
+    ehReuniao(i)
+      ? (proximaOcorrencia(i.reuniao)?.getTime() ?? Infinity)
+      : Math.min(
       temPrazo(i) ? paraDate(i.prazo).getTime() : Infinity,
       temLembreteAtivo(i) ? paraDate(i.lembrete.proximaVerificacao).getTime() : Infinity
     );

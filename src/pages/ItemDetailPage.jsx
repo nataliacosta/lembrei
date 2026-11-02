@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Comentarios from "../components/Comentarios";
 import LembreteAcoes from "../components/LembreteAcoes";
+import ReuniaoDetalhe from "../components/ReuniaoDetalhe";
 import { IconeCheck, IconeSino } from "../components/Icones";
 import { useAuth } from "../contexts/AuthContext";
 import { BotaoVoltar, useVoltar } from "../contexts/HistoricoContext";
-
 import { useUsuarios } from "../hooks/useUsuarios";
 import { TIPO_POR_KEY, PAPEIS } from "../lib/constants";
 import { diasAte, formatarData, formatarDataRelativa } from "../lib/datas";
@@ -80,6 +80,10 @@ export default function ItemDetailPage() {
     if (!window.confirm(`Excluir o item "${item.titulo}"? Essa ação não pode ser desfeita.`)) return;
     await excluirItem(frenteId, itemId);
     voltar();
+  }
+
+  if (item.tipo === "reuniao" && item.reuniao) {
+    return <ReuniaoDetalhe item={item} frenteId={frenteId} papel={papel} podeEditar={podeEditar} onExcluir={excluir} />;
   }
 
 

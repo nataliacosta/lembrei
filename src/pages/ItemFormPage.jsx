@@ -10,6 +10,7 @@ import { atualizarItem, criarItem, watchFrente, watchItem } from "../lib/firesto
 import { watchContrato } from "../lib/contratos";
 import TagInput from "../components/TagInput";
 import CustomFieldsEditor from "../components/CustomFieldsEditor";
+import ReuniaoCampos, { formularioParaReuniao, reuniaoParaFormulario } from "../components/ReuniaoCampos";
 
 const LEMBRETE_VAZIO = { ativo: false, proximaVerificacao: null, mensagem: "", recorrente: false, status: "pendente" };
 const CHAVE_ULTIMA_FRENTE = "lembrei:ultimaFrente";
@@ -102,6 +103,7 @@ export default function ItemFormPage() {
   );
   const [tags, setTags] = useState([]);
   const [lembrete, setLembrete] = useState(LEMBRETE_VAZIO);
+  const [reuniao, setReuniao] = useState(() => reuniaoParaFormulario(null));
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
@@ -138,6 +140,7 @@ export default function ItemFormPage() {
         setCamposCustom(item.camposCustom || []);
         setTags(item.tags || []);
         setLembrete(item.lembrete || LEMBRETE_VAZIO);
+        setReuniao(reuniaoParaFormulario(item.reuniao));
       }
     });
     return unsub;
@@ -145,6 +148,8 @@ export default function ItemFormPage() {
 
   const membros = useUsuarios(frente?.membrosUids || []);
   const temStatusPrazo = TIPO_POR_KEY[tipo]?.temStatusPrazo;
+  const ehReuniao = tipo === "reuniao";
+  const nomeDe = (uid) => membros[uid]?.nome || (uid === user.uid ? user.displayName : "") || "";
 
   if (escolheFrente && frentesEditaveis.length === 0) {
     return (
@@ -161,6 +166,10 @@ export default function ItemFormPage() {
   async function salvar(e) {
     e?.preventDefault();
     if (!titulo.trim() || salvando) return;
+    if (ehReuniao && !reuniao.inicio) {
+      window.alert("Escolha a data da reunião.");
+      return;
+    }
     setSalvando(true);
 
     let respId = null;
@@ -182,7 +191,8 @@ export default function ItemFormPage() {
       responsavelNome: respNome,
       camposCustom: camposCustom.filter((c) => c.label.trim()),
       tags,
-      lembrete: lembrete.ativo && lembrete.proximaVerificacao ? { ...lembrete, status: "pendente" } : null,
+      lembrete: !ehReuniao && lembrete.ativo && lembrete.proximaVerificacao ? { ...lembrete, status: "pendente" } : null,
+      reuniao: ehReuniao ? formularioParaReuniao(reuniao, { original: itemOriginal?.reuniao, nomeDe }) : null,
     };
 
     try {
@@ -329,70 +339,82 @@ export default function ItemFormPage() {
             </div>
           )}
 
-          <div
-            style={{
-              marginTop: 20,
-              padding: "14px 16px",
-              borderRadius: 12,
-              background: lembrete.ativo ? "rgba(0,212,192,0.08)" : "var(--color-bg-soft)",
-              border: `1px solid ${lembrete.ativo ? "rgba(0,212,192,0.4)" : "var(--color-border)"}`,
-            }}
-          >
-            <label style={{ display: "flex", alignItems: "center", gap: 10, margin: 0, fontSize: 14, minHeight: 32 }}>
-              <input
-                type="checkbox"
-                checked={lembrete.ativo}
-                onChange={(e) =>
-                  setLembrete({
-                    ...lembrete,
-                    ativo: e.target.checked,
-                    proximaVerificacao: lembrete.proximaVerificacao || (e.target.checked ? somarDias(inicioDoDia(), 7) : null),
-                  })
-                }
-                style={{ width: 18, height: 18 }}
-              />
-              Me lembrar de verificar
-            </label>
-            {lembrete.ativo && (
-              <>
-                <div className="prazo-rapido" style={{ marginTop: 10 }} role="group" aria-label="Quando lembrar">
-                  {atalhosDeLembrete().map((a) => (
-                    <button
-                      key={a.label}
-                      type="button"
-                      className="chip"
-                      aria-pressed={lembreteValor === a.valor}
-                      onClick={() => setLembrete({ ...lembrete, proximaVerificacao: deInputDate(a.valor) })}
-                    >
-                      {a.label}
-                    </button>
-                  ))}
-                  <input
-                    type="date"
-                    value={lembreteValor}
-                    onChange={(e) => setLembrete({ ...lembrete, proximaVerificacao: deInputDate(e.target.value) })}
-                    aria-label="Outra data do lembrete"
-                  />
-                </div>
+          {ehReuniao && (
+            <ReuniaoCampos
+              valor={reuniao}
+              onChange={setReuniao}
+              membrosUids={frente.membrosUids || []}
+              nomeDe={nomeDe}
+              uidAtual={user.uid}
+            />
+          )}
+
+          {!ehReuniao && (
+            <div
+              style={{
+                marginTop: 20,
+                padding: "14px 16px",
+                borderRadius: 12,
+                background: lembrete.ativo ? "rgba(0,212,192,0.08)" : "var(--color-bg-soft)",
+                border: `1px solid ${lembrete.ativo ? "rgba(0,212,192,0.4)" : "var(--color-border)"}`,
+              }}
+            >
+              <label style={{ display: "flex", alignItems: "center", gap: 10, margin: 0, fontSize: 14, minHeight: 32 }}>
                 <input
-                  value={lembrete.mensagem}
-                  onChange={(e) => setLembrete({ ...lembrete, mensagem: e.target.value })}
-                  placeholder="Mensagem do lembrete. Ex: Cobrar retorno do fornecedor"
-                  aria-label="Mensagem do lembrete"
-                  style={{ marginTop: 10 }}
+                  type="checkbox"
+                  checked={lembrete.ativo}
+                  onChange={(e) =>
+                    setLembrete({
+                      ...lembrete,
+                      ativo: e.target.checked,
+                      proximaVerificacao: lembrete.proximaVerificacao || (e.target.checked ? somarDias(inicioDoDia(), 7) : null),
+                    })
+                  }
+                  style={{ width: 18, height: 18 }}
                 />
-                <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 500, marginTop: 10, marginBottom: 0 }}>
+                Me lembrar de verificar
+              </label>
+              {lembrete.ativo && (
+                <>
+                  <div className="prazo-rapido" style={{ marginTop: 10 }} role="group" aria-label="Quando lembrar">
+                    {atalhosDeLembrete().map((a) => (
+                      <button
+                        key={a.label}
+                        type="button"
+                        className="chip"
+                        aria-pressed={lembreteValor === a.valor}
+                        onClick={() => setLembrete({ ...lembrete, proximaVerificacao: deInputDate(a.valor) })}
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                    <input
+                      type="date"
+                      value={lembreteValor}
+                      onChange={(e) => setLembrete({ ...lembrete, proximaVerificacao: deInputDate(e.target.value) })}
+                      aria-label="Outra data do lembrete"
+                    />
+                  </div>
                   <input
-                    type="checkbox"
-                    checked={lembrete.recorrente}
-                    onChange={(e) => setLembrete({ ...lembrete, recorrente: e.target.checked })}
-                    style={{ width: "auto" }}
+                    value={lembrete.mensagem}
+                    onChange={(e) => setLembrete({ ...lembrete, mensagem: e.target.value })}
+                    placeholder="Mensagem do lembrete. Ex: Cobrar retorno do fornecedor"
+                    aria-label="Mensagem do lembrete"
+                    style={{ marginTop: 10 }}
                   />
-                  Quando tiver retorno, perguntar se ainda preciso acompanhar
-                </label>
-              </>
-            )}
-          </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 500, marginTop: 10, marginBottom: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={lembrete.recorrente}
+                      onChange={(e) => setLembrete({ ...lembrete, recorrente: e.target.checked })}
+                      style={{ width: "auto" }}
+                    />
+                    Quando tiver retorno, perguntar se ainda preciso acompanhar
+                  </label>
+                </>
+              )}
+            </div>
+          )}
 
           <details open={editando || Boolean(temDetalhes)} style={{ marginTop: 18, borderTop: "1px solid var(--color-border)", paddingTop: 14 }}>
             <summary style={{ fontSize: 14, fontWeight: 600, color: "var(--color-primary)", cursor: "pointer", minHeight: 32 }}>
@@ -449,7 +471,7 @@ export default function ItemFormPage() {
               Cancelar
             </button>
             <button type="submit" disabled={salvando || !titulo.trim()} className="btn btn-primary">
-              {salvando ? "Salvando..." : "Salvar item"}
+              {salvando ? "Salvando..." : ehReuniao ? "Salvar reunião" : "Salvar item"}
             </button>
           </span>
         </div>

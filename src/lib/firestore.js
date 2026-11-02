@@ -244,6 +244,7 @@ export async function criarItem(frenteId, { membrosUids, uid, ...dados }) {
     concluido: false,
     concluidoEm: null,
     lembrete: dados.lembrete || null,
+    reuniao: dados.reuniao || null,
     contratoVinculado: dados.contratoVinculado || null,
     criadoPor: uid,
     frenteId,
@@ -306,6 +307,20 @@ export async function encerrarLembrete(frenteId, itemId) {
     "lembrete.ativo": false,
     "lembrete.status": "respondido",
   });
+}
+
+// ---------- Reuniões ----------
+
+// Marca/desmarca um preparo como feito para a reunião de uma data ("AAAA-MM-DD").
+export async function marcarPreparo(frenteId, itemId, chave, preparoId, feito) {
+  return atualizarItem(frenteId, itemId, {
+    [`reuniao.feitos.${chave}`]: feito ? arrayUnion(preparoId) : arrayRemove(preparoId),
+  });
+}
+
+// Cancela só a reunião de uma data; a recorrência segue normal.
+export async function pularReuniao(frenteId, itemId, chave) {
+  return atualizarItem(frenteId, itemId, { "reuniao.puladas": arrayUnion(chave) });
 }
 
 export async function buscarItensAbertosDoUsuario(uid) {
