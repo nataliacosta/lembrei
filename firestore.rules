@@ -197,5 +197,55 @@ service cloud.firestore {
         }
       }
     }
+
+    // ---------- Fila de demandas ----------
+    // filas/{donoId}: o id é o uid do dono. Membros convidados podem ver ou
+    // editar (repriorizar, criar e atualizar demandas), nunca mudar o acesso.
+
+    function papelNaFila(donoId) {
+      return get(/databases/$(database)/documents/filas/$(donoId)).data.membros[request.auth.uid];
+    }
+
+    function podeVerFila(donoId) {
+      return logado() && (request.auth.uid == donoId || request.auth.uid in get(/databases/$(database)/documents/filas/$(donoId)).data.membrosUids);
+    }
+
+    function podeEditarFila(donoId) {
+      return logado() && (request.auth.uid == donoId || papelNaFila(donoId) == 'editor');
+    }
+
+    function aceitandoConviteFila() {
+      return logado()
+        && !(request.auth.uid in resource.data.membrosUids)
+        && request.auth.token.email in resource.data.convitesPendentesEmails
+        && request.auth.uid in request.resource.data.membrosUids
+        && request.resource.data.membros[request.auth.uid] in ['editor', 'visualizador']
+        && request.resource.data.donoId == resource.data.donoId
+        && request.resource.data.membros.diff(resource.data.membros).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    match /filas/{donoId} {
+      // Quem foi convidado precisa conseguir ler a fila para aceitar o convite.
+      allow read: if logado()
+        && (request.auth.uid == donoId
+            || request.auth.uid in resource.data.membrosUids
+            || request.auth.token.email in resource.data.convitesPendentesEmails);
+      allow create: if logado()
+        && request.auth.uid == donoId
+        && request.resource.data.donoId == donoId
+        && request.resource.data.membros[donoId] == 'proprietario';
+      allow update: if (logado() && request.auth.uid == donoId && request.resource.data.donoId == donoId)
+        || (logado() && resource.data.membros[request.auth.uid] == 'editor'
+            && request.resource.data.membros == resource.data.membros
+            && request.resource.data.membrosUids == resource.data.membrosUids
+            && request.resource.data.donoId == resource.data.donoId)
+        || aceitandoConviteFila();
+      allow delete: if false;
+
+      match /demandas/{demandaId} {
+        allow read: if podeVerFila(donoId);
+        allow create, update, delete: if podeEditarFila(donoId);
+      }
+    }
   }
 }

@@ -5,7 +5,8 @@ import { useDados } from "../contexts/DadosContext";
 import AgendaRow from "../components/AgendaRow";
 import { GRUPOS, agruparAgenda, contratosPedindoAtencao } from "../lib/agenda";
 import { CONTRATO_STATUS } from "../lib/constants";
-import { descreverVencimento, diaDaSemanaPorExtenso, diasAte, formatarData } from "../lib/datas";
+import { descreverVencimento, diaDaSemanaPorExtenso, diasAte, formatarData, formatarDataRelativa, inicioDoDia, paraDate } from "../lib/datas";
+import { calcularPrevisao, formatarHoras, horasRestantes, ordenarFila } from "../lib/previsao";
 
 function lerFiltro() {
   try {
@@ -25,8 +26,19 @@ function salvarFiltro(valor) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { itensAbertos, carregandoItens, erroItens, mapaFrentes, contratos, mapaContratos, aditivosTI, erroContratos, papelNaFrente } =
-    useDados();
+  const {
+    itensAbertos,
+    carregandoItens,
+    erroItens,
+    mapaFrentes,
+    contratos,
+    mapaContratos,
+    aditivosTI,
+    erroContratos,
+    papelNaFrente,
+    minhaFila,
+    minhasDemandas,
+  } = useDados();
   const [filtro, setFiltro] = useState(lerFiltro);
   const [mostrarSemData, setMostrarSemData] = useState(false);
 
@@ -41,6 +53,8 @@ export default function DashboardPage() {
   const totalAgenda = GRUPOS.reduce((soma, g) => soma + grupos[g.key].length, 0);
 
   const hoje = diaDaSemanaPorExtenso();
+  const minhaFilaOrdenada = minhaFila ? ordenarFila(minhaFila.ordem, minhasDemandas) : [];
+  const previsaoFila = calcularPrevisao(minhaFilaOrdenada.slice(0, 3), minhaFila?.capacidadeHoras || 6).itens;
 
   return (
     <>
@@ -149,6 +163,37 @@ export default function DashboardPage() {
       </div>
 
       <aside className="dashboard-aside page-shell" style={{ paddingTop: 28, paddingBottom: 48, paddingLeft: 0, paddingRight: 24, borderLeft: "none" }}>
+        {previsaoFila.length > 0 && (
+          <>
+            <h2 style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700, display: "flex", justifyContent: "space-between" }}>
+              Minha fila
+              <Link to="/demandas" style={{ fontSize: 13, fontWeight: 600 }}>
+                ver fila
+              </Link>
+            </h2>
+            <div className="lista-card" style={{ marginBottom: 24 }}>
+              {previsaoFila.map((r, i) => {
+                const d = r.demanda;
+                const estoura = d.prazoPedido && r.fim > inicioDoDia(paraDate(d.prazoPedido));
+                return (
+                  <Link key={d.id} to={`/demandas/${minhaFila.id}/${d.id}`} className="secao-lateral" style={i === 0 ? { background: "#f3fbfa" } : undefined}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{d.titulo}</span>
+                      <span className={estoura ? "texto-alerta" : ""} style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {diasAte(r.fim) === 0 ? "Hoje" : formatarDataRelativa(r.fim)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 2 }}>
+                      {i === 0 ? `Em andamento · restam ${formatarHoras(horasRestantes(d))}` : i === 1 ? "Próxima da fila" : `${i + 1}ª da fila`}
+                      {estoura && ` · depois do prazo pedido (${formatarData(d.prazoPedido)})`}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </>
+        )}
+
         <h2 id="contratos-atencao" style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700 }}>
           Contratos pedindo atenção
         </h2>

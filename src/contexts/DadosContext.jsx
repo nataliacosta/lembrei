@@ -3,6 +3,7 @@ import { useAuth } from "./AuthContext";
 import { watchFrentes, watchItensAbertosDoUsuario } from "../lib/firestore";
 import { buscarAditivosPendentesTI, watchContratos } from "../lib/contratos";
 import { itemAtrasado } from "../lib/agenda";
+import { watchDemandas, watchFila, watchFilasCompartilhadas } from "../lib/filas";
 
 // Dados que várias partes da tela usam ao mesmo tempo (painel, menu lateral,
 // busca, barra do celular): carregados uma vez só e mantidos em tempo real.
@@ -17,6 +18,26 @@ export function DadosProvider({ children }) {
   const [erroItens, setErroItens] = useState("");
   const [erroContratos, setErroContratos] = useState("");
   const [aditivosTI, setAditivosTI] = useState([]);
+  const [minhaFila, setMinhaFila] = useState(null);
+  const [minhasDemandas, setMinhasDemandas] = useState([]);
+  const [filasCompartilhadas, setFilasCompartilhadas] = useState([]);
+
+  // Minha fila de demandas (para o menu e o quadro do "O que fazer") e as
+  // filas que outras pessoas compartilharam comigo.
+  useEffect(() => {
+    if (!user) return;
+    return watchFila(user.uid, setMinhaFila);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    return watchDemandas(user.uid, setMinhasDemandas);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    return watchFilasCompartilhadas(user.uid, setFilasCompartilhadas);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -75,8 +96,11 @@ export function DadosProvider({ children }) {
       mapaContratos,
       contagemPorFrente,
       papelNaFrente: (frenteId) => mapaFrentes[frenteId]?.membros?.[user?.uid],
+      minhaFila,
+      minhasDemandas,
+      filasCompartilhadas,
     };
-  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user]);
+  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas]);
 
   return <DadosContext.Provider value={valor}>{children}</DadosContext.Provider>;
 }

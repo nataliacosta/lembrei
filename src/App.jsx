@@ -19,6 +19,9 @@ import CancelamentoFormPage from "./pages/CancelamentoFormPage";
 import FrentesListPage from "./pages/FrentesListPage";
 import ContaPage from "./pages/ContaPage";
 import BuscaPage from "./pages/BuscaPage";
+import DemandasPage from "./pages/DemandasPage";
+import DemandaFormPage from "./pages/DemandaFormPage";
+import FilaSharingPage from "./pages/FilaSharingPage";
 
 export default function App() {
   if (!firebaseConfigurado) {
@@ -39,6 +42,10 @@ export default function App() {
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/novo" element={<ItemFormPage />} />
+        <Route path="/demandas" element={<DemandasPage />} />
+        <Route path="/demandas/nova" element={<DemandaFormPage />} />
+        <Route path="/demandas/compartilhar" element={<FilaSharingPage />} />
+        <Route path="/demandas/:donoId/:demandaId" element={<DemandaFormPage />} />
         <Route path="/frentes" element={<FrentesListPage />} />
         <Route path="/buscar" element={<BuscaPage />} />
         <Route path="/conta" element={<ContaPage />} />

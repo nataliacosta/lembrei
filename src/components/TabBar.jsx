@@ -1,15 +1,14 @@
 import { NavLink, useMatch } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
-import { IconeDocumento, IconeLista, IconeMais, IconePasta } from "./Icones";
-import Avatar from "./Avatar";
+import { IconeDocumento, IconeFila, IconeLista, IconeMais, IconePasta } from "./Icones";
 
 // Navegação inferior, visível só no celular (ver .tab-bar no CSS).
 export default function TabBar() {
-  const { user } = useAuth();
   const naFrente = useMatch("/frentes/:frenteId/*");
   const frenteId = naFrente?.params.frenteId;
   // Dentro de uma frente, o "+" já cria o item nela.
-  const linkNovo = frenteId ? `/frentes/${frenteId}/novo` : "/novo";
+  const naFila = useMatch("/demandas/*");
+  // Na fila de demandas, o "+" cria uma demanda.
+  const linkNovo = frenteId ? `/frentes/${frenteId}/novo` : naFila ? "/demandas/nova" : "/novo";
   const classe = ({ isActive }) => (isActive ? "ativo" : "");
 
   return (
@@ -18,20 +17,20 @@ export default function TabBar() {
         <IconeLista size={22} />
         Hoje
       </NavLink>
+      <NavLink to="/demandas" className={classe}>
+        <IconeFila size={22} />
+        Demandas
+      </NavLink>
+      <NavLink to={linkNovo} className="tab-novo" aria-label={naFila ? "Nova demanda" : "Novo item"}>
+        <IconeMais size={24} />
+      </NavLink>
       <NavLink to="/frentes" className={classe}>
         <IconePasta size={22} />
         Frentes
       </NavLink>
-      <NavLink to={linkNovo} className="tab-novo" aria-label="Novo item">
-        <IconeMais size={24} />
-      </NavLink>
       <NavLink to="/contratos" className={classe}>
         <IconeDocumento size={22} />
         Contratos
-      </NavLink>
-      <NavLink to="/conta" className={classe}>
-        <Avatar nome={user?.displayName || user?.email} url={user?.photoURL} tamanho={24} decorativo />
-        Conta
       </NavLink>
     </nav>
   );
