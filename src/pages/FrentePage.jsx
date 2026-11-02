@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import AgendaRow from "../components/AgendaRow";
+import Avatar from "../components/Avatar";
 import { useAuth } from "../contexts/AuthContext";
 import { BotaoVoltar } from "../contexts/HistoricoContext";
 
@@ -125,14 +126,13 @@ export default function FrentePage() {
             </span>
             <span style={{ display: "flex", paddingLeft: 6 }}>
               {(frente.membrosUids || []).map((uid) => (
-                <span
+                <Avatar
                   key={uid}
-                  className="avatar"
-                  style={{ width: 26, height: 26, fontSize: 10, border: "2px solid var(--color-bg-soft)", marginLeft: -6 }}
-                  title={membros[uid]?.nome}
-                >
-                  {(membros[uid]?.nome || "?").slice(0, 2).toUpperCase()}
-                </span>
+                  nome={membros[uid]?.nome}
+                  url={membros[uid]?.avatarUrl}
+                  tamanho={26}
+                  style={{ border: "2px solid var(--color-bg-soft)", marginLeft: -6 }}
+                />
               ))}
             </span>
           </div>

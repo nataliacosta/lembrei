@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import Avatar from "../components/Avatar";
+
 import { useVoltar } from "../contexts/HistoricoContext";
 
 import { useUsuarios } from "../hooks/useUsuarios";
@@ -97,9 +99,7 @@ export default function SharingPage() {
               return (
                 <div key={uid} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, padding: "10px 0", borderBottom: "1px solid #F0F0F0" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div className="avatar" style={{ width: 34, height: 34, fontSize: 12 }}>
-                      {(m?.nome || "?").slice(0, 2).toUpperCase()}
-                    </div>
+                    <Avatar nome={m?.nome} url={m?.avatarUrl} tamanho={34} decorativo />
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>
                         {m?.nome} {uid === user.uid ? "(você)" : ""}

@@ -2,16 +2,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import Busca from "./Busca";
 import { IconeBusca } from "./Icones";
-
-export function iniciais(nome) {
-  if (!nome) return "?";
-  return nome
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0].toUpperCase())
-    .join("");
-}
+import Avatar from "./Avatar";
 
 export default function TopBar() {
   const { user, signOut } = useAuth();
@@ -37,13 +28,7 @@ export default function TopBar() {
             <IconeBusca size={22} />
           </span>
         </Link>
-        <div
-          className="avatar so-desktop"
-          style={{ width: 36, height: 36, fontSize: 13 }}
-          title={user?.displayName || user?.email}
-        >
-          {iniciais(user?.displayName || user?.email)}
-        </div>
+        <Avatar className="so-desktop" nome={user?.displayName || user?.email} url={user?.photoURL} tamanho={36} />
         <button onClick={signOut} className="btn-ghost btn so-desktop" style={{ fontSize: 12, padding: "6px 12px" }}>
           Sair
         </button>

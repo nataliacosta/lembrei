@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import Avatar from "../components/Avatar";
+
 import { BotaoVoltar } from "../contexts/HistoricoContext";
 
 import { useUsuarios } from "../hooks/useUsuarios";
@@ -343,9 +345,7 @@ export default function ContratoDetailPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {(contrato.membrosUids || []).map((uid) => (
                 <div key={uid} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                  <span className="avatar" style={{ width: 28, height: 28, fontSize: 11 }}>
-                    {(membros[uid]?.nome || "?").slice(0, 2).toUpperCase()}
-                  </span>
+                  <Avatar nome={membros[uid]?.nome} url={membros[uid]?.avatarUrl} tamanho={28} decorativo />
                   {membros[uid]?.nome || "..."} · {PAPEIS[contrato.membros?.[uid]]?.toLowerCase()}
                 </div>
               ))}

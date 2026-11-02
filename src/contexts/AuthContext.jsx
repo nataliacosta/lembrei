@@ -26,6 +26,10 @@ export function AuthProvider({ children }) {
         avatarUrl: firebaseUser.photoURL || "",
         criadoEm: serverTimestamp(),
       });
+    } else if ((snap.data().avatarUrl || "") !== (firebaseUser.photoURL || "")) {
+      // Mantém a foto do Google em dia (ela aparece para quem divide frentes
+      // e contratos com a pessoa).
+      await setDoc(ref, { avatarUrl: firebaseUser.photoURL || "" }, { merge: true });
     }
   }
 
