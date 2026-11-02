@@ -1,25 +1,86 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useDados } from "../contexts/DadosContext";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { CAMPO_CONTRATO_LABEL, FRENTE_CONTRATOS_ID, TIPOS, STATUS_OPCOES, TIPO_POR_KEY } from "../lib/constants";
-import { deInputDate, paraInputDate } from "../lib/datas";
+import { deInputDate, inicioDoDia, paraInputDate, somarDias } from "../lib/datas";
 import { atualizarItem, criarItem, watchFrente, watchItem } from "../lib/firestore";
 import { watchContrato } from "../lib/contratos";
 import TagInput from "../components/TagInput";
 import CustomFieldsEditor from "../components/CustomFieldsEditor";
 
 const LEMBRETE_VAZIO = { ativo: false, proximaVerificacao: null, mensagem: "", recorrente: false, status: "pendente" };
+const CHAVE_ULTIMA_FRENTE = "lembrei:ultimaFrente";
+
+// Datas locais em "AAAA-MM-DD" (sem passar por UTC, que pode trocar o dia).
+function paraInput(data) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${data.getFullYear()}-${p(data.getMonth() + 1)}-${p(data.getDate())}`;
+}
+
+function proximoDiaDaSemana(diaSemana) {
+  const hoje = inicioDoDia();
+  const faltam = (diaSemana - hoje.getDay() + 7) % 7 || 7;
+  return somarDias(hoje, faltam);
+}
+
+function atalhosDePrazo() {
+  const hoje = inicioDoDia();
+  const sexta = proximoDiaDaSemana(5);
+  return [
+    { label: "Hoje", valor: paraInput(hoje) },
+    { label: "Amanhã", valor: paraInput(somarDias(hoje, 1)) },
+    { label: `Sexta (${String(sexta.getDate()).padStart(2, "0")}/${String(sexta.getMonth() + 1).padStart(2, "0")})`, valor: paraInput(sexta) },
+    { label: "Próx. segunda", valor: paraInput(proximoDiaDaSemana(1)) },
+    { label: "Sem prazo", valor: "" },
+  ];
+}
+
+function atalhosDeLembrete() {
+  const hoje = inicioDoDia();
+  return [
+    { label: "Em 2 dias", valor: paraInput(somarDias(hoje, 2)) },
+    { label: "Em 1 semana", valor: paraInput(somarDias(hoje, 7)) },
+    { label: "Em 2 semanas", valor: paraInput(somarDias(hoje, 14)) },
+  ];
+}
+
+function lerUltimaFrente() {
+  try {
+    return localStorage.getItem(CHAVE_ULTIMA_FRENTE) || "";
+  } catch {
+    return "";
+  }
+}
+
+function salvarUltimaFrente(id) {
+  try {
+    localStorage.setItem(CHAVE_ULTIMA_FRENTE, id);
+  } catch {
+    // Sem localStorage: só não lembra a última frente.
+  }
+}
 
 export default function ItemFormPage() {
   const { frenteId: frenteIdParam, contratoId, itemId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { frentes } = useDados();
   const editando = Boolean(itemId);
   // Criado a partir da tela de um contrato: a frente é sempre a "Contratos",
   // e o item já nasce com o campo personalizado "Contrato" preenchido.
   const viaContrato = Boolean(contratoId) && !editando;
-  const frenteId = viaContrato ? FRENTE_CONTRATOS_ID : frenteIdParam;
+  // Criado pelo botão "+ Novo item" geral (/novo): a pessoa escolhe a frente.
+  const escolheFrente = !frenteIdParam && !viaContrato && !editando;
+
+  const frentesEditaveis = frentes.filter((f) => ["proprietario", "editor"].includes(f.membros?.[user.uid]));
+  const [frenteEscolhida, setFrenteEscolhida] = useState(lerUltimaFrente);
+  const frenteEscolhidaValida = frentesEditaveis.some((f) => f.id === frenteEscolhida)
+    ? frenteEscolhida
+    : frentesEditaveis[0]?.id || "";
+
+  const frenteId = viaContrato ? FRENTE_CONTRATOS_ID : escolheFrente ? frenteEscolhidaValida : frenteIdParam;
 
   const [frente, setFrente] = useState(null);
   const [contrato, setContrato] = useState(viaContrato ? undefined : null);
@@ -30,7 +91,7 @@ export default function ItemFormPage() {
   const [descricao, setDescricao] = useState("");
   const [status, setStatus] = useState(STATUS_OPCOES[0]);
   const [prazo, setPrazo] = useState("");
-  const [responsavelId, setResponsavelId] = useState("");
+  const [responsavelId, setResponsavelId] = useState(editando ? "" : user.uid);
   const [responsavelLivre, setResponsavelLivre] = useState("");
   const [camposCustom, setCamposCustom] = useState(
     viaContrato ? [{ label: CAMPO_CONTRATO_LABEL, valor: contratoId }] : []
@@ -40,14 +101,13 @@ export default function ItemFormPage() {
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-    const unsub = watchFrente(frenteId, setFrente);
-    return unsub;
+    if (!frenteId) return;
+    return watchFrente(frenteId, setFrente);
   }, [frenteId]);
 
   useEffect(() => {
     if (!viaContrato) return;
-    const unsub = watchContrato(contratoId, setContrato);
-    return unsub;
+    return watchContrato(contratoId, setContrato);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viaContrato, contratoId]);
 
@@ -82,13 +142,21 @@ export default function ItemFormPage() {
   const membros = useUsuarios(frente?.membrosUids || []);
   const temStatusPrazo = TIPO_POR_KEY[tipo]?.temStatusPrazo;
 
-  if (!frente || (editando && itemOriginal === undefined) || (viaContrato && contrato === undefined)) {
+  if (escolheFrente && frentesEditaveis.length === 0) {
+    return (
+      <div className="spinner-wrap" style={{ flexDirection: "column", gap: 12, textAlign: "center", padding: 24 }}>
+        {frentes.length === 0 ? "Carregando..." : "Você ainda não pode criar itens em nenhuma frente. Crie uma frente primeiro."}
+      </div>
+    );
+  }
+
+  if (!frente || frente.id !== frenteId || (editando && itemOriginal === undefined) || (viaContrato && contrato === undefined)) {
     return <div className="spinner-wrap">Carregando...</div>;
   }
 
   async function salvar(e) {
-    e.preventDefault();
-    if (!titulo.trim()) return;
+    e?.preventDefault();
+    if (!titulo.trim() || salvando) return;
     setSalvando(true);
 
     let respId = null;
@@ -97,7 +165,7 @@ export default function ItemFormPage() {
       respNome = responsavelLivre.trim() || null;
     } else if (responsavelId) {
       respId = responsavelId;
-      respNome = membros[responsavelId]?.nome || null;
+      respNome = membros[responsavelId]?.nome || (responsavelId === user.uid ? user.displayName : null) || null;
     }
 
     const dados = {
@@ -110,194 +178,293 @@ export default function ItemFormPage() {
       responsavelNome: respNome,
       camposCustom: camposCustom.filter((c) => c.label.trim()),
       tags,
-      lembrete: lembrete.ativo ? lembrete : null,
+      lembrete: lembrete.ativo && lembrete.proximaVerificacao ? { ...lembrete, status: "pendente" } : null,
     };
 
-    if (editando) {
-      await atualizarItem(frenteId, itemId, dados);
-      navigate(`/frentes/${frenteId}/itens/${itemId}`);
-    } else {
-      const ref = await criarItem(frenteId, {
-        ...dados,
-        uid: user.uid,
-        membrosUids: frente.membrosUids,
-        contratoVinculado: viaContrato ? contratoId : null,
-      });
-      navigate(viaContrato ? `/contratos/${contratoId}` : `/frentes/${frenteId}/itens/${ref.id}`);
+    try {
+      if (editando) {
+        await atualizarItem(frenteId, itemId, dados);
+        navigate(`/frentes/${frenteId}/itens/${itemId}`);
+      } else {
+        const ref = await criarItem(frenteId, {
+          ...dados,
+          uid: user.uid,
+          membrosUids: frente.membrosUids,
+          contratoVinculado: viaContrato ? contratoId : null,
+        });
+        if (escolheFrente) salvarUltimaFrente(frenteId);
+        navigate(viaContrato ? `/contratos/${contratoId}` : `/frentes/${frenteId}/itens/${ref.id}`);
+      }
+    } catch (erro) {
+      console.error("Erro ao salvar item:", erro);
+      window.alert("Não deu pra salvar o item. Tente de novo.");
+      setSalvando(false);
     }
-    setSalvando(false);
   }
 
   function cancelar() {
     if (editando) navigate(`/frentes/${frenteId}/itens/${itemId}`);
     else if (viaContrato) navigate(`/contratos/${contratoId}`);
+    else if (escolheFrente) navigate(-1);
     else navigate(`/frentes/${frenteId}`);
   }
+
+  function atalhoTeclado(e) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) salvar(e);
+    if (e.key === "Escape") cancelar();
+  }
+
+  const lembreteValor = paraInputDate(lembrete.proximaVerificacao);
+  const temDetalhes = descricao || tags.length > 0 || camposCustom.some((c) => c.label && c.label !== CAMPO_CONTRATO_LABEL);
 
   return (
     <div className="modal-overlay" style={{ width: "100%", minHeight: "100vh", background: "rgba(0,51,45,0.55)", display: "flex", justifyContent: "center" }}>
       <form
         onSubmit={salvar}
+        onKeyDown={atalhoTeclado}
         className="card"
-        style={{ width: "100%", maxWidth: 720, boxShadow: "0 20px 60px rgba(0,51,45,0.25)", overflow: "hidden" }}
+        style={{ width: "100%", maxWidth: 720, boxShadow: "0 20px 60px rgba(0,51,45,0.25)", overflow: "hidden", alignSelf: "flex-start" }}
       >
-        <div className="modal-body-pad" style={{ paddingTop: 24, paddingBottom: 24, borderBottom: "1px solid var(--color-gray-light)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{editando ? "Editar item" : "Novo item"}</h2>
-            <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 2 }}>
-              {viaContrato ? `Contrato: ${contrato.titulo}` : `Frente: ${frente.nome}`}
-            </div>
+        <div className="modal-body-pad" style={{ paddingTop: 18, paddingBottom: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-gray)" }}>
+            {editando ? "Editar item" : "Novo item"}
+            {viaContrato && ` · Contrato: ${contrato.titulo}`}
+            {!viaContrato && !escolheFrente && ` · ${frente.nome}`}
           </div>
-          <button type="button" onClick={cancelar} style={{ fontSize: 20, color: "var(--color-gray)", background: "none", border: "none" }} aria-label="Fechar">
+          <button
+            type="button"
+            onClick={cancelar}
+            style={{ fontSize: 22, color: "var(--color-gray)", background: "none", border: "none", width: 44, height: 44 }}
+            aria-label="Fechar"
+          >
             ×
           </button>
         </div>
 
-        <div className="modal-body-pad" style={{ paddingTop: 28, paddingBottom: 8 }}>
-          <label>Tipo de item</label>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-            {TIPOS.map((t) => {
-              const selecionado = t.key === tipo;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setTipo(t.key)}
-                  style={{
-                    background: selecionado ? "var(--color-primary)" : "#fff",
-                    color: selecionado ? "#fff" : "var(--color-dark)",
-                    border: `1px solid ${selecionado ? "var(--color-primary)" : "var(--color-gray-light)"}`,
-                    padding: "9px 16px",
-                    borderRadius: 20,
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
+        <div className="modal-body-pad" style={{ paddingBottom: 8 }}>
+          <label style={{ margin: 0 }}>
+            <span style={{ position: "absolute", left: -9999 }}>Título</span>
+            <input
+              autoFocus={!editando}
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              placeholder="O que você precisa lembrar?"
+              required
+              style={{
+                fontSize: 22,
+                fontWeight: 600,
+                border: "none",
+                borderBottom: "1px solid var(--color-border)",
+                borderRadius: 0,
+                padding: "4px 0 12px",
+              }}
+            />
+          </label>
 
-          <div style={{ marginBottom: 18 }}>
-            <label>Título</label>
-            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} required />
-          </div>
-
-          <div style={{ marginBottom: 18 }}>
-            <label>Descrição</label>
-            <textarea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} style={{ resize: "vertical" }} />
-          </div>
-
-          <div className="field-row" style={{ marginBottom: responsavelId === "__outro__" ? 10 : 18 }}>
+          <div className="field-row" style={{ marginTop: 20 }}>
+            {escolheFrente && (
+              <div>
+                <Rotulo>Frente</Rotulo>
+                <select value={frenteId} onChange={(e) => setFrenteEscolhida(e.target.value)} aria-label="Frente">
+                  {frentesEditaveis.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
-              <label>Responsável</label>
-              <select value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)}>
-                <option value="">— selecionar —</option>
+              <Rotulo>Responsável</Rotulo>
+              <select value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)} aria-label="Responsável">
+                <option value="">— ninguém —</option>
                 {(frente.membrosUids || []).map((uid) => (
                   <option key={uid} value={uid}>
-                    {membros[uid]?.nome || "..."}
+                    {uid === user.uid ? `Eu (${membros[uid]?.nome || user.displayName || "você"})` : membros[uid]?.nome || "..."}
                   </option>
                 ))}
                 <option value="__outro__">Outro (digitar nome)</option>
               </select>
             </div>
-            {temStatusPrazo && (
-              <div>
-                <label>Prazo</label>
-                <input type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
-              </div>
-            )}
           </div>
-
           {responsavelId === "__outro__" && (
-            <div style={{ marginBottom: 18 }}>
-              <input
-                value={responsavelLivre}
-                onChange={(e) => setResponsavelLivre(e.target.value)}
-                placeholder="Nome do responsável"
-              />
-            </div>
+            <input
+              value={responsavelLivre}
+              onChange={(e) => setResponsavelLivre(e.target.value)}
+              placeholder="Nome do responsável"
+              aria-label="Nome do responsável"
+              style={{ marginTop: 10 }}
+            />
           )}
+
+          <div style={{ marginTop: 20 }}>
+            <Rotulo>Tipo</Rotulo>
+            <div className="chips-row" role="group" aria-label="Tipo de item">
+              {TIPOS.map((t) => (
+                <button key={t.key} type="button" className="chip" aria-pressed={t.key === tipo} onClick={() => setTipo(t.key)}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {temStatusPrazo && (
-            <div style={{ marginBottom: 18 }}>
-              <label>Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                {STATUS_OPCOES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
+            <div style={{ marginTop: 20 }}>
+              <Rotulo>Prazo</Rotulo>
+              <div className="prazo-rapido" role="group" aria-label="Prazo">
+                {atalhosDePrazo().map((a) => (
+                  <button key={a.label} type="button" className="chip" aria-pressed={prazo === a.valor} onClick={() => setPrazo(a.valor)}>
+                    {a.label}
+                  </button>
                 ))}
-              </select>
+                <input type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} aria-label="Outra data de prazo" />
+              </div>
             </div>
           )}
 
-          <div style={{ marginBottom: 18 }}>
-            <label>Campos personalizados</label>
-            <CustomFieldsEditor campos={camposCustom} onChange={setCamposCustom} />
-          </div>
-
-          <div style={{ marginBottom: 18 }}>
-            <label>Tags</label>
-            <TagInput tags={tags} onChange={setTags} />
-          </div>
-
-          <div style={{ marginBottom: 18 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div
+            style={{
+              marginTop: 20,
+              padding: "14px 16px",
+              borderRadius: 12,
+              background: lembrete.ativo ? "rgba(0,212,192,0.08)" : "var(--color-bg-soft)",
+              border: `1px solid ${lembrete.ativo ? "rgba(0,212,192,0.4)" : "var(--color-border)"}`,
+            }}
+          >
+            <label style={{ display: "flex", alignItems: "center", gap: 10, margin: 0, fontSize: 14, minHeight: 32 }}>
               <input
                 type="checkbox"
                 checked={lembrete.ativo}
-                onChange={(e) => setLembrete({ ...lembrete, ativo: e.target.checked })}
-                style={{ width: "auto" }}
+                onChange={(e) =>
+                  setLembrete({
+                    ...lembrete,
+                    ativo: e.target.checked,
+                    proximaVerificacao: lembrete.proximaVerificacao || (e.target.checked ? somarDias(inicioDoDia(), 7) : null),
+                  })
+                }
+                style={{ width: 18, height: 18 }}
               />
-              Adicionar lembrete de verificação a este item
+              Me lembrar de verificar
             </label>
-          </div>
-
-          {lembrete.ativo && (
-            <div style={{ background: "rgba(0,212,192,0.1)", border: "1px solid rgba(0,212,192,0.4)", borderRadius: 10, padding: "18px 20px", marginBottom: 8 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Lembrete deste item</div>
-              <div className="field-row" style={{ marginBottom: 14 }}>
-                <div>
-                  <label>Próxima verificação</label>
+            {lembrete.ativo && (
+              <>
+                <div className="prazo-rapido" style={{ marginTop: 10 }} role="group" aria-label="Quando lembrar">
+                  {atalhosDeLembrete().map((a) => (
+                    <button
+                      key={a.label}
+                      type="button"
+                      className="chip"
+                      aria-pressed={lembreteValor === a.valor}
+                      onClick={() => setLembrete({ ...lembrete, proximaVerificacao: deInputDate(a.valor) })}
+                    >
+                      {a.label}
+                    </button>
+                  ))}
                   <input
                     type="date"
-                    value={paraInputDate(lembrete.proximaVerificacao)}
+                    value={lembreteValor}
                     onChange={(e) => setLembrete({ ...lembrete, proximaVerificacao: deInputDate(e.target.value) })}
+                    aria-label="Outra data do lembrete"
                   />
                 </div>
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <label>Mensagem do lembrete</label>
                 <input
                   value={lembrete.mensagem}
                   onChange={(e) => setLembrete({ ...lembrete, mensagem: e.target.value })}
-                  placeholder="Ex: Cobrar retorno do fornecedor"
+                  placeholder="Mensagem do lembrete. Ex: Cobrar retorno do fornecedor"
+                  aria-label="Mensagem do lembrete"
+                  style={{ marginTop: 10 }}
                 />
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 500, marginTop: 10, marginBottom: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={lembrete.recorrente}
+                    onChange={(e) => setLembrete({ ...lembrete, recorrente: e.target.checked })}
+                    style={{ width: "auto" }}
+                  />
+                  Quando tiver retorno, perguntar se ainda preciso acompanhar
+                </label>
+              </>
+            )}
+          </div>
+
+          <details open={editando || Boolean(temDetalhes)} style={{ marginTop: 18, borderTop: "1px solid var(--color-border)", paddingTop: 14 }}>
+            <summary style={{ fontSize: 14, fontWeight: 600, color: "var(--color-primary)", cursor: "pointer", minHeight: 32 }}>
+              Mais detalhes: {temStatusPrazo ? "status, " : ""}descrição, tags e campos personalizados
+            </summary>
+            <div style={{ paddingTop: 12 }}>
+              {temStatusPrazo && (
+                <div style={{ marginBottom: 18 }}>
+                  <Rotulo>Status</Rotulo>
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
+                    {STATUS_OPCOES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div style={{ marginBottom: 18 }}>
+                <Rotulo>Descrição</Rotulo>
+                <textarea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} style={{ resize: "vertical" }} aria-label="Descrição" />
               </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 500 }}>
-                <input
-                  type="checkbox"
-                  checked={lembrete.recorrente}
-                  onChange={(e) => setLembrete({ ...lembrete, recorrente: e.target.checked })}
-                  style={{ width: "auto" }}
-                />
-                Se houver retorno, perguntar se ainda preciso acompanhar antes de encerrar
-              </label>
+              <div style={{ marginBottom: 18 }}>
+                <Rotulo>Tags</Rotulo>
+                <TagInput tags={tags} onChange={setTags} />
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <Rotulo>Campos personalizados</Rotulo>
+                <CustomFieldsEditor campos={camposCustom} onChange={setCamposCustom} />
+              </div>
             </div>
-          )}
+          </details>
         </div>
 
-        <div className="modal-body-pad" style={{ paddingTop: 20, paddingBottom: 20, borderTop: "1px solid var(--color-gray-light)", display: "flex", justifyContent: "flex-end", gap: 12 }}>
-          <button type="button" onClick={cancelar} className="btn btn-ghost">
-            Cancelar
-          </button>
-          <button type="submit" disabled={salvando} className="btn btn-primary">
-            {salvando ? "Salvando..." : "Salvar item"}
-          </button>
+        <div
+          className="modal-body-pad"
+          style={{
+            paddingTop: 16,
+            paddingBottom: 16,
+            marginTop: 12,
+            borderTop: "1px solid var(--color-border)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <span className="so-desktop" style={{ fontSize: 12, color: "var(--color-gray)" }}>
+            Ctrl + Enter para salvar
+          </span>
+          <span style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
+            <button type="button" onClick={cancelar} className="btn btn-ghost">
+              Cancelar
+            </button>
+            <button type="submit" disabled={salvando || !titulo.trim()} className="btn btn-primary">
+              {salvando ? "Salvando..." : "Salvar item"}
+            </button>
+          </span>
         </div>
       </form>
     </div>
+  );
+}
+
+function Rotulo({ children }) {
+  return (
+    <span
+      style={{
+        display: "block",
+        fontSize: 12,
+        fontWeight: 700,
+        color: "var(--color-gray)",
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+        marginBottom: 8,
+      }}
+    >
+      {children}
+    </span>
   );
 }

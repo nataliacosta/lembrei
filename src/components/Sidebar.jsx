@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, NavLink } from "react-router-dom";
 import NovaFrenteModal from "./NovaFrenteModal";
 import { useAuth } from "../contexts/AuthContext";
-import { watchFrentes } from "../lib/firestore";
-import { watchContratos } from "../lib/contratos";
+import { useDados } from "../contexts/DadosContext";
 import { CONTRATO_STATUS } from "../lib/constants";
+import { situacaoDoContrato } from "../lib/agenda";
+import { IconeLista } from "./Icones";
 
 function lerPreferencia(chave, padrao) {
   try {
@@ -25,23 +26,10 @@ function salvarPreferencia(chave, valor) {
 
 export default function Sidebar() {
   const { user } = useAuth();
-  const [frentes, setFrentes] = useState([]);
-  const [contratos, setContratos] = useState([]);
+  const { frentes, contratos, contagemPorFrente } = useDados();
   const [mostrarNovaFrente, setMostrarNovaFrente] = useState(false);
   const [frentesAbertas, setFrentesAbertas] = useState(() => lerPreferencia("lembrei:sidebarFrentes", true));
   const [contratosAbertos, setContratosAbertos] = useState(() => lerPreferencia("lembrei:sidebarContratos", true));
-
-  useEffect(() => {
-    if (!user) return;
-    const unsub = watchFrentes(user.uid, setFrentes);
-    return unsub;
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    const unsub = watchContratos(user.uid, setContratos, () => {});
-    return unsub;
-  }, [user]);
 
   function alternarFrentes() {
     setFrentesAbertas((atual) => {
@@ -61,30 +49,34 @@ export default function Sidebar() {
 
   if (!user) return null;
 
+  const totalAtrasados = Object.values(contagemPorFrente).reduce((soma, c) => soma + c.atrasados, 0);
+  const classeLink = ({ isActive }) => (isActive ? "sidebar-link-ativo" : "");
+
   return (
     <div className="dashboard-sidebar" style={{ background: "var(--color-dark)", padding: "24px 0" }}>
-      <Link
+      <NavLink
         to="/dashboard"
+        className={classeLink}
         style={{
           display: "flex",
           alignItems: "center",
           gap: 10,
-          padding: "0 24px 20px 24px",
-          marginBottom: 8,
+          padding: "10px 24px",
           color: "#fff",
           fontSize: 14,
           fontWeight: 700,
-          borderBottom: "1px solid rgba(255,255,255,0.12)",
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "0 0 auto" }}>
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-          <polyline points="9 22 9 12 15 12 15 22"></polyline>
-        </svg>
-        Painel geral
-      </Link>
+        <IconeLista size={16} />
+        O que fazer
+        {totalAtrasados > 0 && (
+          <span className="sidebar-badge alerta" title={`${totalAtrasados} atrasados`}>
+            {totalAtrasados}
+          </span>
+        )}
+      </NavLink>
 
-      <div style={{ marginTop: 20 }}>
+      <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
         <SectionHeader aberto={frentesAbertas} onToggle={alternarFrentes}>
           Minhas frentes
         </SectionHeader>
@@ -95,16 +87,29 @@ export default function Sidebar() {
                 Nenhuma frente ainda.
               </div>
             )}
-            {frentes.map((f) => (
-              <Link
-                key={f.id}
-                to={`/frentes/${f.id}`}
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13 }}
-              >
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: f.cor, flex: "0 0 auto" }} />
-                {f.nome}
-              </Link>
-            ))}
+            {frentes.map((f) => {
+              const contagem = contagemPorFrente[f.id];
+              return (
+                <NavLink
+                  key={f.id}
+                  to={`/frentes/${f.id}`}
+                  className={classeLink}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13 }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: f.cor, flex: "0 0 auto" }} />
+                  {f.nome}
+                  {contagem?.atrasados > 0 ? (
+                    <span className="sidebar-badge alerta" title={`${contagem.atrasados} atrasados`}>
+                      {contagem.atrasados}
+                    </span>
+                  ) : contagem?.abertos > 0 ? (
+                    <span className="sidebar-badge" title={`${contagem.abertos} abertos`}>
+                      {contagem.abertos}
+                    </span>
+                  ) : null}
+                </NavLink>
+              );
+            })}
             <button
               onClick={() => setMostrarNovaFrente(true)}
               className="btn btn-primary"
@@ -128,9 +133,10 @@ export default function Sidebar() {
               </div>
             )}
             {contratos.map((c) => (
-              <Link
+              <NavLink
                 key={c.id}
                 to={`/contratos/${c.id}`}
+                className={classeLink}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13 }}
               >
                 <span
@@ -143,7 +149,12 @@ export default function Sidebar() {
                   }}
                 />
                 {c.titulo}
-              </Link>
+                {situacaoDoContrato(c) === "atencao" && (
+                  <span className="sidebar-badge alerta" title="Pede atenção (vencimento)">
+                    !
+                  </span>
+                )}
+              </NavLink>
             ))}
             <Link
               to="/contratos"

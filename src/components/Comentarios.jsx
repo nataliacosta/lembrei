@@ -45,7 +45,7 @@ export default function Comentarios({ caminhoPai }) {
     <div style={{ marginTop: 28 }}>
       <div
         style={{
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: 700,
           color: "var(--color-gray)",
           textTransform: "uppercase",
@@ -56,11 +56,6 @@ export default function Comentarios({ caminhoPai }) {
         Comentários {comentarios.length > 0 && `(${comentarios.length})`}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16, maxWidth: 600 }}>
-        {comentarios.map((c) => (
-          <ComentarioItem key={c.id} caminhoPai={caminhoPai} comentario={c} ehAutor={c.autorId === user.uid} />
-        ))}
-      </div>
 
       <form onSubmit={enviar} style={{ maxWidth: 600, display: "flex", gap: 8 }}>
         <input
@@ -73,6 +68,14 @@ export default function Comentarios({ caminhoPai }) {
           Comentar
         </button>
       </form>
+      {comentarios.length > 1 && (
+        <div style={{ fontSize: 12, color: "var(--color-gray)", margin: "12px 0 0" }}>Mais recentes primeiro</div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10, maxWidth: 600 }}>
+        {comentarios.map((c) => (
+          <ComentarioItem key={c.id} caminhoPai={caminhoPai} comentario={c} ehAutor={c.autorId === user.uid} />
+        ))}
+      </div>
     </div>
   );
 }

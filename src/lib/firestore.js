@@ -271,6 +271,43 @@ export async function marcarConcluido(frenteId, itemId, concluido) {
 
 // ---------- Painel geral (consulta entre frentes) ----------
 
+// Mesma consulta da busca abaixo, mas em tempo real: alimenta o painel, o
+// menu lateral, a busca e os contadores, que precisam refletir na hora um
+// item concluído ou um lembrete adiado.
+export function watchItensAbertosDoUsuario(uid, callback, onError) {
+  const q = query(
+    collectionGroup(db, "itens"),
+    where("membrosUids", "array-contains", uid),
+    where("concluido", "==", false),
+    orderBy("prazo", "asc")
+  );
+  return onSnapshot(
+    q,
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (erro) => {
+      console.error("Erro ao observar itens abertos:", erro);
+      if (onError) onError(erro);
+    }
+  );
+}
+
+// ---------- Lembretes ----------
+
+export async function adiarLembrete(frenteId, itemId, novaData) {
+  return atualizarItem(frenteId, itemId, {
+    "lembrete.proximaVerificacao": novaData,
+    "lembrete.status": "pendente",
+  });
+}
+
+// "Já tive retorno": encerra o lembrete (o item continua aberto).
+export async function encerrarLembrete(frenteId, itemId) {
+  return atualizarItem(frenteId, itemId, {
+    "lembrete.ativo": false,
+    "lembrete.status": "respondido",
+  });
+}
+
 export async function buscarItensAbertosDoUsuario(uid) {
   const q = query(
     collectionGroup(db, "itens"),

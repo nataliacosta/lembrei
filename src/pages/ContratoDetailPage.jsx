@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { CONTRATO_STATUS, FRENTE_CONTRATOS_ID, PAPEIS, TIPO_POR_KEY } from "../lib/constants";
-import { alertaVencimento, formatarData } from "../lib/datas";
+import { alertaVencimento, descreverVencimento, diasAte, formatarData } from "../lib/datas";
 import { watchItensDoContrato } from "../lib/firestore";
 import {
   atualizarContrato,
@@ -88,192 +88,322 @@ export default function ContratoDetailPage() {
     await finalizarCancelamento(contratoId, cancelamentoAtivo.id);
   }
 
-  return (
-    <div className="page-shell" style={{ maxWidth: 780, margin: "0 auto", paddingTop: 32, paddingBottom: 80 }}>
-        <Link to="/contratos" style={{ fontSize: 13, fontWeight: 600 }}>
-          ← Voltar para Contratos
-        </Link>
+  const proximoPasso = calcularProximoPasso({ contrato, alerta, aditivoAtivo, cancelamentoAtivo });
 
-        <div style={{ marginTop: 20, marginBottom: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-            <span className="pill" style={{ background: "rgba(0,0,0,0.06)", color: statusInfo.cor }}>
-              {statusInfo.label}
-              {contrato.status === "aditivo" && (aditivoAtivo?.pendenteEm || contrato.aditivoAtivoPendenteEm) &&
-                ` · Pendente em ${aditivoAtivo?.pendenteEm || contrato.aditivoAtivoPendenteEm}`}
-            </span>
+  return (
+    <div className="page-shell" style={{ paddingTop: 24, paddingBottom: 80, maxWidth: 1180 }}>
+      <Link to="/contratos" style={{ fontSize: 13, fontWeight: 600 }}>
+        ← Contratos
+      </Link>
+
+      <div className="detalhe-layout" style={{ marginTop: 16 }}>
+        <div className="detalhe-principal">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
             {alerta === "vencido" && (
               <span className="pill" style={{ background: "var(--color-accent)", color: "var(--color-dark)" }}>
                 Vencido
               </span>
             )}
             {alerta === "proximo" && (
-              <span className="pill" style={{ background: "rgba(238,115,27,0.14)", color: "var(--color-orange)" }}>
-                Vence em breve
+              <span className="pill" style={{ background: "var(--color-orange-soft)", color: "var(--color-orange)" }}>
+                {descreverVencimento(contrato.vencimento)}
               </span>
             )}
+            <span className="pill" style={{ background: "rgba(0,212,192,0.18)", color: "var(--color-dark)" }}>
+              {statusInfo.label}
+              {contrato.status === "aditivo" && (aditivoAtivo?.pendenteEm || contrato.aditivoAtivoPendenteEm) &&
+                ` · pendente em ${aditivoAtivo?.pendenteEm || contrato.aditivoAtivoPendenteEm}`}
+            </span>
           </div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{contrato.titulo}</h1>
-        </div>
-
-        <div className="meta-grid" style={{ padding: "16px 0", borderTop: "1px solid var(--color-gray-light)", borderBottom: "1px solid var(--color-gray-light)", marginBottom: 20 }}>
-          <Meta label="Número do contrato" valor={contrato.numero || "—"} />
-          <Meta label="Fornecedor" valor={contrato.fornecedor || "—"} />
-          <Meta label="Vencimento" valor={contrato.vencimento ? formatarData(contrato.vencimento) : "—"} />
-        </div>
-
-        {contrato.escopo && (
-          <div style={{ marginBottom: 24 }}>
-            <SectionTitle>Escopo</SectionTitle>
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, maxWidth: 620 }}>{contrato.escopo}</p>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>{contrato.titulo}</h1>
+          <div style={{ fontSize: 14, color: "var(--color-gray)", marginTop: 4 }}>
+            {[contrato.fornecedor, contrato.numero && `Nº ${contrato.numero}`].filter(Boolean).join(" · ")}
           </div>
-        )}
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 32 }}>
-          {podeEditar && (
-            <Link to={`/contratos/${contratoId}/itens/novo`} className="btn btn-primary">
-              + Novo item
-            </Link>
-          )}
-          {podeEditar && contrato.status === "ativo" && (
-            <Link to={`/contratos/${contratoId}/aditivos/novo`} className="btn btn-primary">
-              + Novo aditivo
-            </Link>
-          )}
-          {podeEditar && contrato.status === "aditivo" && (
-            <button onClick={concluirAditivo} className="btn btn-primary">
-              Finalizar aditivo
-            </button>
-          )}
-          {podeEditar && contrato.status === "ativo" && (
-            <Link to={`/contratos/${contratoId}/cancelamentos/novo`} className="btn btn-outline">
-              Solicitar cancelamento
-            </Link>
-          )}
-          {podeEditar && contrato.status === "cancelamento" && (
-            <button onClick={concluirCancelamento} className="btn btn-outline" style={{ borderColor: "var(--color-orange)", color: "var(--color-orange)" }}>
-              Finalizar cancelamento
-            </button>
-          )}
-          {podeEditar && (
-            <Link to={`/contratos/${contratoId}/editar`} className="btn btn-ghost">
-              Editar
-            </Link>
-          )}
-          <Link to={`/contratos/${contratoId}/compartilhar`} className="btn btn-ghost">
-            Compartilhar
-          </Link>
-          {souProprietario && (
-            <button onClick={excluir} className="btn btn-ghost" style={{ color: "var(--color-orange)", borderColor: "var(--color-orange)" }}>
-              Excluir contrato
-            </button>
-          )}
-          {!podeEditar && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 4px", fontSize: 12, color: "var(--color-gray)" }}>
-              Seu acesso: <b style={{ color: "var(--color-dark)" }}>{PAPEIS[papel] || "Sem acesso"}</b>
+          {proximoPasso && (
+            <div
+              className="lista-card"
+              style={{
+                marginTop: 18,
+                padding: "16px 18px",
+                borderColor: proximoPasso.alerta ? "var(--color-orange-border)" : "#00d4c0",
+                background: proximoPasso.alerta ? "var(--color-orange-soft)" : "var(--color-white)",
+                display: "flex",
+                gap: 16,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ flex: "1 1 300px" }}>
+                <div
+                  className={proximoPasso.alerta ? "texto-alerta" : ""}
+                  style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-primary-dark)" }}
+                >
+                  Próximo passo
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}>{proximoPasso.titulo}</div>
+                {proximoPasso.detalhe && <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 2 }}>{proximoPasso.detalhe}</div>}
+              </div>
+              {podeEditar && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {aditivoAtivo && (
+                    <Link to={`/contratos/${contratoId}/aditivos/${aditivoAtivo.id}`} className="btn btn-ghost">
+                      Ver aditivo
+                    </Link>
+                  )}
+                  {contrato.status === "aditivo" && (
+                    <button onClick={concluirAditivo} className="btn btn-primary">
+                      Finalizar aditivo
+                    </button>
+                  )}
+                  {contrato.status === "cancelamento" && (
+                    <button onClick={concluirCancelamento} className="btn btn-primary">
+                      Finalizar cancelamento
+                    </button>
+                  )}
+                  {contrato.status === "ativo" && (
+                    <>
+                      <Link to={`/contratos/${contratoId}/aditivos/novo`} className="btn btn-primary">
+                        + Novo aditivo
+                      </Link>
+                      <Link to={`/contratos/${contratoId}/cancelamentos/novo`} className="btn btn-ghost">
+                        Solicitar cancelamento
+                      </Link>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
-        </div>
 
-        {aditivos.length > 0 && (
-          <div style={{ marginBottom: 28 }}>
-            <SectionTitle>Aditivos</SectionTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 620 }}>
-              {aditivos.map((a) => (
-                <Link
-                  key={a.id}
-                  to={`/contratos/${contratoId}/aditivos/${a.id}`}
-                  className="card"
-                  style={{ padding: "12px 16px", opacity: a.finalizado ? 0.75 : 1, color: "inherit", display: "block" }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                    <span className="pill" style={{ background: a.finalizado ? "#F3F3F3" : "rgba(0,212,192,0.2)", color: a.finalizado ? "var(--color-gray)" : "var(--color-dark)" }}>
+          <SecaoCabecalho
+            titulo={`Itens · ${itensVinculados.length}`}
+            acao={
+              podeEditar && (
+                <Link to={`/contratos/${contratoId}/itens/novo`} style={{ fontSize: 13, fontWeight: 600 }}>
+                  + Novo item
+                </Link>
+              )
+            }
+          />
+          {itensVinculados.length === 0 ? (
+            <div className="lista-card empty-state" style={{ padding: 18 }}>Nenhum item ainda.</div>
+          ) : (
+            <div className="lista-card">
+              {itensVinculados
+                .slice()
+                .sort((a, b) => Number(a.concluido) - Number(b.concluido))
+                .map((item) => (
+                  <Link
+                    key={item.id}
+                    to={`/frentes/${FRENTE_CONTRATOS_ID}/itens/${item.id}`}
+                    state={{ from: "contrato", contratoId }}
+                    className="secao-lateral"
+                    style={{ display: "flex", justifyContent: "space-between", gap: 12, opacity: item.concluido ? 0.7 : 1 }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, textDecoration: item.concluido ? "line-through" : "none" }}>{item.titulo}</div>
+                      <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 2 }}>
+                        {TIPO_POR_KEY[item.tipo]?.label}
+                        {item.responsavelNome && ` · ${item.responsavelNome}`}
+                        {item.concluido && " · concluído"}
+                      </div>
+                    </div>
+                    {!item.concluido && item.prazo && (
+                      <span className={diasAte(item.prazo) < 0 ? "texto-alerta" : ""} style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {formatarData(item.prazo)}
+                      </span>
+                    )}
+                  </Link>
+                ))}
+            </div>
+          )}
+
+          {aditivos.length > 0 && (
+            <>
+              <SecaoCabecalho titulo={`Aditivos · ${aditivos.length}`} />
+              <div className="lista-card">
+                {aditivos.map((a) => (
+                  <Link
+                    key={a.id}
+                    to={`/contratos/${contratoId}/aditivos/${a.id}`}
+                    className="secao-lateral"
+                    style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", opacity: a.finalizado ? 0.7 : 1 }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{(a.tipo || []).join(", ") || "Aditivo"}</div>
+                      <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 2 }}>
+                        Pendente em {a.pendenteEm} · solicitado em {a.dataSolicitacao ? formatarData(a.dataSolicitacao) : "—"}
+                        {a.numeroRQS && ` · RQS ${a.numeroRQS}`}
+                        {a.motivo && ` · ${a.motivo}`}
+                      </div>
+                    </div>
+                    <span
+                      className="pill"
+                      style={{
+                        flex: "0 0 auto",
+                        background: a.finalizado ? "#eceeee" : "rgba(0,212,192,0.22)",
+                        color: a.finalizado ? "var(--color-gray)" : "var(--color-dark)",
+                      }}
+                    >
                       {a.finalizado ? "Finalizado" : "Em andamento"}
                     </span>
-                    <span style={{ fontSize: 12, color: "var(--color-gray)" }}>
-                      Solicitado em {a.dataSolicitacao ? formatarData(a.dataSolicitacao) : "—"}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 13, display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
-                    <span>Pendente em: <b>{a.pendenteEm}</b></span>
-                    <span>Tipo: {(a.tipo || []).join(", ") || "—"}</span>
-                    {a.numeroRQS && <span>RQS: {a.numeroRQS}</span>}
-                  </div>
-                  {a.motivo && <div style={{ fontSize: 13, color: "var(--color-gray)" }}>{a.motivo}</div>}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
+                  </Link>
+                ))}
+              </div>
+            </>
+          )}
 
-        {itensVinculados.length > 0 && (
-          <div style={{ marginBottom: 28 }}>
-            <SectionTitle>Itens</SectionTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 620 }}>
-              {itensVinculados.map((item) => (
-                <Link
-                  key={item.id}
-                  to={`/frentes/${FRENTE_CONTRATOS_ID}/itens/${item.id}`}
-                  state={{ from: "contrato", contratoId }}
-                  className="card"
-                  style={{ padding: "12px 16px", opacity: item.concluido ? 0.75 : 1, color: "inherit", display: "block" }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                    <span className="pill" style={{ background: "rgba(0,153,146,0.12)", color: "var(--color-primary)" }}>
-                      {TIPO_POR_KEY[item.tipo]?.label}
-                    </span>
-                    {item.concluido ? (
-                      <span style={{ fontSize: 12, color: "var(--color-gray)" }}>Concluído</span>
-                    ) : (
-                      item.prazo && <span style={{ fontSize: 12, color: "var(--color-gray)" }}>Prazo: {formatarData(item.prazo)}</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{item.titulo}</div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {cancelamentos.length > 0 && (
-          <div style={{ marginBottom: 28 }}>
-            <SectionTitle>Cancelamentos</SectionTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 620 }}>
-              {cancelamentos.map((c) => (
-                <div key={c.id} className="card" style={{ padding: "12px 16px", opacity: c.finalizado ? 0.75 : 1 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                    <span className="pill" style={{ background: c.finalizado ? "#F3F3F3" : "rgba(238,115,27,0.14)", color: c.finalizado ? "var(--color-gray)" : "var(--color-orange)" }}>
+          {cancelamentos.length > 0 && (
+            <>
+              <SecaoCabecalho titulo={`Cancelamentos · ${cancelamentos.length}`} />
+              <div className="lista-card">
+                {cancelamentos.map((c) => (
+                  <div
+                    key={c.id}
+                    className="secao-lateral"
+                    style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", opacity: c.finalizado ? 0.7 : 1 }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{c.motivo || "Cancelamento"}</div>
+                      <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 2 }}>
+                        Solicitado em {c.dataSolicitacao ? formatarData(c.dataSolicitacao) : "—"}
+                      </div>
+                    </div>
+                    <span
+                      className="pill"
+                      style={{
+                        flex: "0 0 auto",
+                        background: c.finalizado ? "#eceeee" : "var(--color-orange-soft)",
+                        color: c.finalizado ? "var(--color-gray)" : "var(--color-orange)",
+                      }}
+                    >
                       {c.finalizado ? "Concluído" : "Em andamento"}
                     </span>
-                    <span style={{ fontSize: 12, color: "var(--color-gray)" }}>
-                      Solicitado em {c.dataSolicitacao ? formatarData(c.dataSolicitacao) : "—"}
-                    </span>
                   </div>
-                  {c.motivo && <div style={{ fontSize: 13, color: "var(--color-gray)" }}>{c.motivo}</div>}
+                ))}
+              </div>
+            </>
+          )}
+
+          {contrato.escopo && (
+            <>
+              <SecaoCabecalho titulo="Escopo" />
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, maxWidth: 640, whiteSpace: "pre-wrap" }}>{contrato.escopo}</p>
+            </>
+          )}
+        </div>
+
+        <aside className="detalhe-lateral">
+          <div className="lista-card">
+            <div className="info-linha">
+              <span>Vencimento</span>
+              <span className={alerta ? "texto-alerta" : ""}>{contrato.vencimento ? formatarData(contrato.vencimento) : "—"}</span>
+            </div>
+            <div className="info-linha">
+              <span>Fornecedor</span>
+              <span>{contrato.fornecedor || "—"}</span>
+            </div>
+            <div className="info-linha">
+              <span>Número</span>
+              <span>{contrato.numero || "—"}</span>
+            </div>
+          </div>
+
+          <div className="lista-card" style={{ padding: "14px 16px" }}>
+            <SectionTitle>Ações</SectionTitle>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {podeEditar && (
+                <Link to={`/contratos/${contratoId}/editar`} className="btn btn-ghost">
+                  Editar contrato
+                </Link>
+              )}
+              <Link to={`/contratos/${contratoId}/compartilhar`} className="btn btn-ghost">
+                Compartilhar
+              </Link>
+              {podeEditar && contrato.status === "ativo" && (
+                <Link to={`/contratos/${contratoId}/cancelamentos/novo`} className="btn btn-ghost">
+                  Solicitar cancelamento
+                </Link>
+              )}
+              {souProprietario && (
+                <button onClick={excluir} className="btn btn-ghost" style={{ color: "var(--color-orange)", borderColor: "var(--color-orange-border)" }}>
+                  Excluir contrato
+                </button>
+              )}
+              {!podeEditar && (
+                <div style={{ fontSize: 12, color: "var(--color-gray)" }}>
+                  Seu acesso: <b style={{ color: "var(--color-dark)" }}>{PAPEIS[papel] || "Sem acesso"}</b>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="lista-card" style={{ padding: "14px 16px" }}>
+            <SectionTitle>Membros</SectionTitle>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {(contrato.membrosUids || []).map((uid) => (
+                <div key={uid} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                  <span className="avatar" style={{ width: 28, height: 28, fontSize: 11 }}>
+                    {(membros[uid]?.nome || "?").slice(0, 2).toUpperCase()}
+                  </span>
+                  {membros[uid]?.nome || "..."} · {PAPEIS[contrato.membros?.[uid]]?.toLowerCase()}
                 </div>
               ))}
             </div>
           </div>
-        )}
-
-        <div>
-          <SectionTitle>Membros</SectionTitle>
-          <div style={{ display: "flex", marginLeft: -6 }}>
-            {(contrato.membrosUids || []).map((uid) => (
-              <div key={uid} className="avatar" style={{ width: 28, height: 28, fontSize: 11, border: "2px solid #fff", marginLeft: -6 }} title={membros[uid]?.nome}>
-                {(membros[uid]?.nome || "?").slice(0, 2).toUpperCase()}
-              </div>
-            ))}
-          </div>
-        </div>
+        </aside>
       </div>
+    </div>
   );
 }
 
-function Meta({ label, valor }) {
+// O que está travando o contrato agora, em uma frase.
+function calcularProximoPasso({ contrato, alerta, aditivoAtivo, cancelamentoAtivo }) {
+  const avisoVencimento = alerta ? `${descreverVencimento(contrato.vencimento)} (${formatarData(contrato.vencimento)}).` : "";
+  if (contrato.status === "cancelamento") {
+    const desde = cancelamentoAtivo?.dataSolicitacao ? ` desde ${formatarData(cancelamentoAtivo.dataSolicitacao)}` : "";
+    return {
+      titulo: `Cancelamento em andamento${desde}`,
+      detalhe: "Quando o fornecedor confirmar, finalize o cancelamento.",
+      alerta: alerta === "vencido",
+    };
+  }
+  if (contrato.status === "aditivo" && aditivoAtivo) {
+    const parado = aditivoAtivo.dataSolicitacao ? -diasAte(aditivoAtivo.dataSolicitacao) : null;
+    const tipos = (aditivoAtivo.tipo || []).join(" e ").toLowerCase();
+    return {
+      titulo: `Aditivo${tipos ? ` de ${tipos}` : ""} aguardando ${aditivoAtivo.pendenteEm}${parado !== null ? ` há ${parado} ${parado === 1 ? "dia" : "dias"}` : ""}`,
+      detalhe: alerta ? `${avisoVencimento} Se o aditivo não sair antes, o contrato fica vencido.` : "",
+      alerta: alerta === "vencido",
+    };
+  }
+  if (contrato.status === "ativo" && alerta === "vencido") {
+    return { titulo: "Contrato vencido", detalhe: `${avisoVencimento} Abra um aditivo ou solicite o cancelamento.`, alerta: true };
+  }
+  if (contrato.status === "ativo" && alerta === "proximo") {
+    return { titulo: "Decidir: renovar ou encerrar", detalhe: `${avisoVencimento} Abra um aditivo ou solicite o cancelamento.`, alerta: false };
+  }
+  return null;
+}
+
+function SecaoCabecalho({ titulo, acao }) {
   return (
-    <div>
-      <div style={{ fontSize: 12, color: "var(--color-gray)", marginBottom: 3 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 500 }}>{valor}</div>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        margin: "24px 0 8px",
+        fontSize: 12,
+        fontWeight: 700,
+        color: "var(--color-gray)",
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+      }}
+    >
+      <span>{titulo}</span>
+      {acao && <span style={{ textTransform: "none", letterSpacing: 0 }}>{acao}</span>}
     </div>
   );
 }
