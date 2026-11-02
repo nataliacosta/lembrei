@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Comentarios from "../components/Comentarios";
 import { useAuth } from "../contexts/AuthContext";
+import { BotaoVoltar } from "../contexts/HistoricoContext";
 import { PAPEIS } from "../lib/constants";
 import { formatarData } from "../lib/datas";
 import { finalizarAditivo, watchAditivo, watchContrato } from "../lib/contratos";
@@ -35,9 +36,7 @@ export default function AditivoDetailPage() {
 
   return (
     <div className="page-shell" style={{ maxWidth: 780, margin: "0 auto", paddingTop: 32, paddingBottom: 80 }}>
-        <Link to={`/contratos/${contratoId}`} style={{ fontSize: 13, fontWeight: 600 }}>
-          ← Voltar para {contrato.titulo}
-        </Link>
+        <BotaoVoltar destinoPadrao={`/contratos/${contratoId}`} />
 
         <div style={{ marginTop: 20, marginBottom: 8 }}>
           <span className="pill" style={{ background: aditivo.finalizado ? "#F3F3F3" : "rgba(0,212,192,0.2)", color: aditivo.finalizado ? "var(--color-gray)" : "var(--color-dark)" }}>

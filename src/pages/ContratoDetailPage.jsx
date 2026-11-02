@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { BotaoVoltar } from "../contexts/HistoricoContext";
+
 import { useUsuarios } from "../hooks/useUsuarios";
 import { CONTRATO_STATUS, FRENTE_CONTRATOS_ID, PAPEIS, TIPO_POR_KEY } from "../lib/constants";
 import { alertaVencimento, descreverVencimento, diasAte, formatarData } from "../lib/datas";
@@ -73,7 +75,7 @@ export default function ContratoDetailPage() {
   async function excluir() {
     if (!window.confirm(`Excluir o contrato "${contrato.titulo}"? Essa ação não pode ser desfeita.`)) return;
     await excluirContrato(contratoId);
-    navigate("/contratos");
+    navigate("/contratos", { replace: true });
   }
 
   async function concluirAditivo() {
@@ -92,9 +94,7 @@ export default function ContratoDetailPage() {
 
   return (
     <div className="page-shell" style={{ paddingTop: 24, paddingBottom: 80, maxWidth: 1180 }}>
-      <Link to="/contratos" style={{ fontSize: 13, fontWeight: 600 }}>
-        ← Contratos
-      </Link>
+      <BotaoVoltar destinoPadrao="/contratos" />
 
       <div className="detalhe-layout" style={{ marginTop: 16 }}>
         <div className="detalhe-principal">
@@ -197,7 +197,6 @@ export default function ContratoDetailPage() {
                   <Link
                     key={item.id}
                     to={`/frentes/${FRENTE_CONTRATOS_ID}/itens/${item.id}`}
-                    state={{ from: "contrato", contratoId }}
                     className="secao-lateral"
                     style={{ display: "flex", justifyContent: "space-between", gap: 12, opacity: item.concluido ? 0.7 : 1 }}
                   >

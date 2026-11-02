@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useVoltar } from "../contexts/HistoricoContext";
+
 import { atualizarAditivo, atualizarContrato, criarAditivo, watchAditivo, watchContrato } from "../lib/contratos";
 import { ADITIVO_TIPOS, PENDENTE_EM_OPCOES } from "../lib/constants";
 import { deInputDate, paraInputDate } from "../lib/datas";
@@ -9,6 +11,9 @@ export default function AditivoFormPage() {
   const { contratoId, aditivoId } = useParams();
   const editando = Boolean(aditivoId);
   const navigate = useNavigate();
+  const { voltar: voltarHistorico, temAnterior } = useVoltar(
+    aditivoId ? `/contratos/${contratoId}/aditivos/${aditivoId}` : `/contratos/${contratoId}`
+  );
   const { user } = useAuth();
   const [contrato, setContrato] = useState(undefined);
   const [aditivoOriginal, setAditivoOriginal] = useState(editando ? undefined : null);
@@ -52,7 +57,7 @@ export default function AditivoFormPage() {
   }
 
   function voltar() {
-    navigate(editando ? `/contratos/${contratoId}/aditivos/${aditivoId}` : `/contratos/${contratoId}`);
+    voltarHistorico();
   }
 
   async function salvar(e) {
@@ -73,10 +78,11 @@ export default function AditivoFormPage() {
       if (!aditivoOriginal.finalizado) {
         await atualizarContrato(contratoId, { aditivoAtivoPendenteEm: pendenteEm });
       }
-      navigate(`/contratos/${contratoId}/aditivos/${aditivoId}`);
+      if (temAnterior) voltarHistorico();
+      else navigate(`/contratos/${contratoId}/aditivos/${aditivoId}`, { replace: true });
     } else {
       const ref = await criarAditivo(contratoId, { ...dados, uid: user.uid, membrosUids: contrato.membrosUids });
-      navigate(`/contratos/${contratoId}/aditivos/${ref.id}`);
+      navigate(`/contratos/${contratoId}/aditivos/${ref.id}`, { replace: true });
     }
     setSalvando(false);
   }

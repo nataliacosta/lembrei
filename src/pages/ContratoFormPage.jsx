@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useVoltar } from "../contexts/HistoricoContext";
+
 import { atualizarContrato, criarContrato, watchContrato } from "../lib/contratos";
 import { deInputDate, paraInputDate } from "../lib/datas";
 
@@ -8,6 +10,7 @@ export default function ContratoFormPage() {
   const { contratoId } = useParams();
   const editando = Boolean(contratoId);
   const navigate = useNavigate();
+  const { voltar, temAnterior } = useVoltar(contratoId ? `/contratos/${contratoId}` : "/contratos");
   const { user } = useAuth();
 
   const [contratoOriginal, setContratoOriginal] = useState(editando ? undefined : null);
@@ -50,16 +53,17 @@ export default function ContratoFormPage() {
     };
     if (editando) {
       await atualizarContrato(contratoId, dados);
-      navigate(`/contratos/${contratoId}`);
+      if (temAnterior) voltar();
+      else navigate(`/contratos/${contratoId}`, { replace: true });
     } else {
       const ref = await criarContrato({ ...dados, uid: user.uid });
-      navigate(`/contratos/${ref.id}`);
+      navigate(`/contratos/${ref.id}`, { replace: true });
     }
     setSalvando(false);
   }
 
   function cancelar() {
-    navigate(editando ? `/contratos/${contratoId}` : "/contratos");
+    voltar();
   }
 
   return (

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useVoltar } from "../contexts/HistoricoContext";
+
 import { useUsuarios } from "../hooks/useUsuarios";
 import { PAPEIS } from "../lib/constants";
 import { alterarPapel, cancelarConvite, convidarMembro, removerMembro, watchFrente } from "../lib/firestore";
@@ -8,6 +10,7 @@ import { alterarPapel, cancelarConvite, convidarMembro, removerMembro, watchFren
 export default function SharingPage() {
   const { frenteId } = useParams();
   const { user } = useAuth();
+  const { voltar } = useVoltar(`/frentes/${frenteId}`);
   const [frente, setFrente] = useState(undefined);
   const [email, setEmail] = useState("");
   const [papelConvite, setPapelConvite] = useState("editor");
@@ -46,9 +49,9 @@ export default function SharingPage() {
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Compartilhar frente</h2>
             <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 2 }}>{frente.nome}</div>
           </div>
-          <Link to={`/frentes/${frenteId}`} style={{ fontSize: 20, color: "var(--color-gray)" }} aria-label="Fechar">
+          <button type="button" onClick={voltar} style={{ fontSize: 20, color: "var(--color-gray)", background: "none", border: "none", width: 44, height: 44 }} aria-label="Fechar">
             ×
-          </Link>
+          </button>
         </div>
 
         <div className="modal-body-pad" style={{ paddingTop: 24, paddingBottom: 24 }}>
@@ -157,9 +160,9 @@ export default function SharingPage() {
         </div>
 
         <div className="modal-body-pad" style={{ paddingTop: 20, paddingBottom: 20, borderTop: "1px solid var(--color-gray-light)", display: "flex", justifyContent: "flex-end" }}>
-          <Link to={`/frentes/${frenteId}`} className="btn btn-primary">
+          <button type="button" onClick={voltar} className="btn btn-primary">
             Concluído
-          </Link>
+          </button>
         </div>
       </div>
     </div>

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useVoltar } from "../contexts/HistoricoContext";
+
 import { criarCancelamento, watchContrato } from "../lib/contratos";
 import { deInputDate } from "../lib/datas";
 
 export default function CancelamentoFormPage() {
   const { contratoId } = useParams();
-  const navigate = useNavigate();
+  const { voltar } = useVoltar(`/contratos/${contratoId}`);
   const { user } = useAuth();
   const [contrato, setContrato] = useState(undefined);
 
@@ -31,11 +33,11 @@ export default function CancelamentoFormPage() {
       motivo: motivo.trim(),
     });
     setSalvando(false);
-    navigate(`/contratos/${contratoId}`);
+    voltar();
   }
 
   function cancelar() {
-    navigate(`/contratos/${contratoId}`);
+    voltar();
   }
 
   return (

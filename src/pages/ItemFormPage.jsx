@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useVoltar } from "../contexts/HistoricoContext";
 import { useDados } from "../contexts/DadosContext";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { CAMPO_CONTRATO_LABEL, FRENTE_CONTRATOS_ID, TIPOS, STATUS_OPCOES, TIPO_POR_KEY } from "../lib/constants";
@@ -66,6 +67,9 @@ export default function ItemFormPage() {
   const { frenteId: frenteIdParam, contratoId, itemId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { voltar, temAnterior } = useVoltar(
+    itemId ? `/frentes/${frenteIdParam}/itens/${itemId}` : contratoId ? `/contratos/${contratoId}` : frenteIdParam ? `/frentes/${frenteIdParam}` : "/dashboard"
+  );
   const { frentes } = useDados();
   const editando = Boolean(itemId);
   // Criado a partir da tela de um contrato: a frente é sempre a "Contratos",
@@ -184,7 +188,9 @@ export default function ItemFormPage() {
     try {
       if (editando) {
         await atualizarItem(frenteId, itemId, dados);
-        navigate(`/frentes/${frenteId}/itens/${itemId}`);
+        // Volta para o detalhe de onde veio (sem empilhar o formulário).
+        if (temAnterior) voltar();
+        else navigate(`/frentes/${frenteId}/itens/${itemId}`, { replace: true });
       } else {
         const ref = await criarItem(frenteId, {
           ...dados,
@@ -193,7 +199,11 @@ export default function ItemFormPage() {
           contratoVinculado: viaContrato ? contratoId : null,
         });
         if (escolheFrente) salvarUltimaFrente(frenteId);
-        navigate(viaContrato ? `/contratos/${contratoId}` : `/frentes/${frenteId}/itens/${ref.id}`);
+        // Criado a partir do contrato: volta para ele. Senão, abre o item
+        // novo no lugar do formulário — o "voltar" dele leva para onde a
+        // pessoa estava antes de clicar em "+ Novo item".
+        if (viaContrato) voltar();
+        else navigate(`/frentes/${frenteId}/itens/${ref.id}`, { replace: true });
       }
     } catch (erro) {
       console.error("Erro ao salvar item:", erro);
@@ -203,10 +213,7 @@ export default function ItemFormPage() {
   }
 
   function cancelar() {
-    if (editando) navigate(`/frentes/${frenteId}/itens/${itemId}`);
-    else if (viaContrato) navigate(`/contratos/${contratoId}`);
-    else if (escolheFrente) navigate(-1);
-    else navigate(`/frentes/${frenteId}`);
+    voltar();
   }
 
   function atalhoTeclado(e) {
