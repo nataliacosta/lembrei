@@ -73,7 +73,7 @@ function ListaPreparos({ item, preparos, podeEditar, passada }) {
   );
 }
 
-export default function ReuniaoDetalhe({ item, frenteId, papel, podeEditar, onExcluir }) {
+export default function ReuniaoDetalhe({ item, frenteId, frente, membros, papel, podeEditar, onExcluir }) {
   const reuniao = item.reuniao;
   const itemComFrente = { ...item, frenteId };
   const proxima = proximaOcorrencia(reuniao);
@@ -158,7 +158,12 @@ export default function ReuniaoDetalhe({ item, frenteId, papel, podeEditar, onEx
           )}
 
           <div style={{ maxWidth: 640 }}>
-            <Comentarios caminhoPai={["frentes", frenteId, "itens", item.id]} />
+            <Comentarios
+              caminhoPai={["frentes", frenteId, "itens", item.id]}
+              aviso={{ alvo: item.titulo, contexto: frente?.nome, link: `/frentes/${frenteId}/itens/${item.id}`, interessados: [item.responsavelId, item.criadoPor] }}
+              usuarios={membros}
+              papeis={frente?.membros}
+            />
           </div>
         </div>
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import AguardandoPriorizacao from "../components/AguardandoPriorizacao";
 import ExportarFila from "../components/ExportarFila";
+import { notificar, notificarFila } from "../lib/notificacoes";
 import { IconeCheck } from "../components/Icones";
 import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
@@ -112,6 +113,21 @@ export default function DemandasPage() {
     .sort((a, b) => (b.concluidaEm?.seconds || 0) - (a.concluidaEm?.seconds || 0))
     .slice(0, 5);
 
+  // Avisos para quem acompanha a fila.
+  function avisarPriorizada(d, posicao, fim) {
+    notificarFila(donoId, fila, {
+      tipo: "demanda_priorizada",
+      alvo: d.titulo,
+      trecho: `Entrou na ${posicao + 1}ª posição${fim ? ` · previsão ${formatarData(fim)}` : ""}`,
+      link: `/demandas/${donoId}/${d.id}`,
+    });
+  }
+
+  function avisarRepriorizada(texto) {
+    if (ehMinha) return;
+    notificar([donoId], { tipo: "fila_repriorizada", alvo: "sua fila", trecho: texto, link: "/demandas" });
+  }
+
   async function reordenar(de, para) {
     if (de === para || para < 0 || para >= ordemAtual.length) return;
     const nova = mover(ordemAtual, de, para);
@@ -123,6 +139,7 @@ export default function DemandasPage() {
     const difs = compararPrevisoes(previsaoSalva, novaPrevisao);
     await salvarOrdem(donoId, nova);
     setAviso(resumirImpacto(difs));
+    avisarRepriorizada(resumirImpacto(difs));
   }
 
   // Cartão de "Aguardando priorização" solto numa posição da fila.
@@ -138,12 +155,14 @@ export default function DemandasPage() {
     }
     await priorizarDemanda(donoId, fila.ordem || [], id, posicao);
     setAviso(`“${d?.titulo || "Demanda"}” entrou na ${posicao + 1}ª posição da fila.`);
+    avisarPriorizada(d, posicao);
   }
 
   async function salvarSimulacao() {
     await salvarOrdem(donoId, ordemSimulada);
     setOrdemSimulada(null);
     setAviso("Nova ordem salva.");
+    avisarRepriorizada(diferencas.length ? resumirImpacto(diferencas) : "A ordem das demandas mudou.");
   }
 
   async function concluir(demanda) {
@@ -530,7 +549,10 @@ export default function DemandasPage() {
         podeEditar={podeEditar && !ordemSimulada}
         donoId={donoId}
         ordem={fila.ordem || []}
-        onPriorizado={setAviso}
+        onPriorizado={(msg, d, posicao, fim) => {
+          setAviso(msg);
+          avisarPriorizada(d, posicao, fim);
+        }}
         onArrastar={setArrastandoNova}
       />
       </div>

@@ -265,5 +265,21 @@ service cloud.firestore {
         allow create, update, delete: if podeEditarFila(donoId);
       }
     }
+
+    // ---------- Notificações ----------
+    // Cada pessoa só lê, marca como lida e apaga as próprias. Quem cria o
+    // aviso é quem fez a ação (autorId precisa ser a própria conta).
+    match /notificacoes/{notificacaoId} {
+      allow read, delete: if logado() && resource.data.destinatarioId == request.auth.uid;
+      allow create: if logado()
+        && request.resource.data.autorId == request.auth.uid
+        && request.resource.data.lida == false
+        && request.resource.data.keys().hasOnly(['destinatarioId', 'autorId', 'autorNome', 'autorFoto', 'tipo', 'alvo', 'contexto', 'trecho', 'link', 'lida', 'criadoEm'])
+        && request.resource.data.tipo in ['comentario', 'mencao', 'atribuido', 'aditivo', 'demanda_criada', 'demanda_priorizada', 'fila_repriorizada', 'convite_recebido', 'convite_aceito']
+        && request.resource.data.trecho.size() <= 300;
+      allow update: if logado()
+        && resource.data.destinatarioId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lida']);
+    }
   }
 }

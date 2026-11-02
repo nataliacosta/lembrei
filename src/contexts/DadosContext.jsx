@@ -4,6 +4,7 @@ import { watchFrentes, watchItensAbertosDoUsuario } from "../lib/firestore";
 import { buscarAditivosPendentesTI, watchContratos } from "../lib/contratos";
 import { itemAtrasado } from "../lib/agenda";
 import { watchDemandas, watchFila, watchFilasCompartilhadas } from "../lib/filas";
+import { limparNotificacoesAntigas, watchNotificacoes } from "../lib/notificacoes";
 
 // Dados que várias partes da tela usam ao mesmo tempo (painel, menu lateral,
 // busca, barra do celular): carregados uma vez só e mantidos em tempo real.
@@ -21,6 +22,13 @@ export function DadosProvider({ children }) {
   const [minhaFila, setMinhaFila] = useState(null);
   const [minhasDemandas, setMinhasDemandas] = useState([]);
   const [filasCompartilhadas, setFilasCompartilhadas] = useState([]);
+  const [notificacoes, setNotificacoes] = useState([]);
+
+  useEffect(() => {
+    if (!user) return;
+    limparNotificacoesAntigas(user.uid).catch((e) => console.error("Erro ao limpar notificações antigas:", e));
+    return watchNotificacoes(user.uid, setNotificacoes);
+  }, [user]);
 
   // Minha fila de demandas (para o menu e o quadro do "O que fazer") e as
   // filas que outras pessoas compartilharam comigo.
@@ -99,8 +107,10 @@ export function DadosProvider({ children }) {
       minhaFila,
       minhasDemandas,
       filasCompartilhadas,
+      notificacoes,
+      naoLidas: notificacoes.filter((n) => !n.lida).length,
     };
-  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas]);
+  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas, notificacoes]);
 
   return <DadosContext.Provider value={valor}>{children}</DadosContext.Provider>;
 }

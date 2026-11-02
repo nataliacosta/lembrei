@@ -15,6 +15,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { avisarConviteResgatado, proprietarioDe } from "./notificacoes";
 
 function contratosRef() {
   return collection(db, "contratos");
@@ -136,6 +137,13 @@ export async function resgatarConvitesPendentesContratos(uid, email) {
       convitesPendentesEmails: arrayRemove(email),
     });
     await sincronizarMembrosNosAditivos(contratoDoc.id, novosMembrosUids);
+    await avisarConviteResgatado({
+      donoId: proprietarioDe(contrato.membros),
+      contexto: "o contrato",
+      alvo: contrato.titulo,
+      linkConvidada: `/contratos/${contratoDoc.id}`,
+      linkDona: `/contratos/${contratoDoc.id}/compartilhar`,
+    });
   }
 }
 

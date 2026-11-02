@@ -83,7 +83,7 @@ export default function ItemDetailPage() {
   }
 
   if (item.tipo === "reuniao" && item.reuniao) {
-    return <ReuniaoDetalhe item={item} frenteId={frenteId} papel={papel} podeEditar={podeEditar} onExcluir={excluir} />;
+    return <ReuniaoDetalhe item={item} frenteId={frenteId} frente={frente} membros={membros} papel={papel} podeEditar={podeEditar} onExcluir={excluir} />;
   }
 
 
@@ -159,7 +159,12 @@ export default function ItemDetailPage() {
           )}
 
           <div style={{ maxWidth: 640 }}>
-            <Comentarios caminhoPai={["frentes", frenteId, "itens", itemId]} />
+            <Comentarios
+              caminhoPai={["frentes", frenteId, "itens", itemId]}
+              aviso={{ alvo: item.titulo, contexto: frente.nome, link: `/frentes/${frenteId}/itens/${itemId}`, interessados: [item.responsavelId, item.criadoPor] }}
+              usuarios={membros}
+              papeis={frente.membros}
+            />
           </div>
         </div>
 

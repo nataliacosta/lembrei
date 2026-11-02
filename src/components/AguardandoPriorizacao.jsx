@@ -65,7 +65,7 @@ function CartaoAguardando({ demanda, fila, capacidade, podeEditar, donoId, ordem
 
   async function confirmar() {
     await priorizarDemanda(donoId, ordem, demanda.id, escolhida);
-    onPriorizado(`“${demanda.titulo}” entrou na ${escolhida + 1}ª posição da fila.`);
+    onPriorizado(`“${demanda.titulo}” entrou na ${escolhida + 1}ª posição da fila.`, demanda, escolhida, opcoes?.simular(escolhida));
     onFechar();
   }
 
