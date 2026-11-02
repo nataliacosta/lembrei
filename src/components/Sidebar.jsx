@@ -129,11 +129,10 @@ export default function Sidebar() {
                 </NavLink>
               );
             })}
-            <button
-              onClick={() => setMostrarNovaFrente(true)}
-              className="btn btn-primary"
-              style={{ margin: "16px 24px 0 24px", fontSize: 13 }}
-            >
+            <NavLink to="/frentes" end className={classeLink} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13, fontWeight: 600 }}>
+              Ver todas as frentes
+            </NavLink>
+            <button type="button" onClick={() => setMostrarNovaFrente(true)} className="sidebar-acao">
               + Nova frente
             </button>
           </>
@@ -175,17 +174,10 @@ export default function Sidebar() {
                 )}
               </NavLink>
             ))}
-            <Link
-              to="/contratos"
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13 }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "0 0 auto" }}>
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-              </svg>
+            <NavLink to="/contratos" end className={classeLink} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13, fontWeight: 600 }}>
               Ver todos os contratos
-            </Link>
-            <Link to="/contratos/novo" className="btn btn-primary" style={{ margin: "12px 24px 0 24px", fontSize: 13 }}>
+            </NavLink>
+            <Link to="/contratos/novo" className="sidebar-acao">
               + Novo contrato
             </Link>
           </>

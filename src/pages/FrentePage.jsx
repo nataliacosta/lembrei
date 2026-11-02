@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import AgendaRow from "../components/AgendaRow";
 import Avatar from "../components/Avatar";
+import NovaFrenteModal from "../components/NovaFrenteModal";
 import { useAuth } from "../contexts/AuthContext";
 import { BotaoVoltar } from "../contexts/HistoricoContext";
 
@@ -38,6 +39,7 @@ export default function FrentePage() {
   const [soMeus, setSoMeus] = useState(false);
   const [status, setStatus] = useState("");
   const [erroItens, setErroItens] = useState("");
+  const [editandoFrente, setEditandoFrente] = useState(false);
 
   useEffect(() => watchFrente(frenteId, setFrente), [frenteId]);
 
@@ -114,7 +116,7 @@ export default function FrentePage() {
 
   return (
     <div className="page-shell" style={{ paddingTop: 24, paddingBottom: 48, maxWidth: 1180 }}>
-      <BotaoVoltar destinoPadrao="/dashboard" />
+      <BotaoVoltar destinoPadrao="/frentes" />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap", marginTop: 12 }}>
         <div style={{ flex: "1 1 420px", minWidth: 0 }}>
@@ -146,6 +148,11 @@ export default function FrentePage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flex: "0 0 auto", flexWrap: "wrap" }}>
+          {podeEditar && (
+            <button type="button" className="btn btn-ghost" onClick={() => setEditandoFrente(true)}>
+              Editar
+            </button>
+          )}
           <Link to={`/frentes/${frenteId}/compartilhar`} className="btn btn-ghost">
             Compartilhar
           </Link>
@@ -238,6 +245,7 @@ export default function FrentePage() {
           )
         )
       )}
+      {editandoFrente && <NovaFrenteModal frente={{ ...frente, id: frenteId }} onClose={() => setEditandoFrente(false)} />}
     </div>
   );
 }
