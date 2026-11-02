@@ -7,7 +7,7 @@ import LembreteAcoes from "./LembreteAcoes";
 
 // Uma linha da lista de coisas a fazer. `entrada` vem de lib/agenda.js:
 // { tipo: "prazo" | "lembrete" | "sem-data", item, data }.
-export default function AgendaRow({ entrada, frente, podeEditar, origem = "dashboard", mostrarFrente = true }) {
+export default function AgendaRow({ entrada, frente, podeEditar, mostrarFrente = true }) {
   const { item, tipo, data } = entrada;
   const dias = data ? diasAte(data) : null;
   const atrasado = dias !== null && dias < 0;
@@ -47,7 +47,7 @@ export default function AgendaRow({ entrada, frente, podeEditar, origem = "dashb
         <span className="icone-linha" />
       )}
 
-      <Link to={link} state={{ from: origem }} style={{ minWidth: 0, color: "inherit" }}>
+      <Link to={link} style={{ minWidth: 0, color: "inherit" }}>
         <div className="titulo">{ehLembrete ? item.lembrete.mensagem || item.titulo : item.titulo}</div>
         <div className="meta">
           {ehLembrete ? (

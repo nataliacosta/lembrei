@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useVoltar } from "../contexts/HistoricoContext";
+
 import { useUsuarios } from "../hooks/useUsuarios";
 import { PAPEIS } from "../lib/constants";
 import {
@@ -14,6 +16,7 @@ import {
 export default function ContratoSharingPage() {
   const { contratoId } = useParams();
   const { user } = useAuth();
+  const { voltar } = useVoltar(`/contratos/${contratoId}`);
   const [contrato, setContrato] = useState(undefined);
   const [email, setEmail] = useState("");
   const [papelConvite, setPapelConvite] = useState("editor");
@@ -52,9 +55,9 @@ export default function ContratoSharingPage() {
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Compartilhar contrato</h2>
             <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 2 }}>{contrato.titulo}</div>
           </div>
-          <Link to={`/contratos/${contratoId}`} style={{ fontSize: 20, color: "var(--color-gray)" }} aria-label="Fechar">
+          <button type="button" onClick={voltar} style={{ fontSize: 20, color: "var(--color-gray)", background: "none", border: "none", width: 44, height: 44 }} aria-label="Fechar">
             ×
-          </Link>
+          </button>
         </div>
 
         <div className="modal-body-pad" style={{ paddingTop: 24, paddingBottom: 24 }}>
@@ -163,9 +166,9 @@ export default function ContratoSharingPage() {
         </div>
 
         <div className="modal-body-pad" style={{ paddingTop: 20, paddingBottom: 20, borderTop: "1px solid var(--color-gray-light)", display: "flex", justifyContent: "flex-end" }}>
-          <Link to={`/contratos/${contratoId}`} className="btn btn-primary">
+          <button type="button" onClick={voltar} className="btn btn-primary">
             Concluído
-          </Link>
+          </button>
         </div>
       </div>
     </div>

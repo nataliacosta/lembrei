@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import Comentarios from "../components/Comentarios";
 import LembreteAcoes from "../components/LembreteAcoes";
 import { IconeCheck, IconeSino } from "../components/Icones";
 import { useAuth } from "../contexts/AuthContext";
+import { BotaoVoltar, useVoltar } from "../contexts/HistoricoContext";
+
 import { useUsuarios } from "../hooks/useUsuarios";
 import { TIPO_POR_KEY, PAPEIS } from "../lib/constants";
 import { diasAte, formatarData, formatarDataRelativa } from "../lib/datas";
@@ -21,10 +23,7 @@ function descreverPrazo(prazo) {
 export default function ItemDetailPage() {
   const { frenteId, itemId } = useParams();
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const veioDoPainel = location.state?.from === "dashboard";
-  const veioDoContrato = location.state?.from === "contrato" && location.state?.contratoId;
+  const { voltar } = useVoltar(`/frentes/${frenteId}`);
 
   const [frente, setFrente] = useState(undefined);
   const [item, setItem] = useState(undefined);
@@ -80,17 +79,13 @@ export default function ItemDetailPage() {
   async function excluir() {
     if (!window.confirm(`Excluir o item "${item.titulo}"? Essa ação não pode ser desfeita.`)) return;
     await excluirItem(frenteId, itemId);
-    navigate(`/frentes/${frenteId}`);
+    voltar();
   }
 
-  const voltarPara = veioDoPainel ? "/dashboard" : veioDoContrato ? `/contratos/${location.state.contratoId}` : `/frentes/${frenteId}`;
-  const voltarTexto = veioDoPainel ? "← O que fazer" : veioDoContrato ? "← Voltar para o contrato" : `← ${frente.nome}`;
 
   return (
     <div className={`page-shell ${podeEditar ? "tem-acoes-fixas" : ""}`} style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 1180 }}>
-      <Link to={voltarPara} style={{ fontSize: 13, fontWeight: 600 }}>
-        {voltarTexto}
-      </Link>
+      <BotaoVoltar destinoPadrao={`/frentes/${frenteId}`} />
 
       <div className="detalhe-layout" style={{ marginTop: 16 }}>
         <div className="detalhe-principal">

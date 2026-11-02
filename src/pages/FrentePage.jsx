@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import AgendaRow from "../components/AgendaRow";
 import { useAuth } from "../contexts/AuthContext";
+import { BotaoVoltar } from "../contexts/HistoricoContext";
+
 import { useUsuarios } from "../hooks/useUsuarios";
 import { excluirFrente, watchFrente, watchItens } from "../lib/firestore";
 import { agruparItensDaFrente, ehMeu } from "../lib/agenda";
@@ -82,7 +84,7 @@ export default function FrentePage() {
   async function excluir() {
     if (!window.confirm(`Excluir a frente "${frente.nome}" e todos os seus itens? Essa ação não pode ser desfeita.`)) return;
     await excluirFrente(frenteId);
-    navigate("/dashboard");
+    navigate("/dashboard", { replace: true });
   }
 
   const { atrasados, comData, semData } = agruparItensDaFrente(itensFiltrados);
@@ -103,12 +105,7 @@ export default function FrentePage() {
 
   return (
     <div className="page-shell" style={{ paddingTop: 24, paddingBottom: 48, maxWidth: 1180 }}>
-      <Link to="/dashboard" className="so-desktop" style={{ fontSize: 13, fontWeight: 600 }}>
-        ← O que fazer
-      </Link>
-      <Link to="/frentes" className="so-mobile" style={{ fontSize: 14, fontWeight: 600 }}>
-        ← Frentes
-      </Link>
+      <BotaoVoltar destinoPadrao="/dashboard" />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap", marginTop: 12 }}>
         <div style={{ flex: "1 1 420px", minWidth: 0 }}>
@@ -225,7 +222,6 @@ export default function FrentePage() {
                     entrada={entradaDoItem(item)}
                     frente={frente}
                     podeEditar={podeEditar && !item.concluido}
-                    origem="frente"
                     mostrarFrente={false}
                   />
                 ))}
