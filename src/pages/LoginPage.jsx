@@ -25,7 +25,7 @@ export default function LoginPage() {
         style={{
           flex: "1 1 420px",
           minWidth: 320,
-          background: "var(--color-primary)",
+          background: "var(--color-brand)",
           color: "#fff",
           display: "flex",
           flexDirection: "column",

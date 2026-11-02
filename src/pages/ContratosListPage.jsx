@@ -1,122 +1,128 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
-import { watchContratos } from "../lib/contratos";
+import { useDados } from "../contexts/DadosContext";
 import { CONTRATO_STATUS, PENDENTE_EM_OPCOES } from "../lib/constants";
-import { alertaVencimento, formatarData } from "../lib/datas";
+import { alertaVencimento, descreverVencimento, formatarData, paraDate } from "../lib/datas";
+import { situacaoDoContrato } from "../lib/agenda";
+
+const GRUPOS_CONTRATO = [
+  { key: "atencao", label: "Pedem atenção", alerta: true },
+  { key: "em-dia", label: "Em dia" },
+  { key: "encerrado", label: "Encerrados" },
+];
 
 export default function ContratosListPage() {
-  const { user } = useAuth();
-  const [contratos, setContratos] = useState([]);
-  const [erro, setErro] = useState("");
+  const { contratos, erroContratos: erro } = useDados();
   const [filtroPendente, setFiltroPendente] = useState("");
 
-  useEffect(() => {
-    setErro("");
-    const unsub = watchContratos(user.uid, setContratos, (e) => setErro(e.message || String(e)));
-    return unsub;
-  }, [user.uid]);
+  const contratosFiltrados = (
+    filtroPendente ? contratos.filter((c) => c.status === "aditivo" && c.aditivoAtivoPendenteEm === filtroPendente) : contratos
+  )
+    .slice()
+    .sort((a, b) => (paraDate(a.vencimento)?.getTime() ?? Infinity) - (paraDate(b.vencimento)?.getTime() ?? Infinity));
 
-  const contratosFiltrados = filtroPendente
-    ? contratos.filter((c) => c.status === "aditivo" && c.aditivoAtivoPendenteEm === filtroPendente)
-    : contratos;
+  const porGrupo = Object.fromEntries(GRUPOS_CONTRATO.map((g) => [g.key, []]));
+  contratosFiltrados.forEach((c) => porGrupo[situacaoDoContrato(c)].push(c));
 
   return (
-    <div className="page-shell" style={{ paddingTop: 32, paddingBottom: 60, maxWidth: 1040, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
-          <div>
-            <h1 style={{ margin: "0 0 4px 0", fontSize: 24, fontWeight: 700 }}>Contratos</h1>
-            <p style={{ margin: 0, color: "var(--color-gray)", fontSize: 14 }}>Fornecedores, vencimentos, aditivos e cancelamentos.</p>
+    <div className="page-shell" style={{ paddingTop: 28, paddingBottom: 60, maxWidth: 1180 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <h1 style={{ margin: "0 0 4px 0", fontSize: 26, fontWeight: 700 }}>Contratos</h1>
+          <p style={{ margin: 0, color: "var(--color-gray)", fontSize: 14 }}>Fornecedores, vencimentos, aditivos e cancelamentos.</p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "var(--color-gray)", fontWeight: 600 }}>Pendente em:</span>
+          <div className="seg" role="group" aria-label="Pendente em">
+            <button type="button" aria-pressed={filtroPendente === ""} onClick={() => setFiltroPendente("")}>
+              Todos
+            </button>
+            {PENDENTE_EM_OPCOES.map((o) => (
+              <button key={o} type="button" aria-pressed={filtroPendente === o} onClick={() => setFiltroPendente(o)}>
+                {o}
+              </button>
+            ))}
           </div>
           <Link to="/contratos/novo" className="btn btn-primary">
             + Novo contrato
           </Link>
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-          <span style={{ fontSize: 12, color: "var(--color-gray)", fontWeight: 600 }}>Pendente em:</span>
-          <button
-            onClick={() => setFiltroPendente("")}
-            style={{
-              background: filtroPendente === "" ? "var(--color-primary)" : "#fff",
-              color: filtroPendente === "" ? "#fff" : "var(--color-gray)",
-              border: `1px solid ${filtroPendente === "" ? "var(--color-primary)" : "var(--color-gray-light)"}`,
-              padding: "6px 14px",
-              borderRadius: 16,
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            Todos
-          </button>
-          {PENDENTE_EM_OPCOES.map((o) => (
-            <button
-              key={o}
-              onClick={() => setFiltroPendente(o)}
-              style={{
-                background: filtroPendente === o ? "var(--color-primary)" : "#fff",
-                color: filtroPendente === o ? "#fff" : "var(--color-gray)",
-                border: `1px solid ${filtroPendente === o ? "var(--color-primary)" : "var(--color-gray-light)"}`,
-                padding: "6px 14px",
-                borderRadius: 16,
-                fontSize: 12,
-                fontWeight: 600,
-              }}
-            >
-              {o}
-            </button>
-          ))}
-        </div>
-
-        {erro ? (
-          <div className="empty-state" style={{ color: "var(--color-orange)" }}>Não deu pra carregar: {erro}</div>
-        ) : contratosFiltrados.length === 0 ? (
-          <div className="empty-state">
-            {filtroPendente ? `Nenhum contrato pendente em ${filtroPendente}.` : "Nenhum contrato cadastrado ainda."}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {contratosFiltrados.map((c) => {
-              const alerta = alertaVencimento(c.vencimento, c.status === "aditivo");
-              const statusInfo = CONTRATO_STATUS[c.status] || CONTRATO_STATUS.ativo;
-              return (
-                <Link key={c.id} to={`/contratos/${c.id}`} className="card" style={{ padding: "16px 20px", color: "inherit" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-                        <span className="pill" style={{ background: "rgba(0,0,0,0.06)", color: statusInfo.cor }}>
-                          {statusInfo.label}
-                          {c.status === "aditivo" && c.aditivoAtivoPendenteEm && ` · Pendente em ${c.aditivoAtivoPendenteEm}`}
-                        </span>
-                        {alerta === "vencido" && (
-                          <span className="pill" style={{ background: "var(--color-accent)", color: "var(--color-dark)" }}>
-                            Vencido
-                          </span>
-                        )}
-                        {alerta === "proximo" && (
-                          <span className="pill" style={{ background: "rgba(238,115,27,0.14)", color: "var(--color-orange)" }}>
-                            Vence em breve
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 16, fontWeight: 700 }}>{c.titulo}</div>
-                      <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 2 }}>
-                        {c.numero && `Nº ${c.numero} · `}
-                        {c.fornecedor}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right", flex: "0 0 auto" }}>
-                      <div style={{ fontSize: 12, color: "var(--color-gray)" }}>Vencimento</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: alerta ? "var(--color-orange)" : "var(--color-dark)" }}>
-                        {c.vencimento ? formatarData(c.vencimento) : "—"}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
       </div>
+
+      {erro ? (
+        <div className="empty-state" style={{ color: "var(--color-orange)" }}>Não deu pra carregar: {erro}</div>
+      ) : contratosFiltrados.length === 0 ? (
+        <div className="empty-state">
+          {filtroPendente ? `Nenhum contrato pendente em ${filtroPendente}.` : "Nenhum contrato cadastrado ainda."}
+        </div>
+      ) : (
+        GRUPOS_CONTRATO.map((g) =>
+          porGrupo[g.key].length === 0 ? null : (
+            <section key={g.key}>
+              <h2 className={`grupo-titulo ${g.alerta ? "grupo-alerta" : ""}`}>
+                {g.label} · {porGrupo[g.key].length}
+              </h2>
+              <div className={`lista-card ${g.alerta ? "alerta" : ""}`} style={g.key === "encerrado" ? { opacity: 0.85 } : undefined}>
+                {porGrupo[g.key].map((c) => (
+                  <ContratoLinha key={c.id} contrato={c} />
+                ))}
+              </div>
+            </section>
+          )
+        )
+      )}
+    </div>
+  );
+}
+
+function ContratoLinha({ contrato: c }) {
+  const alerta = alertaVencimento(c.vencimento, c.status === "aditivo");
+  const statusInfo = CONTRATO_STATUS[c.status] || CONTRATO_STATUS.ativo;
+  const encerrado = c.status === "cancelado";
+  return (
+    <Link
+      to={`/contratos/${c.id}`}
+      className="secao-lateral"
+      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", padding: "14px 18px" }}
+    >
+      <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{c.titulo}</div>
+        <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 2 }}>
+          {c.numero && `Nº ${c.numero} · `}
+          {c.fornecedor}
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+          {alerta === "vencido" && (
+            <span className="pill" style={{ background: "var(--color-accent)", color: "var(--color-dark)" }}>
+              Vencido
+            </span>
+          )}
+          {alerta === "proximo" && (
+            <span className="pill" style={{ background: "var(--color-orange-soft)", color: "var(--color-orange)" }}>
+              Vence em breve
+            </span>
+          )}
+          <span
+            className="pill"
+            style={
+              encerrado
+                ? { background: "#eceeee", color: "var(--color-gray)" }
+                : { background: "rgba(0,212,192,0.18)", color: "var(--color-dark)" }
+            }
+          >
+            {statusInfo.label}
+            {c.status === "aditivo" && c.aditivoAtivoPendenteEm && ` · pendente em ${c.aditivoAtivoPendenteEm}`}
+          </span>
+        </div>
+      </div>
+      <div style={{ textAlign: "right", flex: "0 0 auto" }}>
+        <div style={{ fontSize: 12, color: "var(--color-gray)" }}>
+          {c.vencimento && !encerrado ? descreverVencimento(c.vencimento) : "Vencimento"}
+        </div>
+        <div className={alerta ? "texto-alerta" : ""} style={{ fontSize: 15, fontWeight: 700 }}>
+          {c.vencimento ? formatarData(c.vencimento) : "—"}
+        </div>
+      </div>
+    </Link>
   );
 }

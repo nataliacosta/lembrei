@@ -16,6 +16,9 @@ import ContratoSharingPage from "./pages/ContratoSharingPage";
 import AditivoFormPage from "./pages/AditivoFormPage";
 import AditivoDetailPage from "./pages/AditivoDetailPage";
 import CancelamentoFormPage from "./pages/CancelamentoFormPage";
+import FrentesListPage from "./pages/FrentesListPage";
+import ContaPage from "./pages/ContaPage";
+import BuscaPage from "./pages/BuscaPage";
 
 export default function App() {
   if (!firebaseConfigurado) {
@@ -35,6 +38,10 @@ export default function App() {
         }
       >
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/novo" element={<ItemFormPage />} />
+        <Route path="/frentes" element={<FrentesListPage />} />
+        <Route path="/buscar" element={<BuscaPage />} />
+        <Route path="/conta" element={<ContaPage />} />
         <Route path="/frentes/:frenteId" element={<FrentePage />} />
         <Route path="/frentes/:frenteId/novo" element={<ItemFormPage />} />
         <Route path="/frentes/:frenteId/itens/:itemId" element={<ItemDetailPage />} />

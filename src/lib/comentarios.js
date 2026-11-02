@@ -11,7 +11,7 @@ function comentariosRef(caminhoPai) {
 }
 
 export function watchComentarios(caminhoPai, callback) {
-  const q = query(comentariosRef(caminhoPai), orderBy("criadoEm", "asc"));
+  const q = query(comentariosRef(caminhoPai), orderBy("criadoEm", "desc"));
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   });

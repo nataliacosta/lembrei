@@ -1,11 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Comentarios from "../components/Comentarios";
+import LembreteAcoes from "../components/LembreteAcoes";
+import { IconeCheck, IconeSino } from "../components/Icones";
 import { useAuth } from "../contexts/AuthContext";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { TIPO_POR_KEY, PAPEIS } from "../lib/constants";
-import { formatarData } from "../lib/datas";
+import { diasAte, formatarData, formatarDataRelativa } from "../lib/datas";
 import { excluirItem, marcarConcluido, watchFrente, watchItem } from "../lib/firestore";
+
+function descreverPrazo(prazo) {
+  const dias = diasAte(prazo);
+  if (dias === null) return "";
+  if (dias === 0) return "hoje";
+  if (dias === 1) return "amanhã";
+  if (dias > 1) return `em ${dias} dias`;
+  return `atrasado há ${-dias} ${dias === -1 ? "dia" : "dias"}`;
+}
 
 export default function ItemDetailPage() {
   const { frenteId, itemId } = useParams();
@@ -14,18 +25,12 @@ export default function ItemDetailPage() {
   const location = useLocation();
   const veioDoPainel = location.state?.from === "dashboard";
   const veioDoContrato = location.state?.from === "contrato" && location.state?.contratoId;
+
   const [frente, setFrente] = useState(undefined);
   const [item, setItem] = useState(undefined);
 
-  useEffect(() => {
-    const unsub = watchFrente(frenteId, setFrente);
-    return unsub;
-  }, [frenteId]);
-
-  useEffect(() => {
-    const unsub = watchItem(frenteId, itemId, setItem);
-    return unsub;
-  }, [frenteId, itemId]);
+  useEffect(() => watchFrente(frenteId, setFrente), [frenteId]);
+  useEffect(() => watchItem(frenteId, itemId, setItem), [frenteId, itemId]);
 
   const membros = useUsuarios(frente?.membrosUids || []);
 
@@ -36,6 +41,37 @@ export default function ItemDetailPage() {
   const podeEditar = papel === "proprietario" || papel === "editor";
   const tipo = TIPO_POR_KEY[item.tipo];
   const criador = membros[item.criadoPor];
+  const lembreteAtivo = item.lembrete?.ativo && item.lembrete.proximaVerificacao;
+  const diasLembrete = lembreteAtivo ? diasAte(item.lembrete.proximaVerificacao) : null;
+  const lembreteAtrasado = diasLembrete !== null && diasLembrete < 0;
+  const prazoAtrasado = !item.concluido && item.prazo && diasAte(item.prazo) < 0;
+
+  const cartaoLembrete = lembreteAtivo && !item.concluido ? (
+            <div
+              className="lista-card"
+              style={{
+                padding: 16,
+                background: lembreteAtrasado ? "var(--color-orange-soft)" : "rgba(0,212,192,0.08)",
+                borderColor: lembreteAtrasado ? "var(--color-orange-border)" : "rgba(0,212,192,0.4)",
+              }}
+            >
+              <div className={lembreteAtrasado ? "texto-alerta" : ""} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700 }}>
+                <IconeSino size={18} />
+                {lembreteAtrasado ? "Lembrete atrasado" : "Lembrete"} · {formatarDataRelativa(item.lembrete.proximaVerificacao)}
+              </div>
+              {item.lembrete.mensagem && <div style={{ fontSize: 14, marginTop: 6 }}>{item.lembrete.mensagem}</div>}
+              {item.lembrete.recorrente && (
+                <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 6 }}>
+                  Ao ter retorno, pergunta se ainda precisa acompanhar.
+                </div>
+              )}
+              {podeEditar && (
+                <div style={{ marginTop: 12 }}>
+                  <LembreteAcoes item={{ ...item, frenteId }} comOutraData />
+                </div>
+              )}
+            </div>
+          ) : null;
 
   async function alternarConcluido() {
     await marcarConcluido(frenteId, itemId, !item.concluido);
@@ -47,133 +83,156 @@ export default function ItemDetailPage() {
     navigate(`/frentes/${frenteId}`);
   }
 
-  return (
-    <div className="page-shell" style={{ maxWidth: 780, margin: "0 auto", paddingTop: 32, paddingBottom: 80 }}>
-        <Link
-          to={veioDoPainel ? "/dashboard" : veioDoContrato ? `/contratos/${location.state.contratoId}` : `/frentes/${frenteId}`}
-          style={{ fontSize: 13, fontWeight: 600 }}
-        >
-          {veioDoPainel ? "← Voltar para o Painel geral" : veioDoContrato ? "← Voltar para o contrato" : `← Voltar para ${frente.nome}`}
-        </Link>
+  const voltarPara = veioDoPainel ? "/dashboard" : veioDoContrato ? `/contratos/${location.state.contratoId}` : `/frentes/${frenteId}`;
+  const voltarTexto = veioDoPainel ? "← O que fazer" : veioDoContrato ? "← Voltar para o contrato" : `← ${frente.nome}`;
 
-        <div style={{ marginTop: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-            <span className="pill" style={{ background: "rgba(0,153,146,0.12)", color: "var(--color-primary)" }}>
-              {tipo?.label}
-            </span>
+  return (
+    <div className={`page-shell ${podeEditar ? "tem-acoes-fixas" : ""}`} style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 1180 }}>
+      <Link to={voltarPara} style={{ fontSize: 13, fontWeight: 600 }}>
+        {voltarTexto}
+      </Link>
+
+      <div className="detalhe-layout" style={{ marginTop: 16 }}>
+        <div className="detalhe-principal">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+            <span className="pill pill-tipo">{tipo?.label}</span>
             {item.concluido ? (
-              <span className="pill" style={{ background: "#F3F3F3", color: "var(--color-gray)" }}>
+              <span className="pill" style={{ background: "#eceeee", color: "var(--color-gray)" }}>
                 Concluído
               </span>
             ) : (
               item.status && (
-                <span className="pill" style={{ background: "rgba(0,212,192,0.2)", color: "var(--color-dark)" }}>
+                <span className="pill" style={{ background: "rgba(0,212,192,0.22)", color: "var(--color-dark)" }}>
                   {item.status}
                 </span>
               )
             )}
           </div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, lineHeight: 1.3 }}>{item.titulo}</h1>
-        </div>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, lineHeight: 1.3 }}>{item.titulo}</h1>
 
-        {item.descricao && (
-          <p style={{ margin: "18px 0 0 0", maxWidth: 600, fontSize: 14, lineHeight: 1.6 }}>{item.descricao}</p>
-        )}
-
-        <div style={{ margin: "28px 0 28px 0", display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {podeEditar && (
-            <Link to={`/frentes/${frenteId}/itens/${itemId}/editar`} className="btn btn-primary">
-              Editar
-            </Link>
-          )}
-          {podeEditar && (
-            <button onClick={alternarConcluido} className="btn btn-outline">
-              {item.concluido ? "Reabrir item" : "Marcar como concluído"}
-            </button>
-          )}
-          {podeEditar && (
-            <button onClick={excluir} className="btn btn-ghost" style={{ color: "var(--color-orange)", borderColor: "var(--color-orange)" }}>
-              Excluir item
-            </button>
-          )}
-          {!podeEditar && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 4px", fontSize: 12, color: "var(--color-gray)" }}>
+          {podeEditar ? (
+            <div className="acoes-fixas" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+              <button onClick={alternarConcluido} className="btn btn-primary">
+                {!item.concluido && <IconeCheck size={18} />}
+                {item.concluido ? "Reabrir item" : "Marcar como concluído"}
+              </button>
+              <Link to={`/frentes/${frenteId}/itens/${itemId}/editar`} className="btn btn-ghost">
+                Editar
+              </Link>
+              <button
+                onClick={excluir}
+                className="btn btn-ghost so-desktop"
+                style={{ color: "var(--color-orange)", borderColor: "var(--color-orange-border)" }}
+              >
+                Excluir
+              </button>
+            </div>
+          ) : (
+            <div style={{ marginTop: 14, fontSize: 13, color: "var(--color-gray)" }}>
               Seu acesso a esta frente: <b style={{ color: "var(--color-dark)" }}>{PAPEIS[papel] || "Sem acesso"}</b>
             </div>
           )}
-        </div>
 
-        {podeEditar && (
-          <div style={{ padding: "10px 14px", background: "var(--color-bg-soft)", borderRadius: 8, fontSize: 12, color: "var(--color-gray)", maxWidth: 560, marginBottom: 28 }}>
-            Itens concluídos saem dos alertas do painel geral e passam para a aba "Concluídos" desta frente.
+          {cartaoLembrete && (
+            <div className="so-mobile" style={{ marginTop: 18 }}>
+              {cartaoLembrete}
+            </div>
+          )}
+
+          {item.descricao && (
+            <>
+              <SectionTitle>Descrição</SectionTitle>
+              <p style={{ margin: 0, maxWidth: 640, fontSize: 15, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{item.descricao}</p>
+            </>
+          )}
+
+          {item.tags?.length > 0 && (
+            <>
+              <SectionTitle>Tags</SectionTitle>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {item.tags.map((t) => (
+                  <span key={t} className="tag-chip">
+                    #{t}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div style={{ maxWidth: 640 }}>
+            <Comentarios caminhoPai={["frentes", frenteId, "itens", itemId]} />
           </div>
-        )}
-
-        <div className="meta-grid" style={{ padding: "20px 0", borderTop: "1px solid var(--color-gray-light)", borderBottom: "1px solid var(--color-gray-light)" }}>
-          <Meta label="Responsável" valor={item.responsavelNome || "—"} />
-          <Meta label="Criado por" valor={`${criador?.nome || "—"} · ${formatarData(item.criadoEm)}`} />
-          <Meta label="Última atualização" valor={formatarData(item.atualizadoEm)} />
-          {item.prazo && <Meta label="Prazo" valor={formatarData(item.prazo)} />}
         </div>
 
-        {item.camposCustom?.length > 0 && (
-          <div style={{ marginTop: 28 }}>
-            <SectionTitle>Campos personalizados</SectionTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 560 }}>
+        <aside className="detalhe-lateral">
+          {cartaoLembrete && <div className="so-desktop">{cartaoLembrete}</div>}
+
+          <div className="lista-card">
+            {item.prazo && (
+              <div className="info-linha">
+                <span>Prazo</span>
+                <span className={prazoAtrasado ? "texto-alerta" : ""}>
+                  {formatarData(item.prazo)} · {descreverPrazo(item.prazo)}
+                </span>
+              </div>
+            )}
+            <div className="info-linha">
+              <span>Responsável</span>
+              <span>{item.responsavelNome || "—"}</span>
+            </div>
+            <div className="info-linha">
+              <span>Criado por</span>
+              <span>
+                {criador?.nome || "—"} · {formatarData(item.criadoEm)}
+              </span>
+            </div>
+            <div className="info-linha">
+              <span>Atualizado</span>
+              <span>{formatarData(item.atualizadoEm)}</span>
+            </div>
+          </div>
+
+          {item.camposCustom?.length > 0 && (
+            <div className="lista-card">
+              <div style={{ padding: "10px 16px 0" }}>
+                <SectionTitle margem={false}>Campos personalizados</SectionTitle>
+              </div>
               {item.camposCustom.map((c, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: 14 }}>
-                  <span style={{ color: "var(--color-gray)" }}>{c.label}</span>
-                  <span style={{ fontWeight: 500, textAlign: "right" }}>{c.valor}</span>
+                <div key={i} className="info-linha" style={i === 0 ? { borderTop: "none" } : undefined}>
+                  <span>{c.label}</span>
+                  <span>{c.valor}</span>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
 
-        {item.tags?.length > 0 && (
-          <div style={{ marginTop: 24 }}>
-            <SectionTitle>Tags</SectionTitle>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {item.tags.map((t) => (
-                <span key={t} className="tag-chip">
-                  #{t}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {item.lembrete?.ativo && (
-          <div style={{ marginTop: 28, maxWidth: 560, background: "rgba(0,212,192,0.1)", border: "1px solid rgba(0,212,192,0.4)", borderRadius: 10, padding: "18px 20px" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Lembrete</div>
-            <div className="sub-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 12 }}>
-              <Meta label="Próxima verificação" valor={formatarData(item.lembrete.proximaVerificacao)} />
-              <Meta label="Status do lembrete" valor={item.lembrete.status === "pendente" ? "Pendente" : item.lembrete.status} />
-            </div>
-            {item.lembrete.mensagem && <Meta label="Mensagem" valor={item.lembrete.mensagem} />}
-            {item.lembrete.recorrente && (
-              <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 10 }}>Repete se não houver retorno até a data.</div>
-            )}
-          </div>
-        )}
-
-        <Comentarios caminhoPai={["frentes", frenteId, "itens", itemId]} />
+          {podeEditar && (
+            <button
+              onClick={excluir}
+              className="btn btn-ghost so-mobile"
+              style={{ color: "var(--color-orange)", borderColor: "var(--color-orange-border)" }}
+            >
+              Excluir item
+            </button>
+          )}
+        </aside>
       </div>
-  );
-}
-
-function Meta({ label, valor }) {
-  return (
-    <div>
-      <div style={{ fontSize: 12, color: "var(--color-gray)", marginBottom: 3 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 500 }}>{valor}</div>
     </div>
   );
 }
 
-function SectionTitle({ children }) {
+function SectionTitle({ children, margem = true }) {
   return (
-    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-gray)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>
+    <div
+      style={{
+        fontSize: 12,
+        fontWeight: 700,
+        color: "var(--color-gray)",
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+        margin: margem ? "24px 0 8px" : "0 0 4px",
+      }}
+    >
       {children}
     </div>
   );
