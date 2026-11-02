@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { LogoMarca, LogoNome } from "../components/Logo";
 
 export default function LoginPage() {
   const { user, loading, signInWithGoogle } = useAuth();
@@ -34,20 +35,8 @@ export default function LoginPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 9,
-              background: "var(--color-dark)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <span style={{ color: "var(--color-accent)", fontWeight: 700, fontSize: 18 }}>L</span>
-          </div>
-          <span style={{ fontWeight: 700, fontSize: 20 }}>Lembrei!</span>
+          <LogoMarca tamanho={40} fundo="var(--color-dark)" />
+          <LogoNome tamanho={22} escuro />
         </div>
         <div style={{ maxWidth: 420 }}>
           <div style={{ width: 40, height: 4, background: "var(--color-accent)", borderRadius: 2, marginBottom: 24 }} />
