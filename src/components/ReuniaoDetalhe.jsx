@@ -3,7 +3,7 @@ import Comentarios from "./Comentarios";
 import { IconeCalendario, IconeCheck } from "./Icones";
 import { BotaoVoltar } from "../contexts/HistoricoContext";
 import { PAPEIS } from "../lib/constants";
-import { diasAte, formatarData, formatarDataRelativa } from "../lib/datas";
+import { diasAte, formatarData, formatarDataRelativa, inicioDoDia } from "../lib/datas";
 import { marcarConcluido, marcarPreparo, pularReuniao } from "../lib/firestore";
 import {
   chaveData,
@@ -43,7 +43,7 @@ function ListaPreparos({ item, preparos, podeEditar, passada }) {
   return (
     <div className="lista-card" style={passada ? { opacity: 0.8 } : undefined}>
       {preparos.map((p) => {
-        const comecou = !passada && p.comecaEm <= new Date();
+        const atrasado = !passada && !p.feito && p.comecaEm < inicioDoDia();
         return (
           <div key={p.id} className="secao-lateral" style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <button
@@ -63,7 +63,11 @@ function ListaPreparos({ item, preparos, podeEditar, passada }) {
                 {[p.responsavelNome || item.responsavelNome, `${p.diasAntes} ${p.diasAntes === 1 ? "dia" : "dias"} antes`]
                   .filter(Boolean)
                   .join(" · ")}
-                {!passada && !p.feito && (comecou ? " · já aparece no O que fazer" : ` · aparece a partir de ${formatarDataRelativa(p.comecaEm).toLowerCase()}`)}
+                {!passada && !p.feito && (
+                  <span className={atrasado ? "texto-alerta" : undefined}>
+                    {` · ${atrasado ? "atrasado desde" : "fazer até"} ${formatarDataRelativa(p.comecaEm).toLowerCase()}`}
+                  </span>
+                )}
               </div>
             </div>
           </div>

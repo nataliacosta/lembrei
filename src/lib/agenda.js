@@ -64,13 +64,13 @@ export function entradasDaAgenda(itens, { uid, soMeus = false } = {}) {
       if (doItem(item)) {
         entradas.push({ chave: `${item.id}:reuniao`, tipo: "reuniao", item, data: ocorrencia, preparos });
       }
-      const hoje = inicioDoDia();
       for (const preparo of preparos) {
-        if (preparo.feito || preparo.comecaEm > hoje) continue;
+        if (preparo.feito) continue;
         const meu = preparo.responsavelId ? preparo.responsavelId === uid : ehMeu(item, uid);
         if (soMeus && !meu) continue;
-        // Data do preparo = dia da reunião (meia-noite), para vir antes dela na lista.
-        entradas.push({ chave: `${item.id}:preparo:${preparo.id}`, tipo: "preparo", item, preparo, data: inicioDoDia(ocorrencia), ocorrencia });
+        // "N dias antes" = fazer N dias antes da reunião: esse é o prazo do
+        // preparo (e ele fica atrasado se passar do dia sem ser feito).
+        entradas.push({ chave: `${item.id}:preparo:${preparo.id}`, tipo: "preparo", item, preparo, data: preparo.comecaEm, ocorrencia });
       }
       continue;
     }
