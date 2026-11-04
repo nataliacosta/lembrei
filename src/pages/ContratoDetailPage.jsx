@@ -7,7 +7,9 @@ import { BotaoVoltar } from "../contexts/HistoricoContext";
 
 import { useUsuarios } from "../hooks/useUsuarios";
 import { CONTRATO_STATUS, FRENTE_CONTRATOS_ID, PAPEIS, TIPO_POR_KEY } from "../lib/constants";
-import { alertaVencimento, descreverVencimento, diasAte, formatarData } from "../lib/datas";
+import { alertaVencimento, descreverVencimento, diasAte, formatarData, formatarDataRelativa, inicioDoDia } from "../lib/datas";
+import { chaveDoMes, marcarMedicaoFeita, nomeDoMes, proximaMedicao } from "../lib/medicao";
+import { IconeCheck } from "../components/Icones";
 import { watchItensDoContrato } from "../lib/firestore";
 import {
   atualizarContrato,
@@ -311,6 +313,8 @@ export default function ContratoDetailPage() {
             </div>
           </div>
 
+          {contrato.medicao?.ativa && <CartaoMedicao contrato={contrato} podeEditar={podeEditar} />}
+
           <div className="lista-card" style={{ padding: "14px 16px" }}>
             <SectionTitle>Ações</SectionTitle>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -403,6 +407,79 @@ function SecaoCabecalho({ titulo, acao }) {
     >
       <span>{titulo}</span>
       {acao && <span style={{ textTransform: "none", letterSpacing: 0 }}>{acao}</span>}
+    </div>
+  );
+}
+
+function CartaoMedicao({ contrato, podeEditar }) {
+  const m = contrato.medicao;
+  const proxima = proximaMedicao(contrato);
+  const hoje = inicioDoDia();
+  const mesAtual = chaveDoMes(hoje.getFullYear(), hoje.getMonth());
+  const feitaEsteMes = Boolean(m.feitas?.[mesAtual]);
+  const atrasada = proxima && proxima.prazo < hoje;
+  const [salvando, setSalvando] = useState(false);
+
+  async function marcar(chave, feita) {
+    setSalvando(true);
+    try {
+      await marcarMedicaoFeita(contrato.id, chave, feita);
+    } catch (e) {
+      console.error("Erro ao marcar medição:", e);
+      window.alert("Não deu pra atualizar a medição. Tente de novo.");
+    }
+    setSalvando(false);
+  }
+
+  return (
+    <div className="lista-card">
+      <div style={{ padding: "12px 16px 2px" }}>
+        <SectionTitle>Medição mensal</SectionTitle>
+      </div>
+      <div className="info-linha">
+        <span>Quem realiza</span>
+        <span>{[m.quem, m.responsavelNome].filter(Boolean).join(" · ") || "—"}</span>
+      </div>
+      <div className="info-linha">
+        <span>Light+</span>
+        <span>{m.lightPlus ? <span className="pill pill-tipo">No processo</span> : "Não"}</span>
+      </div>
+      <div className="info-linha">
+        <span>Prazo</span>
+        <span>
+          dia {m.diaPrazo || 10} · lembrar {m.diasAntes ?? 0} {Number(m.diasAntes) === 1 ? "dia" : "dias"} antes
+        </span>
+      </div>
+      {proxima && (
+        <div className="info-linha">
+          <span style={{ textTransform: "capitalize" }}>{proxima.nomeMes}</span>
+          <span className={atrasada ? "texto-alerta" : ""}>
+            {atrasada ? "atrasada · " : "até "}
+            {formatarDataRelativa(proxima.prazo).toLowerCase()}
+            {!atrasada && proxima.lembrarEm > hoje ? ` · aparece ${formatarDataRelativa(proxima.lembrarEm).toLowerCase()}` : ""}
+          </span>
+        </div>
+      )}
+      {podeEditar && (
+        <div style={{ padding: "6px 16px 14px" }}>
+          {feitaEsteMes ? (
+            <div style={{ fontSize: 13, display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+              <span>
+                <IconeCheck size={14} /> Medição de {nomeDoMes(hoje.getMonth())} feita
+              </span>
+              <button type="button" className="link-botao" disabled={salvando} onClick={() => marcar(mesAtual, false)}>
+                Desfazer
+              </button>
+            </div>
+          ) : (
+            proxima && (
+              <button type="button" className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} disabled={salvando} onClick={() => marcar(proxima.chave, true)}>
+                Medição de {proxima.nomeMes} feita
+              </button>
+            )
+          )}
+        </div>
+      )}
     </div>
   );
 }

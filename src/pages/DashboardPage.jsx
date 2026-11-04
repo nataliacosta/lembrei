@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
 import AgendaRow from "../components/AgendaRow";
 import { GRUPOS, agruparAgenda, contratosPedindoAtencao } from "../lib/agenda";
+import { entradasDeMedicao } from "../lib/medicao";
 import { CONTRATO_STATUS } from "../lib/constants";
 import { descreverVencimento, diaDaSemanaPorExtenso, diasAte, formatarData, formatarDataRelativa, inicioDoDia, paraDate } from "../lib/datas";
 import { calcularPrevisao, formatarHoras, horasRestantes, ordenarFila } from "../lib/previsao";
@@ -47,7 +48,8 @@ export default function DashboardPage() {
     salvarFiltro(valor);
   }
 
-  const { grupos, semData } = agruparAgenda(itensAbertos, { uid: user.uid, soMeus: filtro === "meus" });
+  const medicoes = entradasDeMedicao(contratos, { uid: user.uid, soMeus: filtro === "meus" });
+  const { grupos, semData } = agruparAgenda(itensAbertos, { uid: user.uid, soMeus: filtro === "meus", extras: medicoes });
   const contratosAtencao = contratosPedindoAtencao(contratos);
   const podeEditar = (frenteId) => ["proprietario", "editor"].includes(papelNaFrente(frenteId));
   const totalAgenda = GRUPOS.reduce((soma, g) => soma + grupos[g.key].length, 0);
@@ -123,8 +125,8 @@ export default function DashboardPage() {
                       <AgendaRow
                         key={entrada.chave}
                         entrada={entrada}
-                        frente={mapaFrentes[entrada.item.frenteId]}
-                        podeEditar={podeEditar(entrada.item.frenteId)}
+                        frente={entrada.item ? mapaFrentes[entrada.item.frenteId] : undefined}
+                        podeEditar={entrada.item ? podeEditar(entrada.item.frenteId) : false}
                       />
                     ))}
                   </div>

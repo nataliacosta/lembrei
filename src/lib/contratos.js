@@ -49,9 +49,10 @@ export function watchContrato(contratoId, callback) {
   });
 }
 
-export async function criarContrato({ titulo, numero, fornecedor, escopo, vencimento, uid }) {
+export async function criarContrato({ titulo, numero, fornecedor, escopo, vencimento, medicao, uid }) {
   return addDoc(contratosRef(), {
     titulo,
+    medicao: medicao || null,
     numero: numero || "",
     fornecedor: fornecedor || "",
     escopo: escopo || "",
