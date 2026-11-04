@@ -6,7 +6,7 @@ import Avatar from "../components/Avatar";
 import { BotaoVoltar } from "../contexts/HistoricoContext";
 
 import { useUsuarios } from "../hooks/useUsuarios";
-import { CONTRATO_STATUS, FRENTE_CONTRATOS_ID, PAPEIS, TIPO_POR_KEY } from "../lib/constants";
+import { CONTRATO_STATUS, PAPEIS, TIPO_POR_KEY } from "../lib/constants";
 import { alertaVencimento, descreverVencimento, diasAte, formatarData, formatarDataRelativa, inicioDoDia } from "../lib/datas";
 import { chaveDoMes, marcarMedicaoFeita, nomeDoMes, proximaMedicao } from "../lib/medicao";
 import { IconeCheck } from "../components/Icones";
@@ -23,7 +23,7 @@ import {
 
 export default function ContratoDetailPage() {
   const { contratoId } = useParams();
-  const { user } = useAuth();
+  const { user, frenteContratosId } = useAuth();
   const navigate = useNavigate();
   const [contrato, setContrato] = useState(undefined);
   const [aditivos, setAditivos] = useState([]);
@@ -46,9 +46,10 @@ export default function ContratoDetailPage() {
   }, [contratoId]);
 
   useEffect(() => {
-    const unsub = watchItensDoContrato(contratoId, setItensVinculados);
+    if (!frenteContratosId) return;
+    const unsub = watchItensDoContrato(frenteContratosId, contratoId, setItensVinculados);
     return unsub;
-  }, [contratoId]);
+  }, [frenteContratosId, contratoId]);
 
   const membros = useUsuarios(contrato?.membrosUids || []);
 
@@ -200,7 +201,7 @@ export default function ContratoDetailPage() {
                 .map((item) => (
                   <Link
                     key={item.id}
-                    to={`/frentes/${FRENTE_CONTRATOS_ID}/itens/${item.id}`}
+                    to={`/frentes/${frenteContratosId}/itens/${item.id}`}
                     className="secao-lateral"
                     style={{ display: "flex", justifyContent: "space-between", gap: 12, opacity: item.concluido ? 0.7 : 1 }}
                   >

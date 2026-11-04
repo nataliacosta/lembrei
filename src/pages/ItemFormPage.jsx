@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useVoltar } from "../contexts/HistoricoContext";
 import { useDados } from "../contexts/DadosContext";
 import { useUsuarios } from "../hooks/useUsuarios";
-import { CAMPO_CONTRATO_LABEL, FRENTE_CONTRATOS_ID, TIPOS, STATUS_OPCOES, TIPO_POR_KEY } from "../lib/constants";
+import { CAMPO_CONTRATO_LABEL, TIPOS, STATUS_OPCOES, TIPO_POR_KEY } from "../lib/constants";
 import { deInputDate, inicioDoDia, paraInputDate, somarDias } from "../lib/datas";
 import { atualizarItem, criarItem, watchFrente, watchItem } from "../lib/firestore";
 import { notificar } from "../lib/notificacoes";
@@ -68,7 +68,7 @@ function salvarUltimaFrente(id) {
 export default function ItemFormPage() {
   const { frenteId: frenteIdParam, contratoId, itemId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, frenteContratosId } = useAuth();
   const { voltar, temAnterior } = useVoltar(
     itemId ? `/frentes/${frenteIdParam}/itens/${itemId}` : contratoId ? `/contratos/${contratoId}` : frenteIdParam ? `/frentes/${frenteIdParam}` : "/dashboard"
   );
@@ -86,7 +86,7 @@ export default function ItemFormPage() {
     ? frenteEscolhida
     : frentesEditaveis[0]?.id || "";
 
-  const frenteId = viaContrato ? FRENTE_CONTRATOS_ID : escolheFrente ? frenteEscolhidaValida : frenteIdParam;
+  const frenteId = viaContrato ? frenteContratosId : escolheFrente ? frenteEscolhidaValida : frenteIdParam;
 
   const [frente, setFrente] = useState(null);
   const [contrato, setContrato] = useState(viaContrato ? undefined : null);
