@@ -7,7 +7,8 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, firebaseConfigurado, googleProvider } from "../firebase";
-import { garantirFrenteContratosPadrao, resgatarConvitesPendentes } from "../lib/firestore";
+import { garantirFrenteContratos, resgatarConvitesPendentes } from "../lib/firestore";
+import { idFrenteContratos } from "../lib/constants";
 import { resgatarConvitesPendentesContratos } from "../lib/contratos";
 import { garantirFila, resgatarConvitesPendentesFilas } from "../lib/filas";
 
@@ -16,6 +17,8 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // ID da frente "Contratos" de quem está logado (uma por pessoa).
+  const [frenteContratosId, setFrenteContratosId] = useState(null);
 
   async function ensureUserDoc(firebaseUser) {
     const ref = doc(db, "usuarios", firebaseUser.uid);
@@ -64,9 +67,10 @@ export function AuthProvider({ children }) {
           console.error("Falha ao resgatar convites pendentes de contratos:", e);
         }
         try {
-          await garantirFrenteContratosPadrao(firebaseUser.uid);
+          setFrenteContratosId(await garantirFrenteContratos(firebaseUser.uid));
         } catch (e) {
-          console.error("Falha ao garantir a frente padrão de contratos:", e);
+          console.error("Falha ao preparar a frente Contratos:", e);
+          setFrenteContratosId(idFrenteContratos(firebaseUser.uid));
         }
         try {
           await garantirFila(firebaseUser);
@@ -90,7 +94,13 @@ export function AuthProvider({ children }) {
     await firebaseSignOut(auth);
   }
 
-  const value = { user, loading, signInWithGoogle, signOut };
+  const value = {
+    user,
+    loading,
+    signInWithGoogle,
+    signOut,
+    frenteContratosId: frenteContratosId || (user ? idFrenteContratos(user.uid) : null),
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -38,8 +38,15 @@ export const PENDENTE_EM_OPCOES = ["TI", "Governança"];
 
 export const ADITIVO_TIPOS = ["Prazo", "Custo", "Escopo"];
 
-// Frente padrão (ID fixo) onde ficam os itens criados a partir da tela de um
-// contrato. Toda pessoa que loga no app vira membro dela automaticamente
-// (ver garantirFrenteContratosPadrao em lib/firestore.js).
-export const FRENTE_CONTRATOS_ID = "contratos-padrao";
+// Cada pessoa tem a própria frente "Contratos", onde ficam os itens que ela
+// cria a partir da tela de um contrato (ver garantirFrenteContratos em
+// lib/firestore.js). "contratos-padrao" é a frente antiga, que era única e
+// compartilhada: continua sendo a frente Contratos de quem a criou.
+export const FRENTE_CONTRATOS_LEGADA = "contratos-padrao";
+export function idFrenteContratos(uid) {
+  return `contratos-${uid}`;
+}
+export function ehFrenteContratos(frenteId) {
+  return frenteId === FRENTE_CONTRATOS_LEGADA || String(frenteId || "").startsWith("contratos-");
+}
 export const CAMPO_CONTRATO_LABEL = "Contrato";

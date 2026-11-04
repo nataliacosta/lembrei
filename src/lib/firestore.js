@@ -19,7 +19,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { avisarConviteResgatado, proprietarioDe } from "./notificacoes";
-import { FRENTE_CONTRATOS_ID } from "./constants";
+import { FRENTE_CONTRATOS_LEGADA, idFrenteContratos } from "./constants";
 
 function frentesRef() {
   return collection(db, "frentes");
@@ -138,47 +138,120 @@ export async function resgatarConvitesPendentes(uid, email) {
   }
 }
 
-// Garante que a frente padrão "Contratos" existe e que quem logou é membro
-// dela — sem isso não dá pra usar o ID fixo FRENTE_CONTRATOS_ID direto nas
-// regras de segurança (que exigem o uid dentro de membrosUids). Primeira
-// pessoa a passar por aqui cria a frente; as próximas só entram como editor.
-export async function garantirFrenteContratosPadrao(uid) {
-  const ref = doc(db, "frentes", FRENTE_CONTRATOS_ID);
-  let snap = await getDoc(ref);
+// Cada pessoa tem a própria frente "Contratos" (contratos-<uid>), onde caem os
+// itens que ela cria a partir da tela de um contrato. Antes existia uma única
+// frente compartilhada ("contratos-padrao") em que todo mundo entrava como
+// editor ao fazer login — quem a criou continua usando ela (sem mover nada),
+// e as demais pessoas saem dela levando os próprios itens.
+// Devolve o ID da frente Contratos de quem logou.
+export async function garantirFrenteContratos(uid) {
+  let legadaEhMinha = false;
+  let legada = null;
+  try {
+    const snap = await getDoc(doc(db, "frentes", FRENTE_CONTRATOS_LEGADA));
+    if (snap.exists()) {
+      legada = snap.data();
+      legadaEhMinha = legada.donoId === uid;
+    }
+  } catch {
+    // Sem permissão para ler: a frente antiga não é minha e já não faço parte dela.
+  }
+
+  if (legadaEhMinha) {
+    await fecharFrenteLegada(uid, legada);
+    return FRENTE_CONTRATOS_LEGADA;
+  }
+
+  const id = idFrenteContratos(uid);
+  const ref = doc(db, "frentes", id);
+  const snap = await getDoc(ref);
   if (!snap.exists()) {
-    try {
-      await setDoc(ref, {
-        nome: "Contratos",
-        descricao: "Frente padrão com os itens de cada contrato.",
-        cor: "#009992",
-        donoId: uid,
-        membros: { [uid]: "proprietario" },
-        membrosUids: [uid],
-        convitesPendentes: [],
-        convitesPendentesEmails: [],
-        arquivada: false,
-        criadoEm: serverTimestamp(),
-        atualizadoEm: serverTimestamp(),
-      });
-      return;
-    } catch {
-      // Alguém criou ao mesmo tempo — recarrega e entra como membro abaixo.
-      snap = await getDoc(ref);
+    await setDoc(ref, {
+      nome: "Contratos",
+      descricao: "Itens criados a partir dos seus contratos.",
+      cor: "#009992",
+      donoId: uid,
+      membros: { [uid]: "proprietario" },
+      membrosUids: [uid],
+      convitesPendentes: [],
+      convitesPendentesEmails: [],
+      arquivada: false,
+      contratosDe: uid,
+      criadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+    });
+  }
+  try {
+    await sairDaFrenteLegada(uid, id, legada);
+  } catch (e) {
+    console.error("Falha ao sair da frente Contratos antiga:", e);
+  }
+  return id;
+}
+
+// Dona da frente antiga: tira as outras pessoas da frente e dos itens. Itens
+// criados por outra pessoa continuam visíveis para ela (até ela levar os
+// itens para a frente Contratos dela, no próximo login).
+async function fecharFrenteLegada(uid, legada) {
+  const outros = (legada.membrosUids || []).filter((m) => m !== uid);
+  if (outros.length === 0) return;
+  const snap = await getDocs(itensRef(FRENTE_CONTRATOS_LEGADA));
+  const batch = writeBatch(db);
+  snap.docs.forEach((d) => {
+    const autor = d.data().criadoPor;
+    batch.update(d.ref, { membrosUids: autor && autor !== uid ? [uid, autor] : [uid] });
+  });
+  batch.update(doc(db, "frentes", FRENTE_CONTRATOS_LEGADA), {
+    membros: { [uid]: "proprietario" },
+    membrosUids: [uid],
+    atualizadoEm: serverTimestamp(),
+  });
+  await batch.commit();
+}
+
+// Outras pessoas: levam os itens que criaram (com os comentários) para a
+// própria frente Contratos e saem da frente antiga.
+async function sairDaFrenteLegada(uid, minhaFrenteId, legada) {
+  // Itens da frente antiga que ainda me incluem (pela consulta do painel, que
+  // funciona mesmo quando já não sou membro da frente).
+  const consultas = [false, true].map((concluido) =>
+    getDocs(
+      query(collectionGroup(db, "itens"), where("membrosUids", "array-contains", uid), where("concluido", "==", concluido), orderBy("prazo", "asc"))
+    )
+  );
+  const docs = (await Promise.all(consultas))
+    .flatMap((s) => s.docs)
+    .filter((d) => d.ref.parent.parent?.id === FRENTE_CONTRATOS_LEGADA);
+
+  for (const d of docs) {
+    const item = d.data();
+    if (item.criadoPor === uid) {
+      const novoRef = doc(db, "frentes", minhaFrenteId, "itens", d.id);
+      await setDoc(novoRef, { ...item, frenteId: minhaFrenteId, membrosUids: [uid] });
+      const comentarios = await getDocs(collection(d.ref, "comentarios"));
+      for (const c of comentarios.docs) {
+        await setDoc(doc(novoRef, "comentarios", c.id), c.data());
+      }
+      await deleteDoc(d.ref);
+    } else {
+      await updateDoc(d.ref, { membrosUids: (item.membrosUids || []).filter((m) => m !== uid) });
     }
   }
-  const dados = snap.data();
-  if (dados && !dados.membrosUids?.includes(uid)) {
-    await updateDoc(ref, {
-      membros: { ...dados.membros, [uid]: "editor" },
-      membrosUids: [...dados.membrosUids, uid],
+
+  if (legada?.membrosUids?.includes(uid)) {
+    const membros = { ...legada.membros };
+    delete membros[uid];
+    await updateDoc(doc(db, "frentes", FRENTE_CONTRATOS_LEGADA), {
+      membros,
+      membrosUids: legada.membrosUids.filter((m) => m !== uid),
     });
   }
 }
 
-// Itens da frente "Contratos" vinculados a um contrato específico (campo
-// contratoVinculado, copiado do ID do contrato na criação pela tela dele).
-export function watchItensDoContrato(contratoId, callback) {
-  const q = query(itensRef(FRENTE_CONTRATOS_ID), where("contratoVinculado", "==", contratoId));
+// Itens da minha frente "Contratos" vinculados a um contrato específico
+// (campo contratoVinculado, copiado do ID do contrato na criação pela tela dele).
+export function watchItensDoContrato(frenteContratosId, contratoId, callback) {
+  const q = query(itensRef(frenteContratosId), where("contratoVinculado", "==", contratoId));
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   });

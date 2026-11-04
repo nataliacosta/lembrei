@@ -52,17 +52,22 @@ service cloud.firestore {
         && request.resource.data.membros.diff(resource.data.membros).affectedKeys().hasOnly([request.auth.uid]);
     }
 
-    // A frente "Contratos" (ID fixo) é padrão pra todo mundo: qualquer pessoa
-    // logada pode se auto-adicionar como editora, sem precisar de convite —
-    // mesma trava de "só o próprio uid" da função acima.
-    function entrandoNaFrentePadrao(frenteId) {
+    // Qualquer membro (que não seja a dona) pode sair de uma frente: só tira o
+    // próprio uid de membros/membrosUids, sem mexer em mais nada. Usado para
+    // sair da antiga frente "Contratos" compartilhada (contratos-padrao).
+    function saindoDaFrente() {
       return logado()
-        && frenteId == 'contratos-padrao'
-        && !(request.auth.uid in resource.data.membrosUids)
-        && request.auth.uid in request.resource.data.membrosUids
-        && request.resource.data.membros[request.auth.uid] == 'editor'
-        && request.resource.data.donoId == resource.data.donoId
-        && request.resource.data.membros.diff(resource.data.membros).affectedKeys().hasOnly([request.auth.uid]);
+        && request.auth.uid in resource.data.membrosUids
+        && request.auth.uid != resource.data.donoId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membros', 'membrosUids'])
+        && request.resource.data.membrosUids == resource.data.membrosUids.removeAll([request.auth.uid])
+        && request.resource.data.membros.diff(resource.data.membros).affectedKeys().hasOnly([request.auth.uid])
+        && !(request.auth.uid in request.resource.data.membros);
+    }
+
+    // A frente "Contratos" de cada pessoa tem o ID contratos-<uid>.
+    function minhaFrenteContratos(frenteId) {
+      return logado() && frenteId == 'contratos-' + request.auth.uid;
     }
 
     // Regra de leitura separada, no nível raiz, com curinga recursivo
@@ -165,28 +170,29 @@ service cloud.firestore {
     }
 
     match /frentes/{frenteId} {
-      // A frente "Contratos" é visível pra qualquer pessoa logada (é o ponto
-      // de partida pra ela virar membro — ver entrandoNaFrentePadrao acima).
       // Quem foi convidado (por e-mail) também lê, para conseguir aceitar o
-      // convite no próximo login (ver resgatarConvitesPendentes).
-      allow read: if logado()
-        && (frenteId == 'contratos-padrao'
-            || request.auth.uid in resource.data.membrosUids
-            || request.auth.token.email in resource.data.convitesPendentesEmails);
+      // convite no próximo login (ver resgatarConvitesPendentes). A própria
+      // frente Contratos pode ser lida mesmo antes de existir (para criá-la).
+      allow read: if minhaFrenteContratos(frenteId)
+        || (logado()
+            && (request.auth.uid in resource.data.membrosUids
+                || request.auth.token.email in resource.data.convitesPendentesEmails));
+      // Uma frente com ID "contratos-<uid>" só pode ser criada pela própria
+      // pessoa (é a frente Contratos dela).
       allow create: if logado()
         && request.auth.uid == request.resource.data.donoId
-        && request.auth.uid in request.resource.data.membrosUids;
+        && request.auth.uid in request.resource.data.membrosUids
+        && (!frenteId.matches('contratos-.*') || minhaFrenteContratos(frenteId));
       allow update: if ehProprietario(frenteId)
         || (podeEditar(frenteId)
             && request.resource.data.membros == resource.data.membros
             && request.resource.data.membrosUids == resource.data.membrosUids
             && request.resource.data.donoId == resource.data.donoId)
         || aceitandoConvite()
-        || entrandoNaFrentePadrao(frenteId);
-      // A frente "Contratos" nunca pode ser excluída — é nela que caem os
-      // itens criados a partir da tela de um contrato (ver criarItem na
-      // tela de contrato e watchItensDoContrato).
-      allow delete: if ehProprietario(frenteId) && frenteId != 'contratos-padrao';
+        || saindoDaFrente();
+      // A frente "Contratos" de cada pessoa nunca pode ser excluída — é nela
+      // que caem os itens criados a partir da tela de um contrato.
+      allow delete: if ehProprietario(frenteId) && !frenteId.matches('contratos-.*');
 
       match /itens/{itemId} {
         allow read: if ehMembro(frenteId);
@@ -195,19 +201,33 @@ service cloud.firestore {
         // (usado nas consultas do painel geral), e só copiando a lista atual
         // da frente — é o que acontece quando alguém aceita um convite, mesmo
         // com acesso "Pode visualizar". Qualquer outra mudança exige edição.
+        // Quem está na lista do item também pode só se tirar dela (ao sair
+        // da antiga frente Contratos compartilhada).
         allow update: if podeEditar(frenteId)
           || (ehMembro(frenteId)
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membrosUids'])
-              && request.resource.data.membrosUids == get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids);
-        allow delete: if podeEditar(frenteId);
+              && request.resource.data.membrosUids == get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids)
+          || (logado()
+              && request.auth.uid in resource.data.membrosUids
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membrosUids'])
+              && request.resource.data.membrosUids == resource.data.membrosUids.removeAll([request.auth.uid]));
+        // Na antiga frente compartilhada, quem criou o item pode apagá-lo
+        // (depois de copiá-lo para a própria frente Contratos).
+        allow delete: if podeEditar(frenteId)
+          || (logado() && frenteId == 'contratos-padrao' && resource.data.criadoPor == request.auth.uid);
 
         match /comentarios/{comentarioId} {
           // Qualquer pessoa com acesso à frente comenta e lê comentários,
-          // mesmo quem só pode visualizar.
-          allow read: if logado() && request.auth.uid in get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids;
+          // mesmo quem só pode visualizar. Quem está na lista do item também
+          // lê (para levar os comentários junto ao mudar o item de frente).
+          allow read: if logado()
+            && (request.auth.uid in get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids
+                || request.auth.uid in get(/databases/$(database)/documents/frentes/$(frenteId)/itens/$(itemId)).data.membrosUids);
+          // Na própria frente Contratos, a dona pode gravar comentários de
+          // outras pessoas: é a cópia feita ao trazer os itens da frente antiga.
           allow create: if logado()
             && request.auth.uid in get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids
-            && request.resource.data.autorId == request.auth.uid;
+            && (request.resource.data.autorId == request.auth.uid || minhaFrenteContratos(frenteId));
           allow update: if logado()
             && request.auth.uid == resource.data.autorId
             && request.resource.data.autorId == resource.data.autorId;
