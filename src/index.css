@@ -1612,3 +1612,37 @@ label {
     font-size: 14px;
   }
 }
+
+/* Medição mensal de contratos */
+.pill-medicao {
+  background: #fdf1d8;
+  color: #8a5a00;
+}
+.caixa-medicao {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-border);
+}
+.caixa-medicao.ativa {
+  background: rgba(0, 212, 192, 0.08);
+  border-color: rgba(0, 212, 192, 0.4);
+}
+.medicao-prazo {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.medicao-prazo label.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.medicao-prazo input {
+  width: 68px;
+}

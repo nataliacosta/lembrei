@@ -91,7 +91,9 @@ export function entradasDaAgenda(itens, { uid, soMeus = false } = {}) {
 
 export function agruparAgenda(itens, opcoes = {}) {
   const grupos = Object.fromEntries(GRUPOS.map((g) => [g.key, []]));
-  for (const entrada of entradasDaAgenda(itens, opcoes)) {
+  // `extras`: entradas de fora dos itens (ex.: medições de contratos).
+  const entradas = [...entradasDaAgenda(itens, opcoes), ...(opcoes.extras || [])].sort((a, b) => a.data - b.data);
+  for (const entrada of entradas) {
     grupos[grupoDaData(entrada.data)].push(entrada);
   }
   const semData = itens.filter(

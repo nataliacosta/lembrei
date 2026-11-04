@@ -1,4 +1,7 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { marcarMedicaoFeita } from "../lib/medicao";
 import { TIPO_POR_KEY } from "../lib/constants";
 import { diasAte, formatarDataRelativa } from "../lib/datas";
 import { marcarConcluido, marcarPreparo } from "../lib/firestore";
@@ -16,6 +19,7 @@ function dataComHora(data, comHora) {
 }
 
 export default function AgendaRow({ entrada, frente, podeEditar, mostrarFrente = true }) {
+  if (entrada.tipo === "medicao") return <MedicaoRow entrada={entrada} />;
   if (entrada.tipo === "reuniao" || entrada.tipo === "preparo") {
     return <ReuniaoRow entrada={entrada} frente={frente} podeEditar={podeEditar} mostrarFrente={mostrarFrente} />;
   }
@@ -164,6 +168,64 @@ function ItemRow({ entrada, frente, podeEditar, mostrarFrente }) {
       <span className={`data ${atrasado ? "texto-alerta" : ""}`} style={dias === null ? { color: "var(--color-gray)" } : undefined}>
         {data ? formatarDataRelativa(data) : "—"}
       </span>
+    </div>
+  );
+}
+
+function IconeMedicao({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 3v18h18" />
+      <path d="M7 15l4-4 3 3 5-6" />
+    </svg>
+  );
+}
+
+// Medição mensal de um contrato (ver lib/medicao.js).
+function MedicaoRow({ entrada }) {
+  const { user } = useAuth();
+  const { contrato, medicao, data } = entrada;
+  const [salvando, setSalvando] = useState(false);
+  const atrasado = diasAte(data) < 0;
+  const papel = contrato.membros?.[user.uid];
+  const podeMarcar = papel === "proprietario" || papel === "editor";
+  const m = contrato.medicao;
+  const detalhes = [contrato.titulo, m.quem, m.lightPlus ? "Light+" : null].filter(Boolean);
+
+  async function feita() {
+    setSalvando(true);
+    try {
+      await marcarMedicaoFeita(contrato.id, medicao.chave, true);
+    } catch (e) {
+      console.error("Erro ao marcar medição:", e);
+      window.alert("Não deu pra marcar a medição como feita. Tente de novo.");
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className={`agenda-row com-acoes medicao`}>
+      <span className={`icone-linha ${atrasado ? "texto-alerta" : ""}`} style={{ color: atrasado ? undefined : "var(--color-primary)" }}>
+        <IconeMedicao />
+      </span>
+      <Link to={`/contratos/${contrato.id}`} style={{ minWidth: 0, color: "inherit" }}>
+        <div className="titulo">Fazer a medição de {medicao.nomeMes}</div>
+        <div className="meta">
+          <span className="pill pill-medicao">Medição</span>
+          <span>{detalhes.join(" · ")}</span>
+          {m.responsavelId !== user.uid && m.responsavelNome && <span>· {m.responsavelNome}</span>}
+        </div>
+      </Link>
+      {podeMarcar ? (
+        <div className="acoes-lembrete">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={feita} disabled={salvando}>
+            {salvando ? "Salvando..." : "Medição feita"}
+          </button>
+        </div>
+      ) : (
+        <span />
+      )}
+      <span className={`data ${atrasado ? "texto-alerta" : ""}`}>{formatarDataRelativa(data)}</span>
     </div>
   );
 }
