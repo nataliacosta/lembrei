@@ -31,13 +31,15 @@ export default function TopBar() {
           </span>
         </Link>
         <Sino />
-        <Avatar className="so-desktop" nome={user?.displayName || user?.email} url={user?.photoURL} tamanho={36} />
+        <Link to="/conta" className="so-desktop" aria-label="Conta" title="Conta" style={{ display: "flex" }}>
+          <Avatar nome={user?.displayName || user?.email} url={user?.photoURL} tamanho={36} decorativo />
+        </Link>
         <Link to="/conta" className="so-mobile" aria-label="Conta" style={{ width: 44, height: 44 }}>
           <span style={{ display: "flex", width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
             <Avatar nome={user?.displayName || user?.email} url={user?.photoURL} tamanho={32} decorativo />
           </span>
         </Link>
-        <button onClick={signOut} className="btn-ghost btn so-desktop" style={{ fontSize: 12, padding: "6px 12px" }}>
+        <button onClick={signOut} className="btn-ghost btn so-desktop esconder-tablet" style={{ fontSize: 12, padding: "6px 12px" }}>
           Sair
         </button>
       </div>
