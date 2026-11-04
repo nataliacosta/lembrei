@@ -79,6 +79,7 @@ function ReuniaoRow({ entrada, frente, podeEditar, mostrarFrente }) {
             </>
           )}
           {mostrarFrente && frente && <span className="so-mobile">· {frente.nome}</span>}
+          <span className="meta-compacta">· {[mostrarFrente ? frente?.nome : null, responsavel].filter(Boolean).join(" · ")}</span>
         </div>
       </Link>
 
@@ -149,6 +150,9 @@ function ItemRow({ entrada, frente, podeEditar, mostrarFrente }) {
               {mostrarFrente && frente && <span className="so-mobile">· {frente.nome}</span>}
             </>
           )}
+          <span className="meta-compacta">
+            · {[mostrarFrente ? frente?.nome : null, item.responsavelNome].filter(Boolean).join(" · ") || "sem responsável"}
+          </span>
         </div>
       </Link>
 

@@ -165,6 +165,7 @@ export default function DashboardPage() {
       </div>
 
       <aside className="dashboard-aside page-shell" style={{ paddingTop: 28, paddingBottom: 48, paddingLeft: 0, paddingRight: 24, borderLeft: "none" }}>
+        <div className="aside-bloco">
         {previsaoFila.length > 0 && (
           <>
             <h2 style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700, display: "flex", justifyContent: "space-between" }}>
@@ -196,6 +197,8 @@ export default function DashboardPage() {
           </>
         )}
 
+        </div>
+        <div className="aside-bloco">
         <h2 id="contratos-atencao" style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700 }}>
           Contratos pedindo atenção
         </h2>
@@ -225,6 +228,8 @@ export default function DashboardPage() {
           </div>
         )}
 
+        </div>
+        <div className="aside-bloco">
         <h2 style={{ margin: "24px 0 10px", fontSize: 15, fontWeight: 700 }}>Aguardando TI</h2>
         {aditivosTI.length === 0 ? (
           <div className="lista-card empty-state" style={{ padding: 20 }}>Nenhum aditivo parado em TI. 🎉</div>
@@ -246,6 +251,7 @@ export default function DashboardPage() {
             })}
           </div>
         )}
+      </div>
       </aside>
     </>
   );
