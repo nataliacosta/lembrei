@@ -283,7 +283,8 @@ label {
     flex: 0 0 auto !important;
   }
 
-  .dashboard-layout > .page-shell {
+  .dashboard-layout > .page-shell,
+  .dashboard-layout > .modal-overlay {
     flex: 1 1 auto !important;
   }
 
