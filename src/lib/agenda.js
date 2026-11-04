@@ -30,6 +30,13 @@ export function ehMeu(item, uid) {
   return item.criadoPor === uid;
 }
 
+// O lembrete pode ser de outra pessoa que não a responsável: quem o criou
+// escolhe "Eu" (lembrete.paraId = uid dela) ou "Responsável" (sem paraId).
+export function lembreteEhMeu(item, uid) {
+  if (item.lembrete?.paraId) return item.lembrete.paraId === uid;
+  return ehMeu(item, uid);
+}
+
 function temPrazo(item) {
   return Boolean(item.prazo) && TIPO_POR_KEY[item.tipo]?.temStatusPrazo !== false;
 }
@@ -67,11 +74,10 @@ export function entradasDaAgenda(itens, { uid, soMeus = false } = {}) {
       }
       continue;
     }
-    if (!doItem(item)) continue;
-    if (temPrazo(item)) {
+    if (temPrazo(item) && doItem(item)) {
       entradas.push({ chave: `${item.id}:prazo`, tipo: "prazo", item, data: paraDate(item.prazo) });
     }
-    if (temLembreteAtivo(item)) {
+    if (temLembreteAtivo(item) && (!soMeus || lembreteEhMeu(item, uid))) {
       entradas.push({
         chave: `${item.id}:lembrete`,
         tipo: "lembrete",

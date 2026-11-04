@@ -104,6 +104,10 @@ export default function ItemFormPage() {
   );
   const [tags, setTags] = useState([]);
   const [lembrete, setLembrete] = useState(LEMBRETE_VAZIO);
+  // Para quem é o lembrete quando o item é de outra pessoa: "eu" ou
+  // "responsavel". Lembrete novo começa em "eu"; os antigos (sem paraId)
+  // continuam com a pessoa responsável.
+  const [lembrarQuem, setLembrarQuem] = useState("eu");
   const [reuniao, setReuniao] = useState(() => reuniaoParaFormulario(null));
   const [salvando, setSalvando] = useState(false);
 
@@ -141,6 +145,10 @@ export default function ItemFormPage() {
         setCamposCustom(item.camposCustom || []);
         setTags(item.tags || []);
         setLembrete(item.lembrete || LEMBRETE_VAZIO);
+        if (item.lembrete?.ativo) {
+          const para = item.lembrete.paraId;
+          setLembrarQuem(!para ? "responsavel" : para === user.uid ? "eu" : `outro:${para}`);
+        }
         setReuniao(reuniaoParaFormulario(item.reuniao));
       }
     });
@@ -162,6 +170,17 @@ export default function ItemFormPage() {
 
   if (!frente || frente.id !== frenteId || (editando && itemOriginal === undefined) || (viaContrato && contrato === undefined)) {
     return <div className="spinner-wrap">Carregando...</div>;
+  }
+
+  // Quem recebe o lembrete (null = a pessoa responsável, como sempre foi).
+  function paraDoLembrete(respId) {
+    if (respId === user.uid) return null;
+    if (lembrarQuem === "eu") return user.uid;
+    if (lembrarQuem.startsWith("outro:")) {
+      const outro = lembrarQuem.slice(6);
+      return outro === respId ? null : outro;
+    }
+    return null;
   }
 
   async function salvar(e) {
@@ -192,7 +211,7 @@ export default function ItemFormPage() {
       responsavelNome: respNome,
       camposCustom: camposCustom.filter((c) => c.label.trim()),
       tags,
-      lembrete: !ehReuniao && lembrete.ativo && lembrete.proximaVerificacao ? { ...lembrete, status: "pendente" } : null,
+      lembrete: !ehReuniao && lembrete.ativo && lembrete.proximaVerificacao ? { ...lembrete, status: "pendente", paraId: paraDoLembrete(respId) } : null,
       reuniao: ehReuniao ? formularioParaReuniao(reuniao, { original: itemOriginal?.reuniao, nomeDe }) : null,
     };
 
@@ -387,7 +406,7 @@ export default function ItemFormPage() {
                   }
                   style={{ width: 18, height: 18 }}
                 />
-                Me lembrar de verificar
+                {responsavelId === user.uid ? "Me lembrar de verificar" : "Lembrar de verificar"}
               </label>
               {lembrete.ativo && (
                 <>
@@ -410,6 +429,35 @@ export default function ItemFormPage() {
                       aria-label="Outra data do lembrete"
                     />
                   </div>
+                  {responsavelId !== user.uid && (
+                    <div className="lembrar-quem">
+                      <span className="lembrar-quem-rotulo">Lembrar quem</span>
+                      <span className="segmentado" role="radiogroup" aria-label="Lembrar quem">
+                        {[
+                          ["eu", "Eu"],
+                          ["responsavel", "Responsável"],
+                        ].map(([valor, rotulo]) => (
+                          <button
+                            key={valor}
+                            type="button"
+                            role="radio"
+                            aria-checked={lembrarQuem === valor}
+                            className={lembrarQuem === valor ? "ativo" : ""}
+                            onClick={() => setLembrarQuem(valor)}
+                          >
+                            {rotulo}
+                          </button>
+                        ))}
+                      </span>
+                      <span className="lembrar-quem-dica">
+                        {lembrarQuem === "eu"
+                          ? "Aparece no seu “O que fazer”, mesmo o item sendo de outra pessoa."
+                          : lembrarQuem === "responsavel"
+                            ? "Aparece no “O que fazer” de quem é responsável pelo item."
+                            : `Hoje este lembrete é de ${membros[lembrarQuem.slice(6)]?.nome || "outra pessoa"}.`}
+                      </span>
+                    </div>
+                  )}
                   <input
                     value={lembrete.mensagem}
                     onChange={(e) => setLembrete({ ...lembrete, mensagem: e.target.value })}

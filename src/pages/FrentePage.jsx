@@ -8,7 +8,7 @@ import { BotaoVoltar } from "../contexts/HistoricoContext";
 
 import { useUsuarios } from "../hooks/useUsuarios";
 import { excluirFrente, watchFrente, watchItens } from "../lib/firestore";
-import { agruparItensDaFrente, ehMeu } from "../lib/agenda";
+import { agruparItensDaFrente, ehMeu, lembreteEhMeu } from "../lib/agenda";
 import { FRENTE_CONTRATOS_ID, STATUS_OPCOES, TIPOS } from "../lib/constants";
 import { paraDate } from "../lib/datas";
 import { preparosDaOcorrencia, proximaOcorrencia } from "../lib/reunioes";
@@ -76,7 +76,7 @@ export default function FrentePage() {
       const passaCategoria =
         categoria === "concluido" ? item.concluido : !item.concluido && (categoria === "abertos" || item.tipo === categoria);
       const passaTag = !filtroTag || item.tags?.some((t) => t.toLowerCase().includes(filtroTag.replace(/^#/, "").toLowerCase()));
-      const passaMeus = !soMeus || ehMeu(item, user.uid);
+      const passaMeus = !soMeus || ehMeu(item, user.uid) || (item.lembrete?.ativo && lembreteEhMeu(item, user.uid));
       const passaStatus = !status || item.status === status;
       return passaCategoria && passaTag && passaMeus && passaStatus;
     });

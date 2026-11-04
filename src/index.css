@@ -1551,3 +1551,60 @@ label {
     gap: 4px !important;
   }
 }
+
+/* Lembrete: para mim ou para a pessoa responsável */
+.lembrar-quem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.lembrar-quem-rotulo {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.segmentado {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 3px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+.segmentado button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--color-dark);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.segmentado button.ativo {
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+}
+.lembrar-quem-dica {
+  font-size: 12px;
+  color: var(--color-gray);
+}
+@media (max-width: 760px) {
+  .lembrar-quem .segmentado {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  .lembrar-quem .segmentado button {
+    min-height: 40px;
+    font-size: 14px;
+  }
+}
