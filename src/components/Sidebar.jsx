@@ -160,7 +160,7 @@ export default function Sidebar() {
                 key={c.id}
                 to={`/contratos/${c.id}`}
                 className={classeLink}
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13 }}
+                style={{ display: "flex", alignItems: c.fornecedor ? "flex-start" : "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13 }}
               >
                 <span
                   style={{
@@ -169,9 +169,15 @@ export default function Sidebar() {
                     borderRadius: "50%",
                     background: (CONTRATO_STATUS[c.status] || CONTRATO_STATUS.ativo).cor,
                     flex: "0 0 auto",
+                    marginTop: c.fornecedor ? 5 : 0,
                   }}
                 />
-                {c.titulo}
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <span style={{ display: "block" }}>{c.titulo}</span>
+                  {c.fornecedor && (
+                    <span style={{ display: "block", fontSize: 12, color: "rgba(255,255,255,.6)", marginTop: 1 }}>{c.fornecedor}</span>
+                  )}
+                </span>
                 {situacaoDoContrato(c) === "atencao" && (
                   <span className="sidebar-badge alerta" title="Pede atenção (vencimento)">
                     !
