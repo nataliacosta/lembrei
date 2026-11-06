@@ -3,6 +3,7 @@ import { useAuth } from "./AuthContext";
 import { watchFrentes, watchItensAbertosDoUsuario } from "../lib/firestore";
 import { buscarAditivosPendentesTI, watchContratos } from "../lib/contratos";
 import { itemAtrasado } from "../lib/agenda";
+import { contratoDaBase, ehBaseContrato } from "../lib/itens";
 import { watchDemandas, watchFila, watchFilasCompartilhadas } from "../lib/filas";
 import { limparNotificacoesAntigas, watchNotificacoes } from "../lib/notificacoes";
 
@@ -103,7 +104,14 @@ export function DadosProvider({ children }) {
       mapaFrentes,
       mapaContratos,
       contagemPorFrente,
-      papelNaFrente: (frenteId) => mapaFrentes[frenteId]?.membros?.[user?.uid],
+      // Papel em uma "base" de item: a frente ou o contrato (ver lib/itens.js).
+      papelNaFrente: (base) =>
+        ehBaseContrato(base) ? mapaContratos[contratoDaBase(base)]?.membros?.[user?.uid] : mapaFrentes[base]?.membros?.[user?.uid],
+      // Frente do item, ou um "rótulo" com o contrato para itens de contrato.
+      origemDe: (base) =>
+        ehBaseContrato(base)
+          ? mapaContratos[contratoDaBase(base)] && { id: base, nome: `Contrato · ${mapaContratos[contratoDaBase(base)].titulo}` }
+          : mapaFrentes[base],
       minhaFila,
       minhasDemandas,
       filasCompartilhadas,

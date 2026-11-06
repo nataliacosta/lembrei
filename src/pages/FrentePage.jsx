@@ -9,7 +9,7 @@ import { BotaoVoltar } from "../contexts/HistoricoContext";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { excluirFrente, watchFrente, watchItens } from "../lib/firestore";
 import { agruparItensDaFrente, ehMeu, lembreteEhMeu } from "../lib/agenda";
-import { STATUS_OPCOES, TIPOS, ehFrenteContratos } from "../lib/constants";
+import { STATUS_OPCOES, TIPOS } from "../lib/constants";
 import { paraDate } from "../lib/datas";
 import { preparosDaOcorrencia, proximaOcorrencia } from "../lib/reunioes";
 
@@ -87,10 +87,7 @@ export default function FrentePage() {
 
   const papel = frente.membros?.[user.uid];
   const podeEditar = papel === "proprietario" || papel === "editor";
-  // A frente "Contratos" é padrão e necessária pro funcionamento dos
-  // aditivos — não dá pra excluir, nem quem é proprietário.
-  const ehFrentePadrao = ehFrenteContratos(frenteId);
-  const souProprietario = papel === "proprietario" && !ehFrentePadrao;
+  const souProprietario = papel === "proprietario";
 
   async function excluir() {
     if (!window.confirm(`Excluir a frente "${frente.nome}" e todos os seus itens? Essa ação não pode ser desfeita.`)) return;

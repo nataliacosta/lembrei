@@ -21,6 +21,7 @@ import { proximaOcorrencia, preparosDaOcorrencia } from "../../src/lib/reunioes.
 import { localDe, textoDaNotificacao } from "../../src/lib/textosNotificacao.js";
 import { categoriaDoTipo, mesclarPrefs } from "../../src/lib/prefsNotificacoes.js";
 import { VAPID_PUBLICO } from "../../src/lib/pushChave.js";
+import { linkDoItem } from "../../src/lib/itens.js";
 
 initializeApp();
 const db = getFirestore();
@@ -119,7 +120,7 @@ export const lembretesAgendados = onSchedule(
             await enviarParaUsuario(uid, {
               title: `Reunião em ${Math.max(1, Math.round(faltam))} min`,
               body: `${item.titulo} às ${hhmm(ocorrencia)}` + (preparos.length ? ` · ${feitos} de ${preparos.length} ${preparos.length === 1 ? "preparo feito" : "preparos feitos"}` : ""),
-              link: `/frentes/${item.frenteId}/itens/${item.id}`,
+              link: linkDoItem(item.frenteId, item.id),
               tag: `reuniao-${chave}`,
             });
             await marca.set({ criadoEm: FieldValue.serverTimestamp() });

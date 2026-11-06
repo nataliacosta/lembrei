@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { marcarMedicaoFeita } from "../lib/contratos";
+import { linkDoItem } from "../lib/itens";
 import { TIPO_POR_KEY } from "../lib/constants";
 import { diasAte, formatarDataRelativa } from "../lib/datas";
 import { marcarConcluido, marcarPreparo } from "../lib/firestore";
@@ -31,7 +32,7 @@ function ReuniaoRow({ entrada, frente, podeEditar, mostrarFrente }) {
   const { item, tipo, data, preparo } = entrada;
   const ehPreparo = tipo === "preparo";
   const ocorrencia = entrada.ocorrencia || data;
-  const link = `/frentes/${item.frenteId}/itens/${item.id}`;
+  const link = linkDoItem(item.frenteId, item.id);
   const preparos = entrada.preparos || [];
   const feitos = preparos.filter((p) => p.feito).length;
   const responsavel = ehPreparo ? preparo.responsavelNome || item.responsavelNome || "—" : item.responsavelNome || "—";
@@ -101,7 +102,7 @@ function ItemRow({ entrada, frente, podeEditar, mostrarFrente }) {
   const atrasado = dias !== null && dias < 0;
   const ehLembrete = tipo === "lembrete";
   const mostrarAcoes = ehLembrete && podeEditar && dias !== null && dias <= 0;
-  const link = `/frentes/${item.frenteId}/itens/${item.id}`;
+  const link = linkDoItem(item.frenteId, item.id);
   const tipoInfo = TIPO_POR_KEY[item.tipo];
   const responsavel = item.responsavelNome || "—";
   const textoLembrete =

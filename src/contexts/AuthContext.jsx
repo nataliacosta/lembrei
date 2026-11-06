@@ -7,8 +7,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, firebaseConfigurado, googleProvider } from "../firebase";
-import { garantirFrenteContratos, resgatarConvitesPendentes } from "../lib/firestore";
-import { idFrenteContratos } from "../lib/constants";
+import { levarItensParaOsContratos, resgatarConvitesPendentes } from "../lib/firestore";
 import { resgatarConvitesPendentesContratos } from "../lib/contratos";
 import { garantirFila, resgatarConvitesPendentesFilas } from "../lib/filas";
 
@@ -17,8 +16,6 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  // ID da frente "Contratos" de quem está logado (uma por pessoa).
-  const [frenteContratosId, setFrenteContratosId] = useState(null);
 
   async function ensureUserDoc(firebaseUser) {
     const ref = doc(db, "usuarios", firebaseUser.uid);
@@ -66,12 +63,9 @@ export function AuthProvider({ children }) {
         } catch (e) {
           console.error("Falha ao resgatar convites pendentes de contratos:", e);
         }
-        try {
-          setFrenteContratosId(await garantirFrenteContratos(firebaseUser.uid));
-        } catch (e) {
-          console.error("Falha ao preparar a frente Contratos:", e);
-          setFrenteContratosId(idFrenteContratos(firebaseUser.uid));
-        }
+        // Leva os itens das antigas frentes "Contratos" para dentro dos
+        // contratos (em segundo plano, sem atrasar a entrada).
+        levarItensParaOsContratos(firebaseUser.uid).catch((e) => console.error("Falha ao levar itens para os contratos:", e));
         try {
           await garantirFila(firebaseUser);
           await resgatarConvitesPendentesFilas(firebaseUser.uid, firebaseUser.email);
@@ -99,7 +93,6 @@ export function AuthProvider({ children }) {
     loading,
     signInWithGoogle,
     signOut,
-    frenteContratosId: frenteContratosId || (user ? idFrenteContratos(user.uid) : null),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

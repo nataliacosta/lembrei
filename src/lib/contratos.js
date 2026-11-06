@@ -150,8 +150,9 @@ export async function resgatarConvitesPendentesContratos(uid, email) {
 }
 
 async function sincronizarMembrosNosAditivos(contratoId, novosMembrosUids) {
-  const snap = await getDocs(aditivosRef(contratoId));
-  await Promise.all(snap.docs.map((d) => updateDoc(d.ref, { membrosUids: novosMembrosUids })));
+  // Aditivos e itens do contrato ficam visíveis para quem tem acesso a ele.
+  const [aditivos, itens] = await Promise.all([getDocs(aditivosRef(contratoId)), getDocs(collection(db, "contratos", contratoId, "itens"))]);
+  await Promise.all([...aditivos.docs, ...itens.docs].map((d) => updateDoc(d.ref, { membrosUids: novosMembrosUids })));
 }
 
 // ---------- Aditivos ----------

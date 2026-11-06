@@ -162,6 +162,31 @@ service cloud.firestore {
         allow read: if ehMembroContrato(contratoId);
         allow create, update, delete: if podeEditarContrato(contratoId);
       }
+
+      // Itens do contrato (e dos aditivos dele, com aditivoId): quem tem
+      // acesso ao contrato vê; quem pode editar o contrato cria e muda.
+      match /itens/{itemId} {
+        allow read: if ehMembroContrato(contratoId);
+        allow create, delete: if podeEditarContrato(contratoId);
+        // Qualquer membro pode copiar a lista de membros do contrato para o
+        // item (ao aceitar um convite, mesmo só podendo visualizar).
+        allow update: if podeEditarContrato(contratoId)
+          || (ehMembroContrato(contratoId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membrosUids'])
+              && request.resource.data.membrosUids == get(/databases/$(database)/documents/contratos/$(contratoId)).data.membrosUids);
+
+        match /comentarios/{comentarioId} {
+          allow read: if ehMembroContrato(contratoId);
+          // Quem pode editar o contrato também grava comentários de outras
+          // pessoas: é a cópia feita ao trazer itens das antigas frentes Contratos.
+          allow create: if ehMembroContrato(contratoId)
+            && (request.resource.data.autorId == request.auth.uid || podeEditarContrato(contratoId));
+          allow update: if logado()
+            && request.auth.uid == resource.data.autorId
+            && request.resource.data.autorId == resource.data.autorId;
+          allow delete: if logado() && request.auth.uid == resource.data.autorId;
+        }
+      }
     }
 
     match /usuarios/{uid} {
@@ -201,9 +226,7 @@ service cloud.firestore {
             && request.resource.data.donoId == resource.data.donoId)
         || aceitandoConvite()
         || saindoDaFrente();
-      // A frente "Contratos" de cada pessoa nunca pode ser excluída — é nela
-      // que caem os itens criados a partir da tela de um contrato.
-      allow delete: if ehProprietario(frenteId) && !frenteId.matches('contratos-.*');
+      allow delete: if ehProprietario(frenteId);
 
       match /itens/{itemId} {
         allow read: if ehMembro(frenteId);

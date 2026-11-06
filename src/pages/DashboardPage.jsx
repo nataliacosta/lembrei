@@ -37,6 +37,7 @@ export default function DashboardPage() {
     aditivosTI,
     erroContratos,
     papelNaFrente,
+    origemDe,
     minhaFila,
     minhasDemandas,
   } = useDados();
@@ -125,7 +126,7 @@ export default function DashboardPage() {
                       <AgendaRow
                         key={entrada.chave}
                         entrada={entrada}
-                        frente={entrada.item ? mapaFrentes[entrada.item.frenteId] : undefined}
+                        frente={entrada.item ? origemDe(entrada.item.frenteId) : undefined}
                         podeEditar={entrada.item ? podeEditar(entrada.item.frenteId) : false}
                       />
                     ))}
@@ -152,7 +153,7 @@ export default function DashboardPage() {
                       <AgendaRow
                         key={item.id}
                         entrada={{ chave: item.id, tipo: "sem-data", item, data: null }}
-                        frente={mapaFrentes[item.frenteId]}
+                        frente={origemDe(item.frenteId)}
                         podeEditar={podeEditar(item.frenteId)}
                       />
                     ))}
