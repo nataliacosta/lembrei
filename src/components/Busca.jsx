@@ -136,7 +136,7 @@ export function useResultadosBusca(termo, ativa = true) {
       }));
 
     const ads = extras.aditivos
-      .filter((a) => casa((a.tipo || []).join(" "), a.motivo, a.numeroRQS, a.pendenteEm, mapaContratos[a.contratoId]?.titulo))
+      .filter((a) => casa((a.tipo || []).join(" "), a.motivo, a.numeroRQS, a.ticketLightPlus, a.pendenteEm, mapaContratos[a.contratoId]?.titulo))
       .sort((a, b) => a.finalizado - b.finalizado)
       .map((a) => ({
         chave: `a:${a.contratoId}:${a.id}`,
@@ -148,6 +148,7 @@ export function useResultadosBusca(termo, ativa = true) {
           "Aditivo",
           a.finalizado ? "finalizado" : a.pendenteEm && `pendente em ${a.pendenteEm}`,
           a.numeroRQS && `RQS ${a.numeroRQS}`,
+          a.ticketLightPlus && `Light+ ${a.ticketLightPlus}`,
           a.dataSolicitacao && `desde ${formatarData(a.dataSolicitacao)}`,
         ]
           .filter(Boolean)

@@ -171,6 +171,7 @@ export async function criarAditivo(contratoId, { membrosUids, uid, ...dados }) {
     pendenteEm: dados.pendenteEm,
     tipo: dados.tipo || [],
     numeroRQS: dados.numeroRQS || "",
+    ticketLightPlus: dados.ticketLightPlus || "",
     motivo: dados.motivo || "",
     finalizado: false,
     finalizadoEm: null,

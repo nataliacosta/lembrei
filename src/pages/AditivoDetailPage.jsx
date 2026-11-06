@@ -72,10 +72,11 @@ export default function AditivoDetailPage() {
           )}
         </div>
 
-        <div className="meta-grid" style={{ padding: "16px 0", borderTop: "1px solid var(--color-gray-light)", borderBottom: "1px solid var(--color-gray-light)" }}>
+        <div className="meta-grid meta-grid-4" style={{ padding: "16px 0", borderTop: "1px solid var(--color-gray-light)", borderBottom: "1px solid var(--color-gray-light)" }}>
           <Meta label="Data da solicitação" valor={aditivo.dataSolicitacao ? formatarData(aditivo.dataSolicitacao) : "—"} />
           <Meta label="Pendente em" valor={aditivo.pendenteEm || "—"} />
           <Meta label="Número da RQS" valor={aditivo.numeroRQS || "—"} />
+          <Meta label="Ticket Light+" valor={aditivo.ticketLightPlus || "—"} />
           {aditivo.finalizado && <Meta label="Finalizado em" valor={formatarData(aditivo.finalizadoEm)} />}
         </div>
 
