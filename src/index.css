@@ -1975,3 +1975,159 @@ label {
     padding: 0;
   }
 }
+
+/* ---------- Demandas: passos e espera ---------- */
+.rotulo-form {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.dica-form {
+  font-size: 12px;
+  color: var(--color-gray);
+  margin-top: 6px;
+  line-height: 1.45;
+}
+.passo {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border-top: 1px solid #f0f0f0;
+}
+.lista-card.passos > .passo:first-child {
+  border-top: none;
+}
+.passo.esperando {
+  background: #fffaf0;
+}
+.passo-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 2px solid #9aa5a4;
+  background: #fff;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+.passo-check.feito {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.passo-check.esperando {
+  border-color: #d9a33a;
+  background: #fdf1d8;
+  color: #8a5a00;
+}
+.passo-titulo {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.passo-quem {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 10px;
+  background: #e6f4f2;
+  color: #00635e;
+  white-space: nowrap;
+}
+.passo-quem.outro {
+  background: #fdf1d8;
+  color: #8a5a00;
+}
+.passo-remover {
+  background: none;
+  border: none;
+  color: var(--color-gray);
+  font-size: 18px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+}
+.passo-novo {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  align-items: center;
+}
+.passo-novo > input:first-child {
+  flex: 1 1 200px;
+}
+.passo-novo select,
+.passo-novo input {
+  width: auto;
+}
+.passo-novo .passo-horas {
+  width: 90px;
+}
+.cartao-espera {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fffaf0;
+  border: 1px solid #f6d38a;
+}
+.cartao-espera-titulo {
+  font-size: 14px;
+  font-weight: 700;
+  color: #8a5a00;
+}
+.cartao-espera-campos {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-top: 10px;
+}
+.cartao-espera-campos label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-gray);
+}
+.cartao-espera-campos input {
+  width: auto;
+  min-height: 34px;
+  padding: 6px 10px;
+}
+.pill-espera {
+  background: #fdf1d8;
+  color: #8a5a00;
+}
+.linha-tempo .barra.espera {
+  background: repeating-linear-gradient(45deg, #f6d38a, #f6d38a 4px, #fdf1d8 4px, #fdf1d8 8px);
+}
+.fila-linha.esperando {
+  background: #fffaf0;
+}
+.tile-espera {
+  background: #fffaf0;
+  border-color: #f6d38a;
+}
+.tile-espera .tile-valor {
+  color: #8a5a00;
+}
+.barra-legenda-espera {
+  display: inline-block;
+  width: 14px;
+  height: 8px;
+  border-radius: 3px;
+  vertical-align: middle;
+  background: repeating-linear-gradient(45deg, #f6d38a, #f6d38a 3px, #fdf1d8 3px, #fdf1d8 6px);
+}

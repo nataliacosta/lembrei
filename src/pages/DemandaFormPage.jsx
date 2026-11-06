@@ -16,6 +16,9 @@ import {
 } from "../lib/filas";
 import { deInputDate, formatarData, formatarDataRelativa, inicioDoDia, paraDate, paraInputDate } from "../lib/datas";
 import { calcularPrevisao, formatarHoras, ordenarFila, paraHoras } from "../lib/previsao";
+import { aplicarPassos, descreverPassoDaEspera, pararManual, retornoChegou } from "../lib/passos";
+import PassosDaDemanda from "../components/PassosDaDemanda";
+import { CartaoEspera, PararDemanda } from "../components/CartaoEspera";
 
 function Rotulo({ children }) {
   return (
@@ -45,6 +48,7 @@ export default function DemandaFormPage() {
   const [prazo, setPrazo] = useState("");
   const [descricao, setDescricao] = useState("");
   const [horasFeitas, setHorasFeitas] = useState("0");
+  const [passos, setPassos] = useState([]);
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => watchFila(donoId, setFila), [donoId]);
@@ -62,12 +66,15 @@ export default function DemandaFormPage() {
     setPrazo(original.prazoPedido ? paraInputDate(original.prazoPedido) : "");
     setDescricao(original.descricao || "");
     setHorasFeitas(String(original.horasFeitas || 0));
+    setPassos(original.passos || []);
     setCarregado(true);
   }, [editando, carregado, original]);
 
   const capacidade = fila?.capacidadeHoras || 6;
   const filaAtual = useMemo(() => ordenarFila(fila?.ordem, demandas || []), [fila?.ordem, demandas]);
-  const horas = paraHoras(valor, unidade, capacidade);
+  // Com passos que têm horas, a estimativa é a soma dos passos "eu".
+  const horasDosPassos = passos.filter((p) => p.quem !== "outro").reduce((s, p) => s + (Number(p.horas) || 0), 0);
+  const horas = horasDosPassos > 0 ? horasDosPassos : paraHoras(valor, unidade, capacidade);
   const prazoData = prazo ? inicioDoDia(deInputDate(prazo)) : null;
 
   // Só para informar: quando ficaria pronta se entrasse no fim da fila hoje.
@@ -95,17 +102,22 @@ export default function DemandaFormPage() {
       titulo: titulo.trim(),
       solicitante: solicitante.trim(),
       frenteId: frenteId || null,
-      estimativaValor: horas ? Number(String(valor).replace(",", ".")) : null,
-      estimativaUnidade: unidade,
-      estimativaHoras: horas,
       prazoPedido: prazo ? deInputDate(prazo) : null,
       descricao,
     };
+    // Sem horas nos passos, a estimativa vem do campo digitado.
+    if (!horasDosPassos) {
+      dados.estimativaValor = horas ? Number(String(valor).replace(",", ".")) : null;
+      dados.estimativaUnidade = unidade;
+      dados.estimativaHoras = horas;
+    }
     try {
       if (editando) {
-        await atualizarDemanda(donoId, demandaId, { ...dados, horasFeitas: Math.min(horas, Math.max(0, Number(String(horasFeitas).replace(",", ".")) || 0)) });
+        const extra = horasDosPassos ? {} : { horasFeitas: Math.min(horas, Math.max(0, Number(String(horasFeitas).replace(",", ".")) || 0)) };
+        await atualizarDemanda(donoId, demandaId, { ...dados, ...extra });
       } else {
-        const ref = await criarDemanda(donoId, dados, user.uid);
+        const { campos } = aplicarPassos({}, passos);
+        const ref = await criarDemanda(donoId, { ...dados, ...(passos.length ? campos : {}) }, user.uid);
         notificarFila(donoId, fila, {
           tipo: "demanda_criada",
           alvo: dados.titulo,
@@ -119,6 +131,36 @@ export default function DemandaFormPage() {
       window.alert("Não deu pra salvar a demanda. Tente de novo.");
       setSalvando(false);
     }
+  }
+
+  // Avisa quem acompanha a fila quando a demanda para ou volta a andar.
+  function avisarEspera(evento, campos, demanda) {
+    if (!evento) return;
+    const espera = campos.espera || demanda.espera;
+    const atualizada = { ...demanda, ...campos };
+    notificarFila(donoId, fila, {
+      tipo: evento === "parou" ? "demanda_parada" : "demanda_retomada",
+      alvo: titulo.trim() || demanda.titulo,
+      trecho: evento === "parou" ? [`Aguardando ${espera?.de || "retorno"}`, descreverPassoDaEspera(atualizada)].filter(Boolean).join(" · ") : "Retorno chegou",
+      link: `/demandas/${donoId}/${demandaId}`,
+    });
+  }
+
+  // Ações que salvam na hora (editando): passos, retorno, parar, datas da espera.
+  async function aplicar({ campos, evento }) {
+    if (!editando || !podeEditar) return;
+    try {
+      await atualizarDemanda(donoId, demandaId, campos);
+      avisarEspera(evento, campos, original);
+    } catch (erro) {
+      console.error("Erro ao atualizar a demanda:", erro);
+      window.alert("Não deu pra salvar. Tente de novo.");
+    }
+  }
+
+  function mudarPassos(novos) {
+    setPassos(novos);
+    if (editando) aplicar(aplicarPassos(original, novos));
   }
 
   async function concluirOuReabrir() {
@@ -184,10 +226,27 @@ export default function DemandaFormPage() {
               </span>
             </div>
           )}
-          {editando && previsaoEdicao && (
+          {editando && previsaoEdicao && !previsaoEdicao.esperando && (
             <div style={{ marginTop: 14, fontSize: 14 }}>
               <b>{posicaoNaFila + 1}º da fila</b> · {posicaoNaFila === 0 ? "em andamento" : `começa ${formatarDataRelativa(previsaoEdicao.inicio).toLowerCase()}`} · pronta{" "}
               <b>{formatarDataRelativa(previsaoEdicao.fim).toLowerCase()}</b>
+            </div>
+          )}
+          {editando && !original.concluida && original.espera?.ativa && (
+            <CartaoEspera
+              demanda={original}
+              podeEditar={podeEditar}
+              onRetorno={() => {
+                const r = retornoChegou(original);
+                if (r.campos.passos) setPassos(r.campos.passos);
+                aplicar(r);
+              }}
+              onMudarEspera={(mudancas) => aplicar({ campos: { espera: { ...original.espera, ...mudancas } }, evento: null })}
+            />
+          )}
+          {editando && !original.concluida && !original.espera?.ativa && podeEditar && (
+            <div style={{ marginTop: 12 }}>
+              <PararDemanda onParar={(dados) => aplicar(pararManual(original, dados))} />
             </div>
           )}
           {editando && original.concluida && (
@@ -212,6 +271,16 @@ export default function DemandaFormPage() {
             </label>
           </div>
 
+          <div style={{ marginTop: 20 }}>
+            <PassosDaDemanda passos={passos} onChange={mudarPassos} podeEditar={podeEditar} esperaPassoId={original?.espera?.ativa ? original.espera.passoId : null} />
+          </div>
+
+          {horasDosPassos > 0 ? (
+            <div style={{ marginTop: 16, fontSize: 14 }}>
+              <Rotulo>Estimativa</Rotulo>
+              <b>{formatarHoras(horasDosPassos)}</b> <span className="dica-form" style={{ display: "inline" }}>— soma dos seus passos</span>
+            </div>
+          ) : (
           <div style={{ marginTop: 20 }}>
             <Rotulo>Estimativa{editando ? "" : " (pode deixar para depois)"}</Rotulo>
             <div className="chips-row">
@@ -238,8 +307,9 @@ export default function DemandaFormPage() {
               )}
             </div>
           </div>
+          )}
 
-          {editando && !original.concluida && posicaoNaFila >= 0 && (
+          {editando && !original.concluida && posicaoNaFila >= 0 && !horasDosPassos && (
             <label style={{ display: "block", marginTop: 16 }}>
               <Rotulo>Horas já feitas</Rotulo>
               <input

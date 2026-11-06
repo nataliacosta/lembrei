@@ -67,6 +67,11 @@ export function proximosDiasUteis(n, desde = inicioDoDia()) {
   return dias;
 }
 
+// Demanda parada esperando retorno de outra pessoa/área (ver lib/filas.js).
+export function estaAguardando(demanda) {
+  return Boolean(demanda?.espera?.ativa) && !demanda.concluida;
+}
+
 export function horasRestantes(demanda) {
   return Math.max(0, (Number(demanda.estimativaHoras) || 0) - (Number(demanda.horasFeitas) || 0));
 }
@@ -83,6 +88,17 @@ export function calcularPrevisao(demandas, capacidadeHoras, desde = inicioDoDia(
   let indiceDia = 0;
   let livreNoDia = capacidade;
   const resultado = demandas.map((demanda) => {
+    // Parada aguardando retorno de alguém: não ocupa a capacidade (a próxima
+    // da fila segue). Com retorno previsto, a entrega conta a partir dele.
+    if (estaAguardando(demanda)) {
+      const retorno = demanda.espera.retornoPrevisto ? inicioDoDia(paraDate(demanda.espera.retornoPrevisto)) : null;
+      if (!retorno) return { demanda, esperando: true, inicio: null, fim: null, iDiaInicio: null, iDiaFim: null, iDiaRetorno: null };
+      let iRetorno = 0;
+      while (diaUtil(iRetorno) < retorno && iRetorno < 400) iRetorno++;
+      const dias = Math.max(1, Math.ceil(horasRestantes(demanda) / capacidade));
+      const iFim = iRetorno + dias - 1;
+      return { demanda, esperando: true, inicio: diaUtil(iRetorno), fim: diaUtil(iFim), iDiaInicio: iRetorno, iDiaFim: iFim, iDiaRetorno: iRetorno };
+    }
     let restante = horasRestantes(demanda);
     if (restante <= 0) {
       return { demanda, inicio: diaUtil(indiceDia), fim: diaUtil(indiceDia), iDiaInicio: indiceDia, iDiaFim: indiceDia };
@@ -103,14 +119,18 @@ export function calcularPrevisao(demandas, capacidadeHoras, desde = inicioDoDia(
     }
     return { demanda, inicio: diaUtil(iDiaInicio), fim: diaUtil(indiceDia), iDiaInicio, iDiaFim: indiceDia };
   });
-  return { itens: resultado, diasUteisTotais: resultado.length ? resultado[resultado.length - 1].iDiaFim + 1 : 0 };
+  const fins = resultado.map((r) => r.iDiaFim).filter((i) => i !== null);
+  return { itens: resultado, diasUteisTotais: fins.length ? Math.max(...fins) + 1 : 0 };
 }
 
 // Diferença, em dias úteis, entre a previsão de uma ordem e a de outra.
 export function compararPrevisoes(antes, depois) {
   const fimAntes = Object.fromEntries(antes.itens.map((r) => [r.demanda.id, r.iDiaFim]));
   return depois.itens
-    .map((r) => ({ ...r, diferenca: fimAntes[r.demanda.id] === undefined ? null : r.iDiaFim - fimAntes[r.demanda.id] }))
+    .map((r) => ({
+      ...r,
+      diferenca: fimAntes[r.demanda.id] == null || r.iDiaFim == null ? null : r.iDiaFim - fimAntes[r.demanda.id],
+    }))
     .filter((r) => r.diferenca);
 }
 
