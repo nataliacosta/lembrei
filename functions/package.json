@@ -4,10 +4,10 @@
   "type": "module",
   "main": "lib/index.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "scripts": {
-    "build": "esbuild src/index.js --bundle --platform=node --target=node20 --format=esm --outfile=lib/index.js --external:firebase-admin --external:firebase-functions --external:web-push"
+    "build": "esbuild src/index.js --bundle --platform=node --target=node22 --format=esm --outfile=lib/index.js --external:firebase-admin --external:firebase-functions --external:web-push"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",
