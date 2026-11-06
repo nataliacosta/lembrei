@@ -77,15 +77,16 @@ export async function atualizarContrato(contratoId, dados) {
 }
 
 export async function excluirContrato(contratoId) {
-  const [aditivosSnap, cancelamentosSnap] = await Promise.all([
-    getDocs(aditivosRef(contratoId)),
-    getDocs(cancelamentosRef(contratoId)),
-  ]);
-  const batch = writeBatch(db);
-  aditivosSnap.docs.forEach((d) => batch.delete(d.ref));
-  cancelamentosSnap.docs.forEach((d) => batch.delete(d.ref));
-  batch.delete(doc(db, "contratos", contratoId));
-  await batch.commit();
+  const subcolecoes = ["aditivos", "cancelamentos", "centros", "recursos", "medicoes"];
+  const snaps = await Promise.all(subcolecoes.map((s) => getDocs(collection(db, "contratos", contratoId, s))));
+  // Em lotes de até 450 (o limite do Firestore é 500 por lote).
+  const refs = snaps.flatMap((snap) => snap.docs.map((d) => d.ref));
+  for (let i = 0; i < refs.length; i += 450) {
+    const lote = writeBatch(db);
+    refs.slice(i, i + 450).forEach((r) => lote.delete(r));
+    await lote.commit();
+  }
+  await writeBatch(db).delete(doc(db, "contratos", contratoId)).commit();
 }
 
 export async function convidarMembroContrato(contratoId, email, papel) {

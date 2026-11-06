@@ -163,6 +163,39 @@ service cloud.firestore {
         allow create, update, delete: if podeEditarContrato(contratoId);
       }
 
+      // Medições por planilha: CCs/ODIs, recursos (com alocações por mês) e
+      // medições salvas. Quem participa do contrato vê; quem edita, muda.
+      match /centros/{centroId} {
+        allow read: if ehMembroContrato(contratoId);
+        allow create, update: if podeEditarContrato(contratoId)
+          && request.resource.data.tipo in ['CC', 'ODI']
+          && request.resource.data.codigo is string
+          && request.resource.data.codigo.size() > 0
+          && request.resource.data.codigo.size() <= 60;
+        allow delete: if podeEditarContrato(contratoId);
+      }
+
+      match /recursos/{recursoId} {
+        allow read: if ehMembroContrato(contratoId);
+        allow create, update: if podeEditarContrato(contratoId)
+          && request.resource.data.nome is string
+          && request.resource.data.nome.size() > 0
+          && request.resource.data.nome.size() <= 200
+          && request.resource.data.alocacoes is list
+          && request.resource.data.alocacoes.size() <= 120;
+        allow delete: if podeEditarContrato(contratoId);
+      }
+
+      match /medicoes/{mes} {
+        allow read: if ehMembroContrato(contratoId);
+        allow create, update: if podeEditarContrato(contratoId)
+          && mes.matches('^[0-9]{4}-[0-9]{2}$')
+          && request.resource.data.mes == mes
+          && request.resource.data.status in ['a_lancar', 'lancada']
+          && request.resource.data.linhas is list;
+        allow delete: if podeEditarContrato(contratoId);
+      }
+
       // Itens do contrato (e dos aditivos dele, com aditivoId): quem tem
       // acesso ao contrato vê; quem pode editar o contrato cria e muda.
       match /itens/{itemId} {

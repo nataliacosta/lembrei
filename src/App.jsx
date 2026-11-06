@@ -12,6 +12,8 @@ import SharingPage from "./pages/SharingPage";
 import ContratosListPage from "./pages/ContratosListPage";
 import ContratoFormPage from "./pages/ContratoFormPage";
 import ContratoDetailPage from "./pages/ContratoDetailPage";
+import SubirMedicaoPage from "./pages/SubirMedicaoPage";
+import MedicaoPage from "./pages/MedicaoPage";
 import ContratoSharingPage from "./pages/ContratoSharingPage";
 import AditivoFormPage from "./pages/AditivoFormPage";
 import AditivoDetailPage from "./pages/AditivoDetailPage";
@@ -60,6 +62,9 @@ export default function App() {
         <Route path="/contratos" element={<ContratosListPage />} />
         <Route path="/contratos/novo" element={<ContratoFormPage />} />
         <Route path="/contratos/:contratoId" element={<ContratoDetailPage />} />
+        <Route path="/contratos/:contratoId/medicoes" element={<ContratoDetailPage aba="medicoes" />} />
+        <Route path="/contratos/:contratoId/medicoes/nova" element={<SubirMedicaoPage />} />
+        <Route path="/contratos/:contratoId/medicoes/:mes" element={<MedicaoPage />} />
         <Route path="/contratos/:contratoId/editar" element={<ContratoFormPage />} />
         <Route path="/contratos/:contratoId/compartilhar" element={<ContratoSharingPage />} />
         <Route path="/contratos/:contratoId/itens/novo" element={<ItemFormPage />} />
