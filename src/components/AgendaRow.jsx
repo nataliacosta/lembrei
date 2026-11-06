@@ -79,6 +79,7 @@ function ReuniaoRow({ entrada, frente, podeEditar, mostrarFrente }) {
               <span className="pill pill-reuniao">Reunião</span>
               <span>
                 {frequenciaCurta(item.reuniao)}
+                {item.reuniao?.sala && ` · ${item.reuniao.sala}`}
                 {preparos.length > 0 &&
                   ` · ${feitos} de ${preparos.length} ${preparos.length === 1 ? "preparo feito" : "preparos feitos"}`}
               </span>

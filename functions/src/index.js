@@ -126,7 +126,7 @@ export const lembretesAgendados = onSchedule(
             const feitos = preparos.filter((p) => p.feito).length;
             await enviarParaUsuario(uid, {
               title: `Reunião em ${Math.max(1, Math.round(faltam))} min`,
-              body: `${item.titulo} às ${hhmm(ocorrencia)}` + (preparos.length ? ` · ${feitos} de ${preparos.length} ${preparos.length === 1 ? "preparo feito" : "preparos feitos"}` : ""),
+              body: `${item.titulo} às ${hhmm(ocorrencia)}` + (item.reuniao.sala ? ` · ${item.reuniao.sala}` : "") + (preparos.length ? ` · ${feitos} de ${preparos.length} ${preparos.length === 1 ? "preparo feito" : "preparos feitos"}` : ""),
               link: linkDoItem(item.frenteId, item.id),
               tag: `reuniao-${chave}`,
             });
