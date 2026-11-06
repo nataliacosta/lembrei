@@ -26,7 +26,7 @@ function salvarPreferencia(chave, valor) {
 
 export default function Sidebar() {
   const { user } = useAuth();
-  const { frentes, contratos, contagemPorFrente, minhaFila, minhasDemandas } = useDados();
+  const { frentes, contratos, contagemPorFrente, minhaFila, minhasDemandas, funcionalidades } = useDados();
   const naFila = minhaFila ? minhasDemandas.filter((d) => !d.concluida && (minhaFila.ordem || []).includes(d.id)).length : 0;
   const aguardandoPriorizacao = minhaFila ? minhasDemandas.filter((d) => !d.concluida && !(minhaFila.ordem || []).includes(d.id)).length : 0;
   const [mostrarNovaFrente, setMostrarNovaFrente] = useState(false);
@@ -77,6 +77,7 @@ export default function Sidebar() {
           </span>
         )}
       </NavLink>
+      {funcionalidades.demandas && (
       <NavLink
         to="/demandas"
         className={classeLink}
@@ -94,7 +95,9 @@ export default function Sidebar() {
           </span>
         ) : null}
       </NavLink>
+      )}
 
+      {funcionalidades.frentes && (
       <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
         <SectionHeader aberto={frentesAbertas} onToggle={alternarFrentes}>
           Minhas frentes
@@ -138,7 +141,9 @@ export default function Sidebar() {
           </>
         )}
       </div>
+      )}
 
+      {funcionalidades.contratos && (
       <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
         <SectionHeader aberto={contratosAbertos} onToggle={alternarContratos}>
           Contratos
@@ -183,6 +188,7 @@ export default function Sidebar() {
           </>
         )}
       </div>
+      )}
 
       {mostrarNovaFrente && <NovaFrenteModal onClose={() => setMostrarNovaFrente(false)} />}
     </div>

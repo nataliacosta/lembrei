@@ -102,3 +102,16 @@ export async function enviarTeste() {
   const { data } = await funcao();
   return data?.enviados || 0;
 }
+
+// Funcionalidades ligadas/desligadas (ver lib/funcionalidades.js).
+export async function salvarFuncionalidades(uid, funcionalidades) {
+  await setDoc(doc(db, "usuarios", uid), { funcionalidades }, { merge: true });
+}
+
+export function watchFuncionalidades(uid, callback) {
+  return onSnapshot(
+    doc(db, "usuarios", uid),
+    (snap) => callback(snap.data()?.funcionalidades || null),
+    (e) => console.error("Erro ao ler as funcionalidades:", e)
+  );
+}

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import Avatar from "../components/Avatar";
 import { useAuth } from "../contexts/AuthContext";
+import { useDados } from "../contexts/DadosContext";
+import { FUNCIONALIDADES } from "../lib/funcionalidades";
 import { TIPOS_DE_AVISO, mesclarPrefs } from "../lib/prefsNotificacoes";
 import {
   ativarPush,
@@ -10,6 +12,7 @@ import {
   estaInstalado,
   inscricaoAtual,
   removerDispositivo,
+  salvarFuncionalidades,
   salvarPrefs,
   suportaPush,
   watchDispositivos,
@@ -31,6 +34,7 @@ function Chave({ ligada, onChange, rotulo }) {
 
 export default function ConfiguracoesPage() {
   const { user, signOut } = useAuth();
+  const { funcionalidades } = useDados();
   const [prefs, setPrefs] = useState(() => mesclarPrefs(null));
   const [dispositivos, setDispositivos] = useState([]);
   const [atualId, setAtualId] = useState(null);
@@ -108,6 +112,31 @@ export default function ConfiguracoesPage() {
         <button type="button" onClick={signOut} className="btn btn-ghost btn-sm">
           Sair
         </button>
+      </div>
+
+      <h2 className="cfg-secao">Funcionalidades</h2>
+      <div className="lista-card">
+        {FUNCIONALIDADES.map((f) => (
+          <div key={f.chave} className="cfg-linha">
+            <span>
+              <span className="cfg-titulo">{f.titulo}</span>
+              <span className="cfg-detalhe">{f.detalhe}</span>
+            </span>
+            <Chave
+              ligada={Boolean(funcionalidades[f.chave])}
+              rotulo={f.titulo}
+              onChange={(v) =>
+                salvarFuncionalidades(user.uid, { ...funcionalidades, [f.chave]: v }).catch((e) => {
+                  console.error("Erro ao salvar funcionalidades:", e);
+                  setMensagem("Não deu pra salvar. Tente de novo.");
+                })
+              }
+            />
+          </div>
+        ))}
+      </div>
+      <div className="cfg-detalhe" style={{ marginTop: 8 }}>
+        Desligar só esconde do seu menu, do seu “O que fazer” e da busca. Nada é apagado e vale só para você: dá para ligar de novo quando quiser.
       </div>
 
       <h2 className="cfg-secao">Notificações neste aparelho</h2>
