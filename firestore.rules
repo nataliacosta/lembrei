@@ -257,11 +257,11 @@ service cloud.firestore {
           allow read: if logado()
             && (request.auth.uid in get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids
                 || request.auth.uid in get(/databases/$(database)/documents/frentes/$(frenteId)/itens/$(itemId)).data.membrosUids);
-          // Na própria frente Contratos, a dona pode gravar comentários de
-          // outras pessoas: é a cópia feita ao trazer os itens da frente antiga.
+          // Quem pode editar a frente também grava comentários de outras
+          // pessoas: é a cópia feita ao mudar um item de lugar.
           allow create: if logado()
             && request.auth.uid in get(/databases/$(database)/documents/frentes/$(frenteId)).data.membrosUids
-            && (request.resource.data.autorId == request.auth.uid || minhaFrenteContratos(frenteId));
+            && (request.resource.data.autorId == request.auth.uid || podeEditar(frenteId));
           allow update: if logado()
             && request.auth.uid == resource.data.autorId
             && request.resource.data.autorId == resource.data.autorId;
