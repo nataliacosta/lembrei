@@ -874,7 +874,9 @@ label {
 
   .tab-bar {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* Quantas colunas houver (algumas funcionalidades podem estar desligadas). */
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     align-items: start;
     position: fixed;
     left: 0;

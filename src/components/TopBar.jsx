@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useDados } from "../contexts/DadosContext";
 import Busca from "./Busca";
 import { IconeBusca } from "./Icones";
 import Avatar from "./Avatar";
@@ -8,6 +9,7 @@ import { LogoMarca, LogoNome } from "./Logo";
 
 export default function TopBar() {
   const { user, signOut } = useAuth();
+  const { funcionalidades } = useDados();
 
   return (
     <div className="top-bar" style={{ gap: 24, background: "var(--color-white)", borderBottomColor: "var(--color-border)" }}>
@@ -17,9 +19,11 @@ export default function TopBar() {
       </Link>
       <Busca />
       <div className="top-bar-acoes" style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>
+        {(funcionalidades.frentes || funcionalidades.contratos) && (
         <Link to="/novo" className="btn btn-primary so-desktop">
           + Novo item
         </Link>
+        )}
         <Link
           to="/buscar"
           className="so-mobile"

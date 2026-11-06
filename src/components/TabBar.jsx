@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { NavLink, useLocation, useMatch } from "react-router-dom";
 import { IconeDocumento, IconeFila, IconeLista, IconeMais, IconePasta } from "./Icones";
+import { useDados } from "../contexts/DadosContext";
 
 // Telas de formulário ocupam a tela toda no celular, com Cancelar/Salvar no
 // próprio formulário: nelas a navegação inferior some (senão cobre o Salvar).
@@ -9,6 +10,7 @@ const ROTA_DE_FORMULARIO = /\/(novo|nova|editar|compartilhar)$|^\/demandas\/[^/]
 // Navegação inferior, visível só no celular (ver .tab-bar no CSS).
 export default function TabBar() {
   const { pathname } = useLocation();
+  const { funcionalidades } = useDados();
   const emFormulario = ROTA_DE_FORMULARIO.test(pathname);
   useEffect(() => {
     document.body.classList.toggle("sem-tab-bar", emFormulario);
@@ -19,7 +21,15 @@ export default function TabBar() {
   // Dentro de uma frente, o "+" já cria o item nela.
   const naFila = useMatch("/demandas/*");
   // Na fila de demandas, o "+" cria uma demanda.
-  const linkNovo = frenteId ? `/frentes/${frenteId}/novo` : naFila ? "/demandas/nova" : "/novo";
+  const podeCriarItem = funcionalidades.frentes || funcionalidades.contratos;
+  const linkNovo =
+    frenteId && funcionalidades.frentes
+      ? `/frentes/${frenteId}/novo`
+      : (naFila || !podeCriarItem) && funcionalidades.demandas
+        ? "/demandas/nova"
+        : podeCriarItem
+          ? "/novo"
+          : null;
   const classe = ({ isActive }) => (isActive ? "ativo" : "");
 
   if (emFormulario) return null;
@@ -30,21 +40,29 @@ export default function TabBar() {
         <IconeLista size={22} />
         Hoje
       </NavLink>
+      {funcionalidades.demandas && (
       <NavLink to="/demandas" className={classe}>
         <IconeFila size={22} />
         Demandas
       </NavLink>
-      <NavLink to={linkNovo} className="tab-novo" aria-label={naFila ? "Nova demanda" : "Novo item"}>
+      )}
+      {linkNovo && (
+      <NavLink to={linkNovo} className="tab-novo" aria-label={linkNovo === "/demandas/nova" ? "Nova demanda" : "Novo item"}>
         <IconeMais size={24} />
       </NavLink>
+      )}
+      {funcionalidades.frentes && (
       <NavLink to="/frentes" className={classe}>
         <IconePasta size={22} />
         Frentes
       </NavLink>
+      )}
+      {funcionalidades.contratos && (
       <NavLink to="/contratos" className={classe}>
         <IconeDocumento size={22} />
         Contratos
       </NavLink>
+      )}
     </nav>
   );
 }

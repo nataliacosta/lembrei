@@ -22,6 +22,7 @@ import { localDe, textoDaNotificacao } from "../../src/lib/textosNotificacao.js"
 import { categoriaDoTipo, mesclarPrefs } from "../../src/lib/prefsNotificacoes.js";
 import { VAPID_PUBLICO } from "../../src/lib/pushChave.js";
 import { linkDoItem } from "../../src/lib/itens.js";
+import { itemVisivel, mesclarFuncionalidades, notificacaoVisivel } from "../../src/lib/funcionalidades.js";
 
 initializeApp();
 const db = getFirestore();
@@ -59,6 +60,8 @@ export const avisarNotificacao = onDocumentCreated({ document: "notificacoes/{id
   const usuario = await db.collection("usuarios").doc(n.destinatarioId).get();
   const prefs = mesclarPrefs(usuario.data()?.prefsNotificacoes);
   if (categoria && !prefs.tipos[categoria]) return;
+  // Funcionalidade desligada (Contratos, Demandas, Frentes): sem push dela.
+  if (!notificacaoVisivel(n, mesclarFuncionalidades(usuario.data()?.funcionalidades))) return;
   prepararWebPush();
   const comAspas = n.tipo === "comentario" || n.tipo === "mencao";
   await enviarParaUsuario(n.destinatarioId, {
@@ -82,7 +85,9 @@ export const lembretesAgendados = onSchedule(
         if (!temAparelho) continue;
         const dados = u.data();
         const prefs = mesclarPrefs(dados.prefsNotificacoes);
+        const func = mesclarFuncionalidades(dados.funcionalidades);
         let itens = null;
+        const carregarItens = async () => (await itensAbertos(db, uid)).filter((i) => itemVisivel(i, func));
 
         // Resumo diário: no horário escolhido (com até 1h de folga, se uma
         // execução falhar), uma vez por dia.
@@ -91,8 +96,10 @@ export const lembretesAgendados = onSchedule(
         alvo.setHours(h || 0, m || 0, 0, 0);
         const minutosDesde = (agora - alvo) / 60000;
         if (prefs.resumo.ativo && (prefs.resumo.dias || []).includes(agora.getDay()) && minutosDesde >= 0 && minutosDesde < 60 && dados.ultimoResumo !== hojeChave(agora)) {
-          itens = await itensAbertos(db, uid);
-          const contratos = (await db.collection("contratos").where("membrosUids", "array-contains", uid).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+          itens = await carregarItens();
+          const contratos = func.contratos
+            ? (await db.collection("contratos").where("membrosUids", "array-contains", uid).get()).docs.map((d) => ({ id: d.id, ...d.data() }))
+            : [];
           await enviarParaUsuario(uid, {
             title: agora.getHours() < 12 ? "Bom dia! Seu dia no Lembrei!" : "Seu dia no Lembrei!",
             body: textoDoResumo(itens, contratos, uid),
@@ -105,7 +112,7 @@ export const lembretesAgendados = onSchedule(
         // Reuniões em que a pessoa é responsável, X minutos antes.
         if (prefs.reunioes.ativo) {
           const antes = Number(prefs.reunioes.minutosAntes) || 15;
-          itens = itens || (await itensAbertos(db, uid));
+          itens = itens || (await carregarItens());
           for (const item of itens) {
             if (item.tipo !== "reuniao" || !item.reuniao?.hora || !ehMeu(item, uid)) continue;
             const ocorrencia = proximaOcorrencia(item.reuniao);

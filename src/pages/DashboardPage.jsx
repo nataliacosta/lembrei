@@ -41,6 +41,7 @@ export default function DashboardPage() {
     origemDe,
     minhaFila,
     minhasDemandas,
+    funcionalidades,
   } = useDados();
   const [filtro, setFiltro] = useState(lerFiltro);
   const [mostrarSemData, setMostrarSemData] = useState(false);
@@ -94,10 +95,12 @@ export default function DashboardPage() {
             <div className="tile-valor">{grupos.semana.length}</div>
             <div className="tile-label">Próximos 7 dias</div>
           </a>
+          {funcionalidades.contratos && (
           <a href="#contratos-atencao" className="tile">
             <div className="tile-valor">{contratosAtencao.length}</div>
             <div className="tile-label">Contratos pedindo atenção</div>
           </a>
+          )}
         </div>
 
         {carregandoItens ? (
@@ -205,6 +208,7 @@ export default function DashboardPage() {
         )}
 
         </div>
+        {funcionalidades.contratos && (
         <div className="aside-bloco">
         <h2 id="contratos-atencao" style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700 }}>
           Contratos pedindo atenção
@@ -236,6 +240,8 @@ export default function DashboardPage() {
         )}
 
         </div>
+        )}
+        {funcionalidades.contratos && (
         <div className="aside-bloco">
         <h2 style={{ margin: "24px 0 10px", fontSize: 15, fontWeight: 700 }}>Aguardando TI</h2>
         {aditivosTI.length === 0 ? (
@@ -259,6 +265,7 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+        )}
       </aside>
     </>
   );

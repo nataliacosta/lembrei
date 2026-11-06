@@ -81,7 +81,7 @@ export default function ItemFormPage() {
           ? linkDaOrigem(baseDaRota)
           : "/dashboard"
   );
-  const { frentes, contratos } = useDados();
+  const { frentes, contratos, funcionalidades } = useDados();
   const editando = Boolean(itemId);
   // Item de contrato (ou de aditivo): mora dentro do contrato.
   const viaContrato = Boolean(contratoId);
@@ -89,10 +89,15 @@ export default function ItemFormPage() {
   const escolheFrente = !frenteIdParam && !viaContrato && !editando;
 
   const frentesEditaveis = frentes.filter((f) => ["proprietario", "editor"].includes(f.membros?.[user.uid]));
+  const contratosEditaveis = contratos.filter((c) => ["proprietario", "editor"].includes(c.membros?.[user.uid]));
+  // "+ Novo item" geral: com Frentes desligado, o item só pode ir para um contrato.
+  const lugaresParaEscolher = funcionalidades.frentes
+    ? frentesEditaveis.map((f) => ({ id: f.id, nome: f.nome }))
+    : contratosEditaveis.map((c) => ({ id: baseDoContrato(c.id), nome: `Contrato · ${c.titulo}` }));
   const [frenteEscolhida, setFrenteEscolhida] = useState(lerUltimaFrente);
-  const frenteEscolhidaValida = frentesEditaveis.some((f) => f.id === frenteEscolhida)
+  const frenteEscolhidaValida = lugaresParaEscolher.some((f) => f.id === frenteEscolhida)
     ? frenteEscolhida
-    : frentesEditaveis[0]?.id || "";
+    : lugaresParaEscolher[0]?.id || "";
 
   const frenteId = viaContrato ? baseDaRota : escolheFrente ? frenteEscolhidaValida : frenteIdParam;
 
@@ -121,7 +126,6 @@ export default function ItemFormPage() {
   const [salvando, setSalvando] = useState(false);
 
   // Editando: o item pode mudar de lugar (outra frente, contrato ou aditivo).
-  const contratosEditaveis = contratos.filter((c) => ["proprietario", "editor"].includes(c.membros?.[user.uid]));
   const [destino, setDestino] = useState(null);
   // undefined = não mexeu (mantém o aditivo atual); null = sem aditivo.
   const [destinoAditivo, setDestinoAditivo] = useState(undefined);
@@ -178,10 +182,14 @@ export default function ItemFormPage() {
   const ehReuniao = tipo === "reuniao";
   const nomeDe = (uid) => membros[uid]?.nome || (uid === user.uid ? user.displayName : "") || "";
 
-  if (escolheFrente && frentesEditaveis.length === 0) {
+  if (escolheFrente && lugaresParaEscolher.length === 0) {
     return (
       <div className="spinner-wrap" style={{ flexDirection: "column", gap: 12, textAlign: "center", padding: 24 }}>
-        {frentes.length === 0 ? "Carregando..." : "Você ainda não pode criar itens em nenhuma frente. Crie uma frente primeiro."}
+        {funcionalidades.frentes
+          ? frentes.length === 0
+            ? "Carregando..."
+            : "Você ainda não pode criar itens em nenhuma frente. Crie uma frente primeiro."
+          : "Com Frentes desligado, os itens ficam nos contratos — e você ainda não pode editar nenhum contrato."}
       </div>
     );
   }
@@ -360,7 +368,7 @@ export default function ItemFormPage() {
                   {!frentesEditaveis.some((f) => f.id === frenteId) && !contratosEditaveis.some((c) => baseDoContrato(c.id) === frenteId) && (
                     <option value={frenteId}>{frente.tipo === "contrato" ? `Contrato · ${frente.nome}` : frente.nome}</option>
                   )}
-                  {frentesEditaveis.length > 0 && (
+                  {funcionalidades.frentes && frentesEditaveis.length > 0 && (
                     <optgroup label="Frentes">
                       {frentesEditaveis.map((f) => (
                         <option key={f.id} value={f.id}>
@@ -405,9 +413,9 @@ export default function ItemFormPage() {
             )}
             {escolheFrente && (
               <div>
-                <Rotulo>Frente</Rotulo>
-                <select value={frenteId} onChange={(e) => setFrenteEscolhida(e.target.value)} aria-label="Frente">
-                  {frentesEditaveis.map((f) => (
+                <Rotulo>{funcionalidades.frentes ? "Frente" : "Contrato"}</Rotulo>
+                <select value={frenteId} onChange={(e) => setFrenteEscolhida(e.target.value)} aria-label={funcionalidades.frentes ? "Frente" : "Contrato"}>
+                  {lugaresParaEscolher.map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.nome}
                     </option>

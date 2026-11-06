@@ -6,6 +6,8 @@ import { itemAtrasado } from "../lib/agenda";
 import { contratoDaBase, ehBaseContrato } from "../lib/itens";
 import { watchDemandas, watchFila, watchFilasCompartilhadas } from "../lib/filas";
 import { limparNotificacoesAntigas, watchNotificacoes } from "../lib/notificacoes";
+import { itemVisivel, mesclarFuncionalidades, notificacaoVisivel } from "../lib/funcionalidades";
+import { watchFuncionalidades } from "../lib/push";
 
 // Dados que várias partes da tela usam ao mesmo tempo (painel, menu lateral,
 // busca, barra do celular): carregados uma vez só e mantidos em tempo real.
@@ -24,6 +26,13 @@ export function DadosProvider({ children }) {
   const [minhasDemandas, setMinhasDemandas] = useState([]);
   const [filasCompartilhadas, setFilasCompartilhadas] = useState([]);
   const [notificacoes, setNotificacoes] = useState([]);
+  // Frentes, Contratos e Demandas podem ser desligados por cada pessoa (Configurações).
+  const [funcionalidades, setFuncionalidades] = useState(() => mesclarFuncionalidades(null));
+
+  useEffect(() => {
+    if (!user) return;
+    return watchFuncionalidades(user.uid, (f) => setFuncionalidades(mesclarFuncionalidades(f)));
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -85,22 +94,29 @@ export function DadosProvider({ children }) {
   }, [user, chaveContratos]);
 
   const valor = useMemo(() => {
-    const mapaFrentes = Object.fromEntries(frentes.map((f) => [f.id, f]));
-    const mapaContratos = Object.fromEntries(contratos.map((c) => [c.id, c]));
+    // O que estiver desligado chega vazio para as telas (nada é apagado).
+    const f = funcionalidades;
+    const frentesV = f.frentes ? frentes : [];
+    const contratosV = f.contratos ? contratos : [];
+    const itensV = itensAbertos.filter((i) => itemVisivel(i, f));
+    const notificacoesV = notificacoes.filter((n) => notificacaoVisivel(n, f));
+    const mapaFrentes = Object.fromEntries(frentesV.map((x) => [x.id, x]));
+    const mapaContratos = Object.fromEntries(contratosV.map((c) => [c.id, c]));
     const contagemPorFrente = {};
-    for (const item of itensAbertos) {
+    for (const item of itensV) {
       const c = (contagemPorFrente[item.frenteId] ||= { abertos: 0, atrasados: 0 });
       c.abertos++;
       if (itemAtrasado(item)) c.atrasados++;
     }
     return {
-      frentes,
-      contratos,
-      itensAbertos,
+      funcionalidades: f,
+      frentes: frentesV,
+      contratos: contratosV,
+      itensAbertos: itensV,
       carregandoItens,
       erroItens,
       erroContratos,
-      aditivosTI,
+      aditivosTI: f.contratos ? aditivosTI : [],
       mapaFrentes,
       mapaContratos,
       contagemPorFrente,
@@ -112,13 +128,13 @@ export function DadosProvider({ children }) {
         ehBaseContrato(base)
           ? mapaContratos[contratoDaBase(base)] && { id: base, nome: `Contrato · ${mapaContratos[contratoDaBase(base)].titulo}` }
           : mapaFrentes[base],
-      minhaFila,
-      minhasDemandas,
-      filasCompartilhadas,
-      notificacoes,
-      naoLidas: notificacoes.filter((n) => !n.lida).length,
+      minhaFila: f.demandas ? minhaFila : null,
+      minhasDemandas: f.demandas ? minhasDemandas : [],
+      filasCompartilhadas: f.demandas ? filasCompartilhadas : [],
+      notificacoes: notificacoesV,
+      naoLidas: notificacoesV.filter((n) => !n.lida).length,
     };
-  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas, notificacoes]);
+  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas, notificacoes, funcionalidades]);
 
   return <DadosContext.Provider value={valor}>{children}</DadosContext.Provider>;
 }
