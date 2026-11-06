@@ -23,6 +23,7 @@ export default function AditivoFormPage() {
   const [pendenteEm, setPendenteEm] = useState(PENDENTE_EM_OPCOES[0]);
   const [tipos, setTipos] = useState([]);
   const [numeroRQS, setNumeroRQS] = useState("");
+  const [ticketLightPlus, setTicketLightPlus] = useState("");
   const [motivo, setMotivo] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -40,6 +41,7 @@ export default function AditivoFormPage() {
         setPendenteEm(a.pendenteEm || PENDENTE_EM_OPCOES[0]);
         setTipos(a.tipo || []);
         setNumeroRQS(a.numeroRQS || "");
+        setTicketLightPlus(a.ticketLightPlus || "");
         setMotivo(a.motivo || "");
       }
     });
@@ -70,6 +72,7 @@ export default function AditivoFormPage() {
       pendenteEm,
       tipo: tipos,
       numeroRQS: numeroRQS.trim(),
+      ticketLightPlus: ticketLightPlus.trim(),
       motivo: motivo.trim(),
     };
     if (editando) {
@@ -156,9 +159,15 @@ export default function AditivoFormPage() {
             )}
           </div>
 
-          <div style={{ marginBottom: 18 }}>
-            <label>Número da RQS</label>
-            <input value={numeroRQS} onChange={(e) => setNumeroRQS(e.target.value)} />
+          <div className="field-row" style={{ marginBottom: 18 }}>
+            <div>
+              <label>Número da RQS</label>
+              <input value={numeroRQS} onChange={(e) => setNumeroRQS(e.target.value)} />
+            </div>
+            <div>
+              <label>Ticket Light+</label>
+              <input value={ticketLightPlus} onChange={(e) => setTicketLightPlus(e.target.value)} placeholder="Ex: LP-2026-0451" />
+            </div>
           </div>
 
           <div style={{ marginBottom: 18 }}>
