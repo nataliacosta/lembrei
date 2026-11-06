@@ -29,7 +29,7 @@ export function HistoricoProvider({ children }) {
 }
 
 function rotuloDoCaminho(pathname, { mapaFrentes, mapaContratos, itensAbertos }) {
-  const fixos = { "/dashboard": "O que fazer", "/frentes": "Frentes", "/contratos": "Contratos", "/buscar": "Busca", "/conta": "Conta" };
+  const fixos = { "/dashboard": "O que fazer", "/frentes": "Frentes", "/contratos": "Contratos", "/buscar": "Busca", "/configuracoes": "Configurações", "/notificacoes": "Notificações" };
   if (fixos[pathname]) return fixos[pathname];
   let m = matchPath("/frentes/:frenteId/itens/:itemId", pathname);
   if (m) return itensAbertos.find((i) => i.id === m.params.itemId)?.titulo || "Item";

@@ -4,6 +4,7 @@ import {
   arrayUnion,
   collection,
   collectionGroup,
+  deleteField,
   doc,
   getDocs,
   onSnapshot,
@@ -267,4 +268,12 @@ export async function buscarAditivosPendentesTI(uid) {
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+// Medição mensal (ver lib/medicao.js): marca o mês como feito ou desfaz.
+export async function marcarMedicaoFeita(contratoId, chave, feita = true) {
+  return updateDoc(doc(db, "contratos", contratoId), {
+    [`medicao.feitas.${chave}`]: feita ? true : deleteField(),
+    atualizadoEm: serverTimestamp(),
+  });
 }

@@ -1852,3 +1852,126 @@ label {
     flex: 1 1 40%;
   }
 }
+
+/* ---------- Configurações ---------- */
+.cfg-secao {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 28px 0 10px;
+}
+.cfg-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-top: 1px solid #f0f0f0;
+  min-height: 56px;
+}
+.lista-card > .cfg-linha:first-child,
+.lista-card.cfg-linha {
+  border-top: none;
+}
+.cfg-titulo {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+.cfg-detalhe {
+  display: block;
+  font-size: 12px;
+  color: var(--color-gray);
+  margin-top: 2px;
+}
+.cfg-aviso {
+  padding: 14px 16px;
+  background: var(--color-orange-soft);
+  border-color: var(--color-orange-border);
+}
+.cfg-campo {
+  width: auto;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 8px 10px;
+}
+.cfg-dias {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cfg-dias button {
+  min-width: 42px;
+  min-height: 36px;
+  border-radius: 18px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-dark);
+  font-family: inherit;
+  cursor: pointer;
+}
+.cfg-dias button.ativo {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.chave {
+  position: relative;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 26px;
+  border-radius: 13px;
+  border: none;
+  background: #cdcdcd;
+  cursor: pointer;
+  padding: 0;
+}
+.chave span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+.chave.ligada {
+  background: var(--color-primary);
+}
+.chave.ligada span {
+  left: 23px;
+}
+@media (max-width: 760px) {
+  .cfg-linha {
+    padding: 12px 14px;
+  }
+  .cfg-titulo {
+    font-size: 15px;
+  }
+  .chave {
+    width: 52px;
+    height: 30px;
+    border-radius: 15px;
+  }
+  .chave span {
+    width: 24px;
+    height: 24px;
+  }
+  .chave.ligada span {
+    left: 25px;
+  }
+  .cfg-dias {
+    width: 100%;
+  }
+  .cfg-dias button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0;
+  }
+}
