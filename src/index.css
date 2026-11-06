@@ -122,6 +122,10 @@ label {
 }
 
 .top-bar {
+  /* Fica sempre visível no topo ao rolar a página. */
+  position: sticky;
+  top: 0;
+  z-index: 45;
   height: 72px;
   display: flex;
   align-items: center;
