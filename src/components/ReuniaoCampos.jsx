@@ -4,7 +4,7 @@ import { deInputDate, formatarData, paraDate, paraInputDate } from "../lib/datas
 // Estado do formulário (strings, como nos inputs) <-> campo `reuniao` gravado.
 export function reuniaoParaFormulario(reuniao) {
   if (!reuniao) {
-    return { frequencia: "semanal", mensalModo: "dia", inicio: "", hora: "", ate: "", link: "", preparos: [] };
+    return { frequencia: "semanal", mensalModo: "dia", inicio: "", hora: "", ate: "", sala: "", link: "", preparos: [] };
   }
   const mensal = reuniao.frequencia?.startsWith("mensal");
   return {
@@ -13,6 +13,7 @@ export function reuniaoParaFormulario(reuniao) {
     inicio: paraInputDate(reuniao.inicio),
     hora: reuniao.hora || "",
     ate: reuniao.ate ? paraInputDate(reuniao.ate) : "",
+    sala: reuniao.sala || "",
     link: reuniao.link || "",
     preparos: (reuniao.preparos || []).map((p) => ({ ...p, diasAntes: String(p.diasAntes ?? 1) })),
   };
@@ -27,6 +28,7 @@ export function formularioParaReuniao(form, { original, nomeDe }) {
     ordinal: frequencia === "mensal-semana" && inicio ? Math.min(Math.ceil(inicio.getDate() / 7), 5) : null,
     hora: form.hora || "",
     ate: form.frequencia === "unica" ? null : deInputDate(form.ate),
+    sala: (form.sala || "").trim(),
     link: form.link.trim(),
     preparos: form.preparos
       .filter((p) => p.titulo.trim())
@@ -119,10 +121,16 @@ export default function ReuniaoCampos({ valor, onChange, membrosUids, nomeDe, ui
             {proximas.length > 0 ? ` · próximas: ${proximas.map((d) => formatarData(d)).join(", ")}` : " · nenhuma data futura"}
           </div>
         )}
-        <label style={{ margin: "14px 0 0" }}>
-          <Rotulo>Link da reunião (opcional)</Rotulo>
-          <input type="url" value={valor.link} onChange={(e) => mudar({ link: e.target.value })} placeholder="https://…" />
-        </label>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 14, alignItems: "flex-end" }}>
+          <label style={{ margin: 0, flex: "1 1 200px" }}>
+            <Rotulo>Sala (opcional)</Rotulo>
+            <input value={valor.sala} onChange={(e) => mudar({ sala: e.target.value })} placeholder="Ex: Sala 3 · 2º andar" maxLength={120} />
+          </label>
+          <label style={{ margin: 0, flex: "1 1 240px" }}>
+            <Rotulo>Link da reunião (opcional)</Rotulo>
+            <input type="url" value={valor.link} onChange={(e) => mudar({ link: e.target.value })} placeholder="https://…" />
+          </label>
+        </div>
       </div>
 
       <div style={{ marginTop: 20 }}>

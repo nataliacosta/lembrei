@@ -132,6 +132,12 @@ export default function ReuniaoDetalhe({ item, frenteId, frente, membros, papel,
               <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>
                 {proxima && !item.concluido ? `${dataLonga(proxima)} · ${emQuanto(proxima)}` : "Nenhuma data futura"}
               </div>
+              {reuniao.sala && (
+                <div style={{ fontSize: 14, color: "#1f4f8f", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                  <IconeLocal size={16} />
+                  {reuniao.sala}
+                </div>
+              )}
             </div>
             {reuniao.link && (
               <a href={reuniao.link} target="_blank" rel="noreferrer" className="btn btn-primary">
@@ -190,6 +196,12 @@ export default function ReuniaoDetalhe({ item, frenteId, frente, membros, papel,
                 <span>{reuniao.ate ? formatarData(reuniao.ate) : "Sem data final"}</span>
               </div>
             )}
+            {reuniao.sala && (
+              <div className="info-linha">
+                <span>Sala</span>
+                <span>{reuniao.sala}</span>
+              </div>
+            )}
             <div className="info-linha">
               <span>Responsável</span>
               <span>{item.responsavelNome || "—"}</span>
@@ -237,5 +249,14 @@ export default function ReuniaoDetalhe({ item, frenteId, frente, membros, papel,
         </aside>
       </div>
     </div>
+  );
+}
+
+function IconeLocal({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
   );
 }
