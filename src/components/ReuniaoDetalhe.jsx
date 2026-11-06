@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import Comentarios from "./Comentarios";
+import { caminhoDoItem, linkDaOrigem, linkDoItem } from "../lib/itens";
+import OrigemDoItem from "./OrigemDoItem";
 import { IconeCalendario, IconeCheck } from "./Icones";
 import { BotaoVoltar } from "../contexts/HistoricoContext";
 import { PAPEIS } from "../lib/constants";
@@ -101,7 +103,7 @@ export default function ReuniaoDetalhe({ item, frenteId, frente, membros, papel,
 
   return (
     <div className="page-shell" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 1180 }}>
-      <BotaoVoltar destinoPadrao={`/frentes/${frenteId}`} />
+      <BotaoVoltar destinoPadrao={linkDaOrigem(frenteId)} />
 
       <div className="detalhe-layout" style={{ marginTop: 16 }}>
         <div className="detalhe-principal">
@@ -117,6 +119,7 @@ export default function ReuniaoDetalhe({ item, frenteId, frente, membros, papel,
             )}
           </div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, lineHeight: 1.3 }}>{item.titulo}</h1>
+          <OrigemDoItem origem={frente} item={item} />
 
           <div className="caixa-reuniao" style={{ marginTop: 18, padding: "16px 18px", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ color: "#1f4f8f" }}>
@@ -163,8 +166,8 @@ export default function ReuniaoDetalhe({ item, frenteId, frente, membros, papel,
 
           <div style={{ maxWidth: 640 }}>
             <Comentarios
-              caminhoPai={["frentes", frenteId, "itens", item.id]}
-              aviso={{ alvo: item.titulo, contexto: frente?.nome, link: `/frentes/${frenteId}/itens/${item.id}`, interessados: [item.responsavelId, item.criadoPor] }}
+              caminhoPai={caminhoDoItem(frenteId, item.id)}
+              aviso={{ alvo: item.titulo, contexto: frente?.nome, link: linkDoItem(frenteId, item.id), interessados: [item.responsavelId, item.criadoPor] }}
               usuarios={membros}
               papeis={frente?.membros}
             />
@@ -211,7 +214,7 @@ export default function ReuniaoDetalhe({ item, frenteId, frente, membros, papel,
 
           {podeEditar ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <Link to={`/frentes/${frenteId}/itens/${item.id}/editar`} className="btn btn-ghost" style={{ justifyContent: "center" }}>
+              <Link to={`${linkDoItem(frenteId, item.id)}/editar`} className="btn btn-ghost" style={{ justifyContent: "center" }}>
                 Editar reunião e preparos
               </Link>
               <button type="button" className="btn btn-ghost" onClick={encerrar} style={{ justifyContent: "center" }}>

@@ -7,6 +7,8 @@ import { BotaoVoltar } from "../contexts/HistoricoContext";
 import { PAPEIS } from "../lib/constants";
 import { formatarData } from "../lib/datas";
 import { finalizarAditivo, watchAditivo, watchContrato } from "../lib/contratos";
+import { watchItensDoContrato } from "../lib/firestore";
+import ItensDoContrato from "../components/ItensDoContrato";
 
 export default function AditivoDetailPage() {
   const { contratoId, aditivoId } = useParams();
@@ -25,6 +27,8 @@ export default function AditivoDetailPage() {
   }, [contratoId, aditivoId]);
 
   const membros = useUsuarios(contrato?.membrosUids || []);
+  const [itens, setItens] = useState([]);
+  useEffect(() => watchItensDoContrato(contratoId, (todos) => setItens(todos.filter((i) => i.aditivoId === aditivoId))), [contratoId, aditivoId]);
 
   if (contrato === undefined || aditivo === undefined) return <div className="spinner-wrap">Carregando...</div>;
   if (!contrato || !aditivo) return <div className="spinner-wrap">Aditivo não encontrado.</div>;
@@ -81,6 +85,18 @@ export default function AditivoDetailPage() {
             <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, maxWidth: 600 }}>{aditivo.motivo}</p>
           </div>
         )}
+
+        <div style={{ marginTop: 28 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <SectionTitle>Itens do aditivo · {itens.length}</SectionTitle>
+            {podeEditar && (
+              <Link to={`/contratos/${contratoId}/aditivos/${aditivoId}/itens/novo`} style={{ fontSize: 13, fontWeight: 600 }}>
+                + Novo item
+              </Link>
+            )}
+          </div>
+          <ItensDoContrato contratoId={contratoId} itens={itens} mostrarAditivo={false} />
+        </div>
 
         <Comentarios
           caminhoPai={["contratos", contratoId, "aditivos", aditivoId]}

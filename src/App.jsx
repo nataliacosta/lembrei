@@ -63,6 +63,9 @@ export default function App() {
         <Route path="/contratos/:contratoId/editar" element={<ContratoFormPage />} />
         <Route path="/contratos/:contratoId/compartilhar" element={<ContratoSharingPage />} />
         <Route path="/contratos/:contratoId/itens/novo" element={<ItemFormPage />} />
+        <Route path="/contratos/:contratoId/itens/:itemId" element={<ItemDetailPage />} />
+        <Route path="/contratos/:contratoId/itens/:itemId/editar" element={<ItemFormPage />} />
+        <Route path="/contratos/:contratoId/aditivos/:aditivoId/itens/novo" element={<ItemFormPage />} />
         <Route path="/contratos/:contratoId/aditivos/novo" element={<AditivoFormPage />} />
         <Route path="/contratos/:contratoId/aditivos/:aditivoId" element={<AditivoDetailPage />} />
         <Route path="/contratos/:contratoId/aditivos/:aditivoId/editar" element={<AditivoFormPage />} />

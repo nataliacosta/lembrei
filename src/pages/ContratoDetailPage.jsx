@@ -6,6 +6,7 @@ import Avatar from "../components/Avatar";
 import { BotaoVoltar } from "../contexts/HistoricoContext";
 
 import { useUsuarios } from "../hooks/useUsuarios";
+import ItensDoContrato from "../components/ItensDoContrato";
 import { CONTRATO_STATUS, PAPEIS, TIPO_POR_KEY } from "../lib/constants";
 import { alertaVencimento, descreverVencimento, diasAte, formatarData, formatarDataRelativa, inicioDoDia } from "../lib/datas";
 import { chaveDoMes, nomeDoMes, proximaMedicao } from "../lib/medicao";
@@ -24,7 +25,7 @@ import {
 
 export default function ContratoDetailPage() {
   const { contratoId } = useParams();
-  const { user, frenteContratosId } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [contrato, setContrato] = useState(undefined);
   const [aditivos, setAditivos] = useState([]);
@@ -46,11 +47,7 @@ export default function ContratoDetailPage() {
     return unsub;
   }, [contratoId]);
 
-  useEffect(() => {
-    if (!frenteContratosId) return;
-    const unsub = watchItensDoContrato(frenteContratosId, contratoId, setItensVinculados);
-    return unsub;
-  }, [frenteContratosId, contratoId]);
+  useEffect(() => watchItensDoContrato(contratoId, setItensVinculados), [contratoId]);
 
   const membros = useUsuarios(contrato?.membrosUids || []);
 
@@ -182,48 +179,6 @@ export default function ContratoDetailPage() {
             </div>
           )}
 
-          <SecaoCabecalho
-            titulo={`Itens · ${itensVinculados.length}`}
-            acao={
-              podeEditar && (
-                <Link to={`/contratos/${contratoId}/itens/novo`} style={{ fontSize: 13, fontWeight: 600 }}>
-                  + Novo item
-                </Link>
-              )
-            }
-          />
-          {itensVinculados.length === 0 ? (
-            <div className="lista-card empty-state" style={{ padding: 18 }}>Nenhum item ainda.</div>
-          ) : (
-            <div className="lista-card">
-              {itensVinculados
-                .slice()
-                .sort((a, b) => Number(a.concluido) - Number(b.concluido))
-                .map((item) => (
-                  <Link
-                    key={item.id}
-                    to={`/frentes/${frenteContratosId}/itens/${item.id}`}
-                    className="secao-lateral"
-                    style={{ display: "flex", justifyContent: "space-between", gap: 12, opacity: item.concluido ? 0.7 : 1 }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, textDecoration: item.concluido ? "line-through" : "none" }}>{item.titulo}</div>
-                      <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 2 }}>
-                        {TIPO_POR_KEY[item.tipo]?.label}
-                        {item.responsavelNome && ` · ${item.responsavelNome}`}
-                        {item.concluido && " · concluído"}
-                      </div>
-                    </div>
-                    {!item.concluido && item.prazo && (
-                      <span className={diasAte(item.prazo) < 0 ? "texto-alerta" : ""} style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
-                        {formatarData(item.prazo)}
-                      </span>
-                    )}
-                  </Link>
-                ))}
-            </div>
-          )}
-
           {aditivos.length > 0 && (
             <>
               <SecaoCabecalho titulo={`Aditivos · ${aditivos.length}`} />
@@ -240,6 +195,10 @@ export default function ContratoDetailPage() {
                       <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 2 }}>
                         Pendente em {a.pendenteEm} · solicitado em {a.dataSolicitacao ? formatarData(a.dataSolicitacao) : "—"}
                         {a.numeroRQS && ` · RQS ${a.numeroRQS}`}
+                        {(() => {
+                          const abertos = itensVinculados.filter((i) => i.aditivoId === a.id && !i.concluido).length;
+                          return abertos ? ` · ${abertos} ${abertos === 1 ? "item aberto" : "itens abertos"}` : "";
+                        })()}
                         {a.motivo && ` · ${a.motivo}`}
                       </div>
                     </div>
@@ -258,6 +217,18 @@ export default function ContratoDetailPage() {
               </div>
             </>
           )}
+
+          <SecaoCabecalho
+            titulo={`Itens · ${itensVinculados.length}`}
+            acao={
+              podeEditar && (
+                <Link to={`/contratos/${contratoId}/itens/novo`} style={{ fontSize: 13, fontWeight: 600 }}>
+                  + Novo item
+                </Link>
+              )
+            }
+          />
+          <ItensDoContrato contratoId={contratoId} itens={itensVinculados} aditivos={aditivos} />
 
           {cancelamentos.length > 0 && (
             <>

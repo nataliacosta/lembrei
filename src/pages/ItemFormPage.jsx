@@ -6,9 +6,11 @@ import { useDados } from "../contexts/DadosContext";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { CAMPO_CONTRATO_LABEL, TIPOS, STATUS_OPCOES, TIPO_POR_KEY } from "../lib/constants";
 import { deInputDate, inicioDoDia, paraInputDate, somarDias } from "../lib/datas";
-import { atualizarItem, criarItem, watchFrente, watchItem } from "../lib/firestore";
+import { atualizarItem, criarItem, watchItem } from "../lib/firestore";
+import { useOrigemDoItem } from "../hooks/useOrigemDoItem";
+import { baseDoContrato, linkDaOrigem, linkDoItem } from "../lib/itens";
 import { notificar } from "../lib/notificacoes";
-import { watchContrato } from "../lib/contratos";
+import { watchAditivo } from "../lib/contratos";
 import TagInput from "../components/TagInput";
 import CustomFieldsEditor from "../components/CustomFieldsEditor";
 import ReuniaoCampos, { formularioParaReuniao, reuniaoParaFormulario } from "../components/ReuniaoCampos";
@@ -66,17 +68,23 @@ function salvarUltimaFrente(id) {
 }
 
 export default function ItemFormPage() {
-  const { frenteId: frenteIdParam, contratoId, itemId } = useParams();
+  const { frenteId: frenteIdParam, contratoId, aditivoId: aditivoParam, itemId } = useParams();
   const navigate = useNavigate();
-  const { user, frenteContratosId } = useAuth();
+  const { user } = useAuth();
+  const baseDaRota = contratoId ? baseDoContrato(contratoId) : frenteIdParam;
   const { voltar, temAnterior } = useVoltar(
-    itemId ? `/frentes/${frenteIdParam}/itens/${itemId}` : contratoId ? `/contratos/${contratoId}` : frenteIdParam ? `/frentes/${frenteIdParam}` : "/dashboard"
+    itemId
+      ? linkDoItem(baseDaRota, itemId)
+      : aditivoParam
+        ? `/contratos/${contratoId}/aditivos/${aditivoParam}`
+        : baseDaRota
+          ? linkDaOrigem(baseDaRota)
+          : "/dashboard"
   );
   const { frentes } = useDados();
   const editando = Boolean(itemId);
-  // Criado a partir da tela de um contrato: a frente é sempre a "Contratos",
-  // e o item já nasce com o campo personalizado "Contrato" preenchido.
-  const viaContrato = Boolean(contratoId) && !editando;
+  // Item de contrato (ou de aditivo): mora dentro do contrato.
+  const viaContrato = Boolean(contratoId);
   // Criado pelo botão "+ Novo item" geral (/novo): a pessoa escolhe a frente.
   const escolheFrente = !frenteIdParam && !viaContrato && !editando;
 
@@ -86,10 +94,11 @@ export default function ItemFormPage() {
     ? frenteEscolhida
     : frentesEditaveis[0]?.id || "";
 
-  const frenteId = viaContrato ? frenteContratosId : escolheFrente ? frenteEscolhidaValida : frenteIdParam;
+  const frenteId = viaContrato ? baseDaRota : escolheFrente ? frenteEscolhidaValida : frenteIdParam;
 
-  const [frente, setFrente] = useState(null);
-  const [contrato, setContrato] = useState(viaContrato ? undefined : null);
+  // Frente ou contrato onde o item mora (nome, membros...).
+  const frente = useOrigemDoItem(frenteId);
+  const [aditivo, setAditivo] = useState(null);
   const [itemOriginal, setItemOriginal] = useState(editando ? undefined : null);
 
   const [tipo, setTipo] = useState("tarefa");
@@ -100,7 +109,7 @@ export default function ItemFormPage() {
   const [responsavelId, setResponsavelId] = useState(editando ? "" : user.uid);
   const [responsavelLivre, setResponsavelLivre] = useState("");
   const [camposCustom, setCamposCustom] = useState(
-    viaContrato ? [{ label: CAMPO_CONTRATO_LABEL, valor: contratoId }] : []
+    []
   );
   const [tags, setTags] = useState([]);
   const [lembrete, setLembrete] = useState(LEMBRETE_VAZIO);
@@ -111,16 +120,12 @@ export default function ItemFormPage() {
   const [reuniao, setReuniao] = useState(() => reuniaoParaFormulario(null));
   const [salvando, setSalvando] = useState(false);
 
+  // Aditivo do item (criado a partir da tela do aditivo, ou editando um item dele).
+  const aditivoId = aditivoParam || itemOriginal?.aditivoId || null;
   useEffect(() => {
-    if (!frenteId) return;
-    return watchFrente(frenteId, setFrente);
-  }, [frenteId]);
-
-  useEffect(() => {
-    if (!viaContrato) return;
-    return watchContrato(contratoId, setContrato);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viaContrato, contratoId]);
+    if (!contratoId || !aditivoId) return;
+    return watchAditivo(contratoId, aditivoId, setAditivo);
+  }, [contratoId, aditivoId]);
 
   useEffect(() => {
     if (!editando) return;
@@ -168,7 +173,7 @@ export default function ItemFormPage() {
     );
   }
 
-  if (!frente || frente.id !== frenteId || (editando && itemOriginal === undefined) || (viaContrato && contrato === undefined)) {
+  if (!frente || frente.id !== frenteId || (editando && itemOriginal === undefined)) {
     return <div className="spinner-wrap">Carregando...</div>;
   }
 
@@ -222,7 +227,7 @@ export default function ItemFormPage() {
           tipo: "atribuido",
           alvo: dados.titulo,
           contexto: frente.nome,
-          link: `/frentes/${frenteId}/itens/${id}`,
+          link: linkDoItem(frenteId, id),
         });
       }
     };
@@ -233,21 +238,21 @@ export default function ItemFormPage() {
         avisarAtribuicao(itemId);
         // Volta para o detalhe de onde veio (sem empilhar o formulário).
         if (temAnterior) voltar();
-        else navigate(`/frentes/${frenteId}/itens/${itemId}`, { replace: true });
+        else navigate(linkDoItem(frenteId, itemId), { replace: true });
       } else {
         const ref = await criarItem(frenteId, {
           ...dados,
           uid: user.uid,
           membrosUids: frente.membrosUids,
-          contratoVinculado: viaContrato ? contratoId : null,
+          aditivoId: viaContrato ? aditivoParam || null : null,
         });
         avisarAtribuicao(ref.id);
         if (escolheFrente) salvarUltimaFrente(frenteId);
-        // Criado a partir do contrato: volta para ele. Senão, abre o item
+        // Criado a partir do contrato/aditivo: volta para ele. Senão, abre o item
         // novo no lugar do formulário — o "voltar" dele leva para onde a
         // pessoa estava antes de clicar em "+ Novo item".
         if (viaContrato) voltar();
-        else navigate(`/frentes/${frenteId}/itens/${ref.id}`, { replace: true });
+        else navigate(linkDoItem(frenteId, ref.id), { replace: true });
       }
     } catch (erro) {
       console.error("Erro ao salvar item:", erro);
@@ -279,7 +284,8 @@ export default function ItemFormPage() {
         <div className="modal-body-pad" style={{ paddingTop: 18, paddingBottom: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-gray)" }}>
             {editando ? "Editar item" : "Novo item"}
-            {viaContrato && ` · Contrato: ${contrato.titulo}`}
+            {viaContrato && ` · Contrato: ${frente.nome}`}
+            {viaContrato && aditivoId && ` › Aditivo: ${(aditivo?.tipo || []).join(", ") || "…"}`}
             {!viaContrato && !escolheFrente && ` · ${frente.nome}`}
           </div>
           <button

@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
 import { carregarExtrasBusca } from "../lib/busca";
 import { TIPO_POR_KEY } from "../lib/constants";
+import { linkDoItem } from "../lib/itens";
 import { formatarData } from "../lib/datas";
 import { IconeBusca } from "./Icones";
 
@@ -85,12 +86,12 @@ export function useResultadosBusca(termo, ativa = true) {
     const itens = [...abertos, ...concluidos].map((i) => ({
       chave: `i:${i.id}`,
       icone: i.tipo === "reuniao" ? "reuniao" : "item",
-      link: `/frentes/${i.frenteId}/itens/${i.id}`,
+      link: linkDoItem(i.frenteId, i.id),
       titulo: i.titulo,
       concluido: Boolean(i.concluido),
       detalhe: [
         TIPO_POR_KEY[i.tipo]?.label,
-        mapaFrentes[i.frenteId]?.nome,
+        mapaFrentes[i.frenteId]?.nome || (i.contratoId ? `Contrato · ${mapaContratos[i.contratoId]?.titulo || ""}` : null),
         i.concluido ? i.concluidoEm && `concluído em ${formatarData(i.concluidoEm)}` : i.prazo && `prazo ${formatarData(i.prazo)}`,
       ]
         .filter(Boolean)

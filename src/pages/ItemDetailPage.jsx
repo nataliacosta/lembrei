@@ -9,7 +9,10 @@ import { BotaoVoltar, useVoltar } from "../contexts/HistoricoContext";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { TIPO_POR_KEY, PAPEIS } from "../lib/constants";
 import { diasAte, formatarData, formatarDataRelativa } from "../lib/datas";
-import { excluirItem, marcarConcluido, watchFrente, watchItem } from "../lib/firestore";
+import { excluirItem, marcarConcluido, watchItem } from "../lib/firestore";
+import { useOrigemDoItem } from "../hooks/useOrigemDoItem";
+import OrigemDoItem from "../components/OrigemDoItem";
+import { baseDoContrato, caminhoDoItem, linkDaOrigem, linkDoItem } from "../lib/itens";
 
 function descreverPrazo(prazo) {
   const dias = diasAte(prazo);
@@ -21,14 +24,15 @@ function descreverPrazo(prazo) {
 }
 
 export default function ItemDetailPage() {
-  const { frenteId, itemId } = useParams();
+  const { frenteId: frenteParam, contratoId, itemId } = useParams();
+  // "Base" do item: a frente ou o contrato onde ele mora (ver lib/itens.js).
+  const frenteId = contratoId ? baseDoContrato(contratoId) : frenteParam;
   const { user } = useAuth();
-  const { voltar } = useVoltar(`/frentes/${frenteId}`);
+  const { voltar } = useVoltar(linkDaOrigem(frenteId));
 
-  const [frente, setFrente] = useState(undefined);
+  const frente = useOrigemDoItem(frenteId);
   const [item, setItem] = useState(undefined);
 
-  useEffect(() => watchFrente(frenteId, setFrente), [frenteId]);
   useEffect(() => watchItem(frenteId, itemId, setItem), [frenteId, itemId]);
 
   const membros = useUsuarios(frente?.membrosUids || []);
@@ -89,7 +93,7 @@ export default function ItemDetailPage() {
 
   return (
     <div className={`page-shell ${podeEditar ? "tem-acoes-fixas" : ""}`} style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 1180 }}>
-      <BotaoVoltar destinoPadrao={`/frentes/${frenteId}`} />
+      <BotaoVoltar destinoPadrao={linkDaOrigem(frenteId)} />
 
       <div className="detalhe-layout" style={{ marginTop: 16 }}>
         <div className="detalhe-principal">
@@ -108,6 +112,7 @@ export default function ItemDetailPage() {
             )}
           </div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, lineHeight: 1.3 }}>{item.titulo}</h1>
+          <OrigemDoItem origem={frente} item={item} />
 
           {podeEditar ? (
             <div className="acoes-fixas" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
@@ -115,7 +120,7 @@ export default function ItemDetailPage() {
                 {!item.concluido && <IconeCheck size={18} />}
                 {item.concluido ? "Reabrir item" : "Marcar como concluído"}
               </button>
-              <Link to={`/frentes/${frenteId}/itens/${itemId}/editar`} className="btn btn-ghost">
+              <Link to={`${linkDoItem(frenteId, itemId)}/editar`} className="btn btn-ghost">
                 Editar
               </Link>
               <button
@@ -128,7 +133,7 @@ export default function ItemDetailPage() {
             </div>
           ) : (
             <div style={{ marginTop: 14, fontSize: 13, color: "var(--color-gray)" }}>
-              Seu acesso a esta frente: <b style={{ color: "var(--color-dark)" }}>{PAPEIS[papel] || "Sem acesso"}</b>
+              Seu acesso a {frente.tipo === "contrato" ? "este contrato" : "esta frente"}: <b style={{ color: "var(--color-dark)" }}>{PAPEIS[papel] || "Sem acesso"}</b>
             </div>
           )}
 
@@ -160,8 +165,8 @@ export default function ItemDetailPage() {
 
           <div style={{ maxWidth: 640 }}>
             <Comentarios
-              caminhoPai={["frentes", frenteId, "itens", itemId]}
-              aviso={{ alvo: item.titulo, contexto: frente.nome, link: `/frentes/${frenteId}/itens/${itemId}`, interessados: [item.responsavelId, item.criadoPor] }}
+              caminhoPai={caminhoDoItem(frenteId, itemId)}
+              aviso={{ alvo: item.titulo, contexto: frente.nome, link: linkDoItem(frenteId, itemId), interessados: [item.responsavelId, item.criadoPor] }}
               usuarios={membros}
               papeis={frente.membros}
             />

@@ -38,15 +38,10 @@ export const PENDENTE_EM_OPCOES = ["TI", "Governança"];
 
 export const ADITIVO_TIPOS = ["Prazo", "Custo", "Escopo"];
 
-// Cada pessoa tem a própria frente "Contratos", onde ficam os itens que ela
-// cria a partir da tela de um contrato (ver garantirFrenteContratos em
-// lib/firestore.js). "contratos-padrao" é a frente antiga, que era única e
-// compartilhada: continua sendo a frente Contratos de quem a criou.
+// Frentes "Contratos" antigas (a compartilhada e a de cada pessoa): os itens
+// delas vão para dentro dos contratos no login (levarItensParaOsContratos).
 export const FRENTE_CONTRATOS_LEGADA = "contratos-padrao";
 export function idFrenteContratos(uid) {
   return `contratos-${uid}`;
-}
-export function ehFrenteContratos(frenteId) {
-  return frenteId === FRENTE_CONTRATOS_LEGADA || String(frenteId || "").startsWith("contratos-");
 }
 export const CAMPO_CONTRATO_LABEL = "Contrato";
