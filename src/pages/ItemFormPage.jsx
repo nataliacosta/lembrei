@@ -6,11 +6,11 @@ import { useDados } from "../contexts/DadosContext";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { CAMPO_CONTRATO_LABEL, TIPOS, STATUS_OPCOES, TIPO_POR_KEY } from "../lib/constants";
 import { deInputDate, inicioDoDia, paraInputDate, somarDias } from "../lib/datas";
-import { atualizarItem, criarItem, watchItem } from "../lib/firestore";
+import { atualizarItem, criarItem, moverItem, watchItem } from "../lib/firestore";
 import { useOrigemDoItem } from "../hooks/useOrigemDoItem";
-import { baseDoContrato, linkDaOrigem, linkDoItem } from "../lib/itens";
+import { baseDoContrato, contratoDaBase, linkDaOrigem, linkDoItem } from "../lib/itens";
 import { notificar } from "../lib/notificacoes";
-import { watchAditivo } from "../lib/contratos";
+import { watchAditivo, watchAditivos } from "../lib/contratos";
 import TagInput from "../components/TagInput";
 import CustomFieldsEditor from "../components/CustomFieldsEditor";
 import ReuniaoCampos, { formularioParaReuniao, reuniaoParaFormulario } from "../components/ReuniaoCampos";
@@ -81,7 +81,7 @@ export default function ItemFormPage() {
           ? linkDaOrigem(baseDaRota)
           : "/dashboard"
   );
-  const { frentes } = useDados();
+  const { frentes, contratos } = useDados();
   const editando = Boolean(itemId);
   // Item de contrato (ou de aditivo): mora dentro do contrato.
   const viaContrato = Boolean(contratoId);
@@ -119,6 +119,19 @@ export default function ItemFormPage() {
   const [lembrarQuem, setLembrarQuem] = useState("eu");
   const [reuniao, setReuniao] = useState(() => reuniaoParaFormulario(null));
   const [salvando, setSalvando] = useState(false);
+
+  // Editando: o item pode mudar de lugar (outra frente, contrato ou aditivo).
+  const contratosEditaveis = contratos.filter((c) => ["proprietario", "editor"].includes(c.membros?.[user.uid]));
+  const [destino, setDestino] = useState(null);
+  // undefined = não mexeu (mantém o aditivo atual); null = sem aditivo.
+  const [destinoAditivo, setDestinoAditivo] = useState(undefined);
+  const [aditivosDestino, setAditivosDestino] = useState([]);
+  const baseDestino = destino ?? frenteId;
+  const contratoDestino = contratoDaBase(baseDestino);
+  useEffect(() => {
+    if (!editando || !contratoDestino) return setAditivosDestino([]);
+    return watchAditivos(contratoDestino, setAditivosDestino);
+  }, [editando, contratoDestino]);
 
   // Aditivo do item (criado a partir da tela do aditivo, ou editando um item dele).
   const aditivoId = aditivoParam || itemOriginal?.aditivoId || null;
@@ -235,6 +248,20 @@ export default function ItemFormPage() {
     try {
       if (editando) {
         await atualizarItem(frenteId, itemId, dados);
+        const aditivoEscolhido = destinoAditivo !== undefined ? destinoAditivo : itemOriginal?.aditivoId || null;
+        if (baseDestino !== frenteId) {
+          // Mudou de lugar: leva o item (e os comentários) para o destino.
+          const membrosDestino = contratoDestino
+            ? contratosEditaveis.find((c) => c.id === contratoDestino)?.membrosUids
+            : frentesEditaveis.find((f) => f.id === baseDestino)?.membrosUids;
+          await moverItem(frenteId, itemId, baseDestino, { aditivoId: aditivoEscolhido, membrosUids: membrosDestino || [user.uid] });
+          avisarAtribuicao(itemId);
+          navigate(linkDoItem(baseDestino, itemId), { replace: true });
+          return;
+        }
+        if (contratoDestino && aditivoEscolhido !== (itemOriginal?.aditivoId || null)) {
+          await atualizarItem(frenteId, itemId, { aditivoId: aditivoEscolhido });
+        }
         avisarAtribuicao(itemId);
         // Volta para o detalhe de onde veio (sem empilhar o formulário).
         if (temAnterior) voltar();
@@ -319,6 +346,63 @@ export default function ItemFormPage() {
           </label>
 
           <div className="field-row" style={{ marginTop: 20 }}>
+            {editando && (
+              <div>
+                <Rotulo>Onde fica</Rotulo>
+                <select
+                  value={baseDestino}
+                  onChange={(e) => {
+                    setDestino(e.target.value);
+                    setDestinoAditivo(null);
+                  }}
+                  aria-label="Onde fica o item"
+                >
+                  {!frentesEditaveis.some((f) => f.id === frenteId) && !contratosEditaveis.some((c) => baseDoContrato(c.id) === frenteId) && (
+                    <option value={frenteId}>{frente.tipo === "contrato" ? `Contrato · ${frente.nome}` : frente.nome}</option>
+                  )}
+                  {frentesEditaveis.length > 0 && (
+                    <optgroup label="Frentes">
+                      {frentesEditaveis.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.nome}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {contratosEditaveis.length > 0 && (
+                    <optgroup label="Contratos">
+                      {contratosEditaveis.map((c) => (
+                        <option key={c.id} value={baseDoContrato(c.id)}>
+                          Contrato · {c.titulo}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                {contratoDestino && aditivosDestino.length > 0 && (
+                  <select
+                    value={(destinoAditivo !== undefined ? destinoAditivo : baseDestino === frenteId ? itemOriginal?.aditivoId : null) || ""}
+                    onChange={(e) => setDestinoAditivo(e.target.value || null)}
+                    aria-label="Aditivo"
+                    style={{ marginTop: 8 }}
+                  >
+                    <option value="">Só no contrato (sem aditivo)</option>
+                    {aditivosDestino.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        Aditivo · {(a.tipo || []).join(", ") || "aditivo"}
+                        {a.finalizado ? " (finalizado)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {baseDestino !== frenteId && (
+                  <div className="dica-form">
+                    Saindo de <b>{frente.tipo === "contrato" ? `Contrato · ${frente.nome}` : frente.nome}</b>. Os comentários vão junto, e quem vê o item passa a ser quem tem acesso
+                    ao novo lugar.
+                  </div>
+                )}
+              </div>
+            )}
             {escolheFrente && (
               <div>
                 <Rotulo>Frente</Rotulo>

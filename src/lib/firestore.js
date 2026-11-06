@@ -298,6 +298,39 @@ export async function criarItem(frenteId, { membrosUids, uid, ...dados }) {
   });
 }
 
+// Muda o item de lugar (frente ↔ contrato/aditivo): copia o item (mesmo id)
+// e os comentários para o destino e apaga o original. Quem vê passa a ser
+// quem tem acesso ao destino (membrosUids).
+export async function moverItem(origem, itemId, destino, { aditivoId = null, membrosUids }) {
+  const antigoRef = doc(db, ...caminhoDoItem(origem, itemId));
+  const snap = await getDoc(antigoRef);
+  if (!snap.exists()) throw new Error("Item não encontrado");
+  const novoRef = doc(db, ...caminhoDoItem(destino, itemId));
+  const contratoId = contratoDaBase(destino);
+  await setDoc(novoRef, {
+    ...snap.data(),
+    frenteId: destino,
+    contratoId,
+    aditivoId: contratoId ? aditivoId || null : null,
+    contratoVinculado: null,
+    membrosUids,
+    atualizadoEm: serverTimestamp(),
+  });
+  const comentarios = await getDocs(collection(antigoRef, "comentarios"));
+  for (const c of comentarios.docs) {
+    const destinoComentario = doc(novoRef, "comentarios", c.id);
+    await setDoc(destinoComentario, c.data()).catch(async (erro) => {
+      // Já existe (o item esteve aqui antes e o comentário, de outra pessoa,
+      // ficou para trás): é o mesmo comentário, então segue.
+      const existente = await getDoc(destinoComentario).catch(() => null);
+      if (!existente?.exists()) throw erro;
+    });
+  }
+  await deleteDoc(antigoRef);
+  // Os comentários antigos que a pessoa pode apagar (os dela) saem também.
+  await Promise.all(comentarios.docs.map((c) => deleteDoc(c.ref).catch(() => {})));
+}
+
 export async function atualizarItem(frenteId, itemId, dados) {
   return updateDoc(doc(db, ...caminhoDoItem(frenteId, itemId)), {
     ...dados,
