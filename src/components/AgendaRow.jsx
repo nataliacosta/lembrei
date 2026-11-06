@@ -3,6 +3,10 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { marcarMedicaoFeita } from "../lib/contratos";
 import { linkDoItem } from "../lib/itens";
+import { atualizarDemanda } from "../lib/filas";
+import { notificarFila } from "../lib/notificacoes";
+import { diasDesde, retornoChegou } from "../lib/passos";
+import { somarDias, inicioDoDia } from "../lib/datas";
 import { TIPO_POR_KEY } from "../lib/constants";
 import { diasAte, formatarDataRelativa } from "../lib/datas";
 import { marcarConcluido, marcarPreparo } from "../lib/firestore";
@@ -21,6 +25,7 @@ function dataComHora(data, comHora) {
 
 export default function AgendaRow({ entrada, frente, podeEditar, mostrarFrente = true }) {
   if (entrada.tipo === "medicao") return <MedicaoRow entrada={entrada} />;
+  if (entrada.tipo === "cobranca") return <CobrancaRow entrada={entrada} />;
   if (entrada.tipo === "reuniao" || entrada.tipo === "preparo") {
     return <ReuniaoRow entrada={entrada} frente={frente} podeEditar={podeEditar} mostrarFrente={mostrarFrente} />;
   }
@@ -230,6 +235,58 @@ function MedicaoRow({ entrada }) {
       ) : (
         <span />
       )}
+      <span className={`data ${atrasado ? "texto-alerta" : ""}`}>{formatarDataRelativa(data)}</span>
+    </div>
+  );
+}
+
+// Cobrar retorno de uma demanda parada (ver entradasDeCobranca).
+function CobrancaRow({ entrada }) {
+  const { demanda: d, donoId, fila, data } = entrada;
+  const [salvando, setSalvando] = useState(false);
+  const atrasado = diasAte(data) < 0;
+  const dias = diasDesde(d.espera.desde);
+
+  async function executar(acao) {
+    setSalvando(true);
+    try {
+      await acao();
+    } catch (e) {
+      console.error("Erro ao atualizar a demanda:", e);
+      window.alert("Não deu pra atualizar. Tente de novo.");
+      setSalvando(false);
+    }
+  }
+  const chegou = () =>
+    executar(async () => {
+      const r = retornoChegou(d);
+      await atualizarDemanda(donoId, d.id, r.campos);
+      if (fila) notificarFila(donoId, fila, { tipo: r.evento === "parou" ? "demanda_parada" : "demanda_retomada", alvo: d.titulo, trecho: "Retorno chegou", link: `/demandas/${donoId}/${d.id}` });
+    });
+  const adiar = () => executar(() => atualizarDemanda(donoId, d.id, { espera: { ...d.espera, cobrarEm: somarDias(inicioDoDia(), 2) } }));
+
+  return (
+    <div className="agenda-row com-acoes lembrete">
+      <span className={`icone-linha ${atrasado ? "texto-alerta" : ""}`} style={{ color: atrasado ? undefined : "#8a5a00" }}>
+        <IconeSino size={18} />
+      </span>
+      <Link to={`/demandas/${donoId}/${d.id}`} style={{ minWidth: 0, color: "inherit" }}>
+        <div className="titulo">
+          Cobrar {d.espera.de}: {d.titulo}
+        </div>
+        <div className="meta">
+          <span className="pill pill-espera">Demanda parada</span>
+          <span>{dias === 0 ? "aguardando desde hoje" : dias === 1 ? "aguardando há 1 dia" : `aguardando há ${dias} dias`}</span>
+        </div>
+      </Link>
+      <div className="acoes-lembrete">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={chegou} disabled={salvando}>
+          Retorno chegou
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={adiar} disabled={salvando}>
+          Adiar 2 dias
+        </button>
+      </div>
       <span className={`data ${atrasado ? "texto-alerta" : ""}`}>{formatarDataRelativa(data)}</span>
     </div>
   );

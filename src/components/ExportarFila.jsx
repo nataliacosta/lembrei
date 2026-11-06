@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { formatarData, inicioDoDia, paraDate } from "../lib/datas";
 import { formatarEstimativa, formatarHoras, horasRestantes } from "../lib/previsao";
+import { descreverPassoDaEspera, diasDesde } from "../lib/passos";
 
 function hojePorExtenso() {
   return new Date().toLocaleDateString("pt-BR");
@@ -8,28 +9,40 @@ function hojePorExtenso() {
 
 function linhasDaFila(previsao, { solicitante, prazo, comparacao }) {
   const fimAntes = comparacao ? Object.fromEntries(comparacao.previsaoSalva.itens.map((r) => [r.demanda.id, r.fim])) : {};
+  const iAndamento = previsao.itens.findIndex((x) => !x.esperando);
   return previsao.itens.map((r, i) => {
     const d = r.demanda;
-    const andamento = i === 0;
-    const pausada = !andamento && Number(d.horasFeitas) > 0;
+    const andamento = i === iAndamento;
+    const esperando = Boolean(r.esperando);
+    const pausada = !andamento && !esperando && Number(d.horasFeitas) > 0;
     const prazoPedido = d.prazoPedido ? inicioDoDia(paraDate(d.prazoPedido)) : null;
-    const estoura = prazoPedido && r.fim > prazoPedido;
-    const estado = andamento ? "em andamento" : pausada ? `pausada, restam ${formatarHoras(horasRestantes(d))}` : formatarEstimativa(d);
+    const estoura = prazoPedido && r.fim && r.fim > prazoPedido;
+    const dias = esperando ? diasDesde(d.espera.desde) : 0;
+    const passo = esperando ? descreverPassoDaEspera(d) : "";
+    const estado = esperando
+      ? `parada, aguardando ${d.espera.de} desde ${formatarData(d.espera.desde)} (${dias === 0 ? "hoje" : dias === 1 ? "há 1 dia" : `há ${dias} dias`})${passo ? ` — ${passo}` : ""}${d.espera.retornoPrevisto ? ` — retorno previsto ${formatarData(d.espera.retornoPrevisto)}` : ""}`
+      : andamento
+        ? "em andamento"
+        : pausada
+          ? `pausada, restam ${formatarHoras(horasRestantes(d))}`
+          : formatarEstimativa(d);
+    const pronta = esperando ? (r.fim ? `≈ ${formatarData(r.fim)} (depende do retorno)` : "depende do retorno") : formatarData(r.fim);
     const antes = fimAntes[d.id];
     return {
       posicao: i + 1,
       titulo: d.titulo,
       solicitante: d.solicitante || "",
       estado,
-      pronta: formatarData(r.fim),
-      prontaAntes: antes && antes.getTime() !== r.fim.getTime() ? formatarData(antes) : "",
+      pronta,
+      grupo: esperando ? "paradas" : andamento ? "andamento" : "proximas",
+      prontaAntes: antes && r.fim && antes.getTime() !== r.fim.getTime() ? formatarData(antes) : "",
       prazo: prazoPedido ? formatarData(prazoPedido) : "",
       estoura,
       texto:
         `${i + 1}. ${d.titulo}` +
         (solicitante && d.solicitante ? ` · ${d.solicitante}` : "") +
-        ` — ${estado} — pronta ${formatarData(r.fim)}` +
-        (antes && antes.getTime() !== r.fim.getTime() ? ` (antes: ${formatarData(antes)})` : "") +
+        ` — ${estado} — pronta ${pronta}` +
+        (antes && r.fim && antes.getTime() !== r.fim.getTime() ? ` (antes: ${formatarData(antes)})` : "") +
         (prazo && prazoPedido ? ` (pedido: ${formatarData(prazoPedido)})${estoura ? " ⚠" : ""}` : ""),
     };
   });
@@ -57,7 +70,8 @@ export default function ExportarFila({ fila, previsao, comparacao, aguardando = 
   const [copiado, setCopiado] = useState(false);
 
   const linhas = linhasDaFila(previsao, { solicitante, prazo, comparacao: comparar ? comparacao : null });
-  const fim = previsao.itens.length ? formatarData(previsao.itens[previsao.itens.length - 1].fim) : "";
+  const ultimo = previsao.itens.reduce((max, r) => (r.fim && (!max || r.fim > max) ? r.fim : max), null);
+  const fim = ultimo ? formatarData(ultimo) : "";
   const titulo = `Fila de demandas — ${fila.donoNome || ""} (${hojePorExtenso()})`;
   const cabecalho = `${titulo}\nCapacidade: ${formatarHoras(fila.capacidadeHoras || 6)} por dia útil${comparar && comparacao ? "\nProposta de nova ordem (comparada com a atual)" : ""}`;
   const blocoAguardando = aguardando.length
@@ -65,7 +79,17 @@ export default function ExportarFila({ fila, previsao, comparacao, aguardando = 
         .map((d) => `• ${d.titulo}${solicitante && d.solicitante ? ` · ${d.solicitante}` : ""}${d.estimativaHoras ? ` — ${formatarEstimativa(d)}` : " — sem estimativa"}${prazo && d.prazoPedido ? ` (pedido: ${formatarData(d.prazoPedido)})` : ""}`)
         .join("\n")}`
     : "";
-  const texto = `${cabecalho}\n\n${linhas.map((l) => l.texto).join("\n")}\n\nFila zerada em ${fim} se a prioridade não mudar.${blocoAguardando}`;
+  // Em andamento · Paradas aguardando retorno · Próximas (a gestora vê o que está travado).
+  const secoes = [
+    ["EM ANDAMENTO", "andamento"],
+    ["⏸ PARADAS AGUARDANDO RETORNO", "paradas"],
+    ["PRÓXIMAS", "proximas"],
+  ]
+    .map(([nome, g]) => [nome, linhas.filter((l) => l.grupo === g)])
+    .filter(([, ls]) => ls.length)
+    .map(([nome, ls]) => `${nome}\n${ls.map((l) => l.texto).join("\n")}`)
+    .join("\n\n");
+  const texto = `${cabecalho}\n\n${secoes}\n\nFila zerada em ${fim} se a prioridade não mudar.${blocoAguardando}`;
 
   async function copiar() {
     try {

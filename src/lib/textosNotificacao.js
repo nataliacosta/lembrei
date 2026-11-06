@@ -17,6 +17,10 @@ export function partesDoTexto(n) {
       return [[a, true], [" criou a demanda ", false], [n.alvo, true], [` na ${n.contexto}`, false]];
     case "demanda_priorizada":
       return [[a, true], [" priorizou ", false], [n.alvo, true], [` na ${n.contexto}`, false]];
+    case "demanda_parada":
+      return [[a, true], [" marcou ", false], [n.alvo, true], [` como parada na ${n.contexto}`, false]];
+    case "demanda_retomada":
+      return [[a, true], [" retomou ", false], [n.alvo, true], [` na ${n.contexto}`, false]];
     case "fila_repriorizada":
       return [[a, true], [" repriorizou sua fila", false]];
     case "convite_recebido":

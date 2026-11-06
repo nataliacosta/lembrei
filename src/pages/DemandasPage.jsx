@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import AguardandoPriorizacao from "../components/AguardandoPriorizacao";
 import ExportarFila from "../components/ExportarFila";
+import { descreverPassoDaEspera, diasDesde } from "../lib/passos";
 import { notificar, notificarFila } from "../lib/notificacoes";
 import { IconeCheck } from "../components/Icones";
 import { useAuth } from "../contexts/AuthContext";
@@ -107,7 +108,8 @@ export default function DemandasPage() {
   }
 
   const depoisDoPrazo = previsao.itens.filter((r) => r.demanda.prazoPedido && r.fim > inicioDoDia(paraDate(r.demanda.prazoPedido)));
-  const fimDaFila = previsao.itens.length ? previsao.itens[previsao.itens.length - 1].fim : null;
+  const fimDaFila = previsao.itens.reduce((max, r) => (r.fim && (!max || r.fim > max) ? r.fim : max), null);
+  const paradas = previsao.itens.filter((r) => r.esperando);
   const concluidas = demandas
     .filter((d) => d.concluida)
     .sort((a, b) => (b.concluidaEm?.seconds || 0) - (a.concluidaEm?.seconds || 0))
@@ -192,6 +194,7 @@ export default function DemandasPage() {
   }
 
   function colunasBarra(r) {
+    if (r.iDiaInicio == null) return null;
     const ini = r.iDiaInicio;
     const fim = r.iDiaFim;
     if (ini >= DIAS_LINHA_TEMPO) return null;
@@ -323,6 +326,18 @@ export default function DemandasPage() {
             <div className="tile-valor">{depoisDoPrazo.length}</div>
             <div className="tile-label">previsão depois do prazo pedido</div>
           </div>
+          {paradas.length > 0 && (
+            <div className="tile tile-espera">
+              <div className="tile-valor">{paradas.length}</div>
+              <div className="tile-label">
+                {paradas.length === 1 ? "parada aguardando retorno" : "paradas aguardando retorno"}
+                {paradas.length === 1 ? ` · ${paradas[0].demanda.espera.de} ${(() => {
+                  const n = diasDesde(paradas[0].demanda.espera.desde);
+                  return n === 0 ? "desde hoje" : n === 1 ? "há 1 dia" : `há ${n} dias`;
+                })()}` : ""}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -355,8 +370,10 @@ export default function DemandasPage() {
           </div>
           {previsao.itens.map((r, i) => {
             const d = r.demanda;
-            const andamento = i === 0;
-            const pausada = !andamento && Number(d.horasFeitas) > 0;
+            // Em andamento: a primeira da fila que não está parada aguardando retorno.
+            const andamento = i === previsao.itens.findIndex((x) => !x.esperando);
+            const esperando = Boolean(r.esperando);
+            const pausada = !andamento && !esperando && Number(d.horasFeitas) > 0;
             const prazo = d.prazoPedido ? inicioDoDia(paraDate(d.prazoPedido)) : null;
             const estoura = prazo && r.fim > prazo;
             const diasAlem = estoura ? Math.max(1, diasUteisEntre(prazo, r.fim)) : 0;
@@ -367,7 +384,7 @@ export default function DemandasPage() {
             return (
               <div
                 key={d.id}
-                className={`fila-linha ${andamento ? "andamento" : ""} ${arrastando === i ? "arrastando" : ""} ${alvo === i && (arrastandoNova || arrastando !== i) ? "alvo" : ""}`}
+                className={`fila-linha ${andamento ? "andamento" : ""} ${esperando ? "esperando" : ""} ${arrastando === i ? "arrastando" : ""} ${alvo === i && (arrastandoNova || arrastando !== i) ? "alvo" : ""}`}
                 draggable={podeEditar}
                 onDragStart={(e) => {
                   setArrastando(i);
@@ -431,6 +448,14 @@ export default function DemandasPage() {
                           Em andamento
                         </span>
                       )}
+                      {esperando && (
+                        <span className="pill pill-espera" style={{ marginRight: 6 }}>
+                          ⏸ Aguardando {d.espera.de} · {(() => {
+                            const n = diasDesde(d.espera.desde);
+                            return n === 0 ? "desde hoje" : n === 1 ? "há 1 dia" : `há ${n} dias`;
+                          })()}
+                        </span>
+                      )}
                       {pausada && (
                         <span className="pill" style={{ background: "#eceeee", color: "var(--color-gray)", marginRight: 6 }}>
                           Pausada
@@ -439,7 +464,12 @@ export default function DemandasPage() {
                       {d.titulo}
                     </div>
                     <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 2 }}>
-                      {[d.solicitante && `Pedido por ${d.solicitante}`, Number(d.horasFeitas) > 0 && `${formatarHoras(Number(d.horasFeitas))} feitas`]
+                      {[
+                        esperando && descreverPassoDaEspera(d),
+                        esperando && d.espera.retornoPrevisto && `retorno previsto ${formatarData(d.espera.retornoPrevisto)}`,
+                        d.solicitante && `Pedido por ${d.solicitante}`,
+                        Number(d.horasFeitas) > 0 && `${formatarHoras(Number(d.horasFeitas))} feitas`,
+                      ]
                         .filter(Boolean)
                         .join(" · ") || "—"}
                     </div>
@@ -462,13 +492,29 @@ export default function DemandasPage() {
                   </small>
                 </span>
                 <span className="col-pronta" style={{ fontSize: 13, fontWeight: 700 }}>
+                  {esperando ? (
+                    <>
+                      <span style={{ whiteSpace: "nowrap" }}>{r.fim ? `≈ ${formatarData(r.fim)}` : "—"}</span>
+                      <small style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#8a5a00" }}>depende do retorno</small>
+                    </>
+                  ) : (
+                  <>
                   <span style={{ whiteSpace: "nowrap" }}>{diasAte(r.fim) === 0 ? "Hoje" : formatarDataRelativa(r.fim)}</span>
                   {dif ? <span className={`impacto ${dif < 0 ? "antes" : "depois"}`}>{dif < 0 ? `${textoDias(dif)} antes` : `+${textoDias(dif)}`}</span> : null}
                   <small style={{ display: "block", fontSize: 11, fontWeight: 600, color: estoura ? "var(--color-orange)" : "var(--color-gray)" }}>
                     {prazo ? `pedido p/ ${formatarData(prazo)}${estoura ? ` · ${textoDias(diasAlem)} depois` : " · ok"}` : "sem prazo pedido"}
                   </small>
+                  </>
+                  )}
                 </span>
                 <span className="col-tempo linha-tempo" aria-hidden="true">
+                  {esperando && (
+                    <span
+                      className="barra espera"
+                      style={{ gridColumn: `1 / ${Math.min(r.iDiaRetorno ?? DIAS_LINHA_TEMPO, DIAS_LINHA_TEMPO) + 1}` }}
+                      title={`Aguardando ${d.espera.de}`}
+                    />
+                  )}
                   {colunas && <span className={`barra ${classeBarra}`} style={{ gridColumn: colunas }} title={`${formatarData(r.inicio)} a ${formatarData(r.fim)}`} />}
                 </span>
               </div>
@@ -499,6 +545,11 @@ export default function DemandasPage() {
             <span style={{ display: "inline-block", width: 14, height: 8, borderRadius: 3, background: "#f0a46a", verticalAlign: "middle" }} /> passa do
             prazo pedido
           </span>
+          {paradas.length > 0 && (
+            <span>
+              <span className="barra-legenda-espera" /> aguardando retorno
+            </span>
+          )}
           <span>A linha do tempo mostra só dias úteis (sem fins de semana e feriados).</span>
         </div>
       )}

@@ -5,6 +5,7 @@ import { useDados } from "../contexts/DadosContext";
 import AgendaRow from "../components/AgendaRow";
 import { GRUPOS, agruparAgenda, contratosPedindoAtencao } from "../lib/agenda";
 import { entradasDeMedicao } from "../lib/medicao";
+import { entradasDeCobranca } from "../lib/passos";
 import { CONTRATO_STATUS } from "../lib/constants";
 import { descreverVencimento, diaDaSemanaPorExtenso, diasAte, formatarData, formatarDataRelativa, inicioDoDia, paraDate } from "../lib/datas";
 import { calcularPrevisao, formatarHoras, horasRestantes, ordenarFila } from "../lib/previsao";
@@ -50,7 +51,8 @@ export default function DashboardPage() {
   }
 
   const medicoes = entradasDeMedicao(contratos, { uid: user.uid, soMeus: filtro === "meus" });
-  const { grupos, semData } = agruparAgenda(itensAbertos, { uid: user.uid, soMeus: filtro === "meus", extras: medicoes });
+  const cobrancas = entradasDeCobranca(minhasDemandas, { donoId: user.uid, fila: minhaFila });
+  const { grupos, semData } = agruparAgenda(itensAbertos, { uid: user.uid, soMeus: filtro === "meus", extras: [...medicoes, ...cobrancas] });
   const contratosAtencao = contratosPedindoAtencao(contratos);
   const podeEditar = (frenteId) => ["proprietario", "editor"].includes(papelNaFrente(frenteId));
   const totalAgenda = GRUPOS.reduce((soma, g) => soma + grupos[g.key].length, 0);
@@ -184,11 +186,15 @@ export default function DashboardPage() {
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                       <span style={{ fontSize: 14, fontWeight: 600 }}>{d.titulo}</span>
                       <span className={estoura ? "texto-alerta" : ""} style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
-                        {diasAte(r.fim) === 0 ? "Hoje" : formatarDataRelativa(r.fim)}
+                        {r.esperando ? (r.fim ? `≈ ${formatarData(r.fim)}` : "—") : diasAte(r.fim) === 0 ? "Hoje" : formatarDataRelativa(r.fim)}
                       </span>
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 2 }}>
-                      {i === 0 ? `Em andamento · restam ${formatarHoras(horasRestantes(d))}` : i === 1 ? "Próxima da fila" : `${i + 1}ª da fila`}
+                    <div style={{ fontSize: 12, color: r.esperando ? "#8a5a00" : "var(--color-gray)", marginTop: 2 }}>
+                      {r.esperando
+                        ? `⏸ Aguardando ${d.espera.de}`
+                        : i === previsaoFila.findIndex((x) => !x.esperando)
+                          ? `Em andamento · restam ${formatarHoras(horasRestantes(d))}`
+                          : `${i + 1}ª da fila`}
                       {estoura && ` · depois do prazo pedido (${formatarData(d.prazoPedido)})`}
                     </div>
                   </Link>
