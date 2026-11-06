@@ -31,10 +31,10 @@ export default function TopBar() {
           </span>
         </Link>
         <Sino />
-        <Link to="/conta" className="so-desktop" aria-label="Conta" title="Conta" style={{ display: "flex" }}>
+        <Link to="/configuracoes" className="so-desktop" aria-label="Configurações" title="Configurações" style={{ display: "flex" }}>
           <Avatar nome={user?.displayName || user?.email} url={user?.photoURL} tamanho={36} decorativo />
         </Link>
-        <Link to="/conta" className="so-mobile" aria-label="Conta" style={{ width: 44, height: 44 }}>
+        <Link to="/configuracoes" className="so-mobile" aria-label="Configurações" style={{ width: 44, height: 44 }}>
           <span style={{ display: "flex", width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
             <Avatar nome={user?.displayName || user?.email} url={user?.photoURL} tamanho={32} decorativo />
           </span>

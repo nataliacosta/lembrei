@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { marcarMedicaoFeita } from "../lib/medicao";
+import { marcarMedicaoFeita } from "../lib/contratos";
 import { TIPO_POR_KEY } from "../lib/constants";
 import { diasAte, formatarDataRelativa } from "../lib/datas";
 import { marcarConcluido, marcarPreparo } from "../lib/firestore";

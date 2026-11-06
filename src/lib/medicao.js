@@ -1,5 +1,3 @@
-import { deleteField, doc, serverTimestamp, updateDoc } from "firebase/firestore";
-import { db } from "../firebase";
 import { inicioDoDia, somarDias } from "./datas";
 import { ehDiaUtil } from "./previsao";
 
@@ -59,11 +57,4 @@ export function entradasDeMedicao(contratos, { uid, soMeus = false } = {}) {
     entradas.push({ chave: `medicao:${contrato.id}:${proxima.chave}`, tipo: "medicao", contrato, medicao: proxima, data: proxima.prazo });
   }
   return entradas;
-}
-
-export async function marcarMedicaoFeita(contratoId, chave, feita = true) {
-  return updateDoc(doc(db, "contratos", contratoId), {
-    [`medicao.feitas.${chave}`]: feita ? true : deleteField(),
-    atualizadoEm: serverTimestamp(),
-  });
 }

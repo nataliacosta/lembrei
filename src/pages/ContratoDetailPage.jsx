@@ -8,7 +8,8 @@ import { BotaoVoltar } from "../contexts/HistoricoContext";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { CONTRATO_STATUS, PAPEIS, TIPO_POR_KEY } from "../lib/constants";
 import { alertaVencimento, descreverVencimento, diasAte, formatarData, formatarDataRelativa, inicioDoDia } from "../lib/datas";
-import { chaveDoMes, marcarMedicaoFeita, nomeDoMes, proximaMedicao } from "../lib/medicao";
+import { chaveDoMes, nomeDoMes, proximaMedicao } from "../lib/medicao";
+import { marcarMedicaoFeita } from "../lib/contratos";
 import { IconeCheck } from "../components/Icones";
 import { watchItensDoContrato } from "../lib/firestore";
 import {
