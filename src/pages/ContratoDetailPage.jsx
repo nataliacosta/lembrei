@@ -7,10 +7,11 @@ import { BotaoVoltar } from "../contexts/HistoricoContext";
 
 import { useUsuarios } from "../hooks/useUsuarios";
 import ItensDoContrato from "../components/ItensDoContrato";
+import AbaMedicoes from "../components/AbaMedicoes";
+import { AbasContrato } from "../components/CabecalhoContrato";
 import { CONTRATO_STATUS, PAPEIS, TIPO_POR_KEY } from "../lib/constants";
 import { alertaVencimento, descreverVencimento, diasAte, formatarData, formatarDataRelativa, inicioDoDia } from "../lib/datas";
 import { chaveDoMes, nomeDoMes, proximaMedicao } from "../lib/medicao";
-import { marcarMedicaoFeita } from "../lib/contratos";
 import { IconeCheck } from "../components/Icones";
 import { watchItensDoContrato } from "../lib/firestore";
 import {
@@ -23,7 +24,7 @@ import {
   watchContrato,
 } from "../lib/contratos";
 
-export default function ContratoDetailPage() {
+export default function ContratoDetailPage({ aba = "resumo" }) {
   const { contratoId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -95,33 +96,50 @@ export default function ContratoDetailPage() {
 
   const proximoPasso = calcularProximoPasso({ contrato, alerta, aditivoAtivo, cancelamentoAtivo });
 
+  const cabecalho = (
+    <>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+      {alerta === "vencido" && (
+        <span className="pill" style={{ background: "var(--color-accent)", color: "var(--color-dark)" }}>
+          Vencido
+        </span>
+      )}
+      {alerta === "proximo" && (
+        <span className="pill" style={{ background: "var(--color-orange-soft)", color: "var(--color-orange)" }}>
+          {descreverVencimento(contrato.vencimento)}
+        </span>
+      )}
+      <span className="pill" style={{ background: "rgba(0,212,192,0.18)", color: "var(--color-dark)" }}>
+        {statusInfo.label}
+        {contrato.status === "aditivo" && (aditivoAtivo?.pendenteEm || contrato.aditivoAtivoPendenteEm) &&
+          ` · pendente em ${aditivoAtivo?.pendenteEm || contrato.aditivoAtivoPendenteEm}`}
+      </span>
+    </div>
+    <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>{contrato.titulo}</h1>
+    <div style={{ fontSize: 14, color: "var(--color-gray)", marginTop: 4 }}>
+      {[contrato.fornecedor, contrato.numero && `Nº ${contrato.numero}`].filter(Boolean).join(" · ")}
+    </div>
+      <AbasContrato contratoId={contratoId} aba={aba} />
+    </>
+  );
+
+  if (aba === "medicoes") {
+    return (
+      <div className="page-shell" style={{ paddingTop: 24, paddingBottom: 80, maxWidth: 1180 }}>
+        <BotaoVoltar destinoPadrao="/contratos" />
+        <div style={{ marginTop: 16 }}>{cabecalho}</div>
+        <AbaMedicoes contrato={contrato} podeEditar={podeEditar} />
+      </div>
+    );
+  }
+
   return (
     <div className="page-shell" style={{ paddingTop: 24, paddingBottom: 80, maxWidth: 1180 }}>
       <BotaoVoltar destinoPadrao="/contratos" />
 
       <div className="detalhe-layout" style={{ marginTop: 16 }}>
         <div className="detalhe-principal">
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-            {alerta === "vencido" && (
-              <span className="pill" style={{ background: "var(--color-accent)", color: "var(--color-dark)" }}>
-                Vencido
-              </span>
-            )}
-            {alerta === "proximo" && (
-              <span className="pill" style={{ background: "var(--color-orange-soft)", color: "var(--color-orange)" }}>
-                {descreverVencimento(contrato.vencimento)}
-              </span>
-            )}
-            <span className="pill" style={{ background: "rgba(0,212,192,0.18)", color: "var(--color-dark)" }}>
-              {statusInfo.label}
-              {contrato.status === "aditivo" && (aditivoAtivo?.pendenteEm || contrato.aditivoAtivoPendenteEm) &&
-                ` · pendente em ${aditivoAtivo?.pendenteEm || contrato.aditivoAtivoPendenteEm}`}
-            </span>
-          </div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>{contrato.titulo}</h1>
-          <div style={{ fontSize: 14, color: "var(--color-gray)", marginTop: 4 }}>
-            {[contrato.fornecedor, contrato.numero && `Nº ${contrato.numero}`].filter(Boolean).join(" · ")}
-          </div>
+          {cabecalho}
 
           {proximoPasso && (
             <div
@@ -286,7 +304,7 @@ export default function ContratoDetailPage() {
             </div>
           </div>
 
-          {contrato.medicao?.ativa && <CartaoMedicao contrato={contrato} podeEditar={podeEditar} />}
+          {contrato.medicao?.ativa && <CartaoMedicao contrato={contrato} />}
 
           <div className="lista-card" style={{ padding: "14px 16px" }}>
             <SectionTitle>Ações</SectionTitle>
@@ -384,26 +402,13 @@ function SecaoCabecalho({ titulo, acao }) {
   );
 }
 
-function CartaoMedicao({ contrato, podeEditar }) {
+function CartaoMedicao({ contrato }) {
   const m = contrato.medicao;
   const proxima = proximaMedicao(contrato);
   const hoje = inicioDoDia();
   const mesAtual = chaveDoMes(hoje.getFullYear(), hoje.getMonth());
   const feitaEsteMes = Boolean(m.feitas?.[mesAtual]);
   const atrasada = proxima && proxima.prazo < hoje;
-  const [salvando, setSalvando] = useState(false);
-
-  async function marcar(chave, feita) {
-    setSalvando(true);
-    try {
-      await marcarMedicaoFeita(contrato.id, chave, feita);
-    } catch (e) {
-      console.error("Erro ao marcar medição:", e);
-      window.alert("Não deu pra atualizar a medição. Tente de novo.");
-    }
-    setSalvando(false);
-  }
-
   return (
     <div className="lista-card">
       <div style={{ padding: "12px 16px 2px" }}>
@@ -433,26 +438,16 @@ function CartaoMedicao({ contrato, podeEditar }) {
           </span>
         </div>
       )}
-      {podeEditar && (
-        <div style={{ padding: "6px 16px 14px" }}>
-          {feitaEsteMes ? (
-            <div style={{ fontSize: 13, display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-              <span>
-                <IconeCheck size={14} /> Medição de {nomeDoMes(hoje.getMonth())} feita
-              </span>
-              <button type="button" className="link-botao" disabled={salvando} onClick={() => marcar(mesAtual, false)}>
-                Desfazer
-              </button>
-            </div>
-          ) : (
-            proxima && (
-              <button type="button" className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} disabled={salvando} onClick={() => marcar(proxima.chave, true)}>
-                Medição de {proxima.nomeMes} feita
-              </button>
-            )
-          )}
-        </div>
-      )}
+      <div style={{ padding: "6px 16px 14px" }}>
+        {feitaEsteMes && (
+          <div style={{ fontSize: 13, marginBottom: 8 }}>
+            <IconeCheck size={14} /> Medição de {nomeDoMes(hoje.getMonth())} feita
+          </div>
+        )}
+        <Link to={`/contratos/${contrato.id}/medicoes`} className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }}>
+          Ir para Medições
+        </Link>
+      </div>
     </div>
   );
 }
