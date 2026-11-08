@@ -3,7 +3,8 @@ import { ehDiaUtil } from "./previsao";
 
 // Medição mensal de contratos. Fica em contrato.medicao:
 // { ativa, quem: "TI" | "Negócio", responsavelId, responsavelNome, lightPlus,
-//   diaPrazo (1–31, padrão 10), diasAntes (padrão 5), feitas: { "2026-11": true } }
+//   diaPrazo (1–31, padrão 10), diasAntes (padrão 5), feitas: { "2026-11": true },
+//   subidas: { "2026-11": true } }  (planilha já subida, falta marcar como lançada)
 // A chave em "feitas" é o mês do prazo; a medição em si é do mês anterior
 // (prazo em 10/11 = medição de outubro), e é esse o nome mostrado.
 
@@ -46,7 +47,8 @@ export function proximaMedicao(contrato, hoje = inicioDoDia()) {
     if (feitas[chave]) continue;
     const prazo = prazoDoMes(ano, mes, Number(m.diaPrazo) || 10);
     const lembrarEm = somarDias(prazo, -(Number(m.diasAntes) || 0));
-    return { chave, ano, mes, nomeMes: nomeDaMedicao(mes), prazo, lembrarEm };
+    const mesReferencia = chaveDoMes(mes === 0 ? ano - 1 : ano, (mes + 11) % 12);
+    return { chave, ano, mes, nomeMes: nomeDaMedicao(mes), prazo, lembrarEm, subida: Boolean(m.subidas?.[chave]), mesReferencia };
   }
   return null;
 }

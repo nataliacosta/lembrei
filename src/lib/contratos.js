@@ -270,7 +270,7 @@ export async function buscarAditivosPendentesTI(uid) {
     orderBy("dataSolicitacao", "asc")
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return snap.docs.map((d) => ({ id: d.id, contratoId: d.ref.parent.parent?.id, ...d.data() }));
 }
 
 // Medição mensal (ver lib/medicao.js): marca o mês como feito ou desfaz.

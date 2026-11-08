@@ -76,6 +76,7 @@ export default function ContratosListPage() {
 }
 
 function ContratoLinha({ contrato: c }) {
+  const { ehSoMedicao } = useDados();
   const alerta = alertaVencimento(c.vencimento, c.status === "aditivo");
   const statusInfo = CONTRATO_STATUS[c.status] || CONTRATO_STATUS.ativo;
   const encerrado = c.status === "cancelado";
@@ -92,6 +93,11 @@ function ContratoLinha({ contrato: c }) {
           {c.fornecedor}
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+          {ehSoMedicao(c.id) && (
+            <span className="pill" style={{ background: "#eceeee", color: "var(--color-dark)" }}>
+              Só medição
+            </span>
+          )}
           {alerta === "vencido" && (
             <span className="pill" style={{ background: "var(--color-accent)", color: "var(--color-dark)" }}>
               Vencido

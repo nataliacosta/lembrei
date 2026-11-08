@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useVoltar } from "../contexts/HistoricoContext";
 
 import { atualizarContrato, criarContrato, watchContrato } from "../lib/contratos";
+import { definirSoMedicao } from "../lib/push";
 import { deInputDate, paraInputDate } from "../lib/datas";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { MEDICAO_PADRAO } from "../lib/medicao";
@@ -20,6 +21,7 @@ export default function ContratoFormPage() {
   const [numero, setNumero] = useState("");
   const [fornecedor, setFornecedor] = useState("");
   const [escopo, setEscopo] = useState("");
+  const [soMedicao, setSoMedicao] = useState(false);
   const [vencimento, setVencimento] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [medicao, setMedicao] = useState(MEDICAO_PADRAO);
@@ -86,6 +88,7 @@ export default function ContratoFormPage() {
       else navigate(`/contratos/${contratoId}`, { replace: true });
     } else {
       const ref = await criarContrato({ ...dados, uid: user.uid });
+      if (soMedicao) await definirSoMedicao(user.uid, ref.id, true).catch((e) => console.error(e));
       navigate(`/contratos/${ref.id}`, { replace: true });
     }
     setSalvando(false);
@@ -121,6 +124,32 @@ export default function ContratoFormPage() {
               <input value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} />
             </div>
           </div>
+
+          {!contratoId && (
+            <div style={{ marginBottom: 18 }}>
+              <label>Sua parte neste contrato</label>
+              <div className="opcoes-linha">
+                <label className={`opcao-card ${!soMedicao ? "on" : ""}`}>
+                  <input type="radio" name="parte" checked={!soMedicao} onChange={() => setSoMedicao(false)} />
+                  <span>
+                    <b>Gestão e medição</b>
+                    <span className="texto-ajuda" style={{ display: "block", marginTop: 2 }}>
+                      Aditivos, renovação, cancelamento e medições.
+                    </span>
+                  </span>
+                </label>
+                <label className={`opcao-card ${soMedicao ? "on" : ""}`}>
+                  <input type="radio" name="parte" checked={soMedicao} onChange={() => setSoMedicao(true)} />
+                  <span>
+                    <b>Só medição</b>
+                    <span className="texto-ajuda" style={{ display: "block", marginTop: 2 }}>
+                      Sem lembrete de vencimento nem de aditivo; no menu ele fica em “Só medição”.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
 
           <div style={{ marginBottom: 18 }}>
             <label>Escopo</label>

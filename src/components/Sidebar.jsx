@@ -26,7 +26,9 @@ function salvarPreferencia(chave, valor) {
 
 export default function Sidebar() {
   const { user } = useAuth();
-  const { frentes, contratos, contagemPorFrente, minhaFila, minhasDemandas, funcionalidades, planejamentos } = useDados();
+  const { frentes, contratos, contagemPorFrente, minhaFila, minhasDemandas, funcionalidades, planejamentos, ehSoMedicao } = useDados();
+  const contratosMeus = contratos.filter((c) => !ehSoMedicao(c.id));
+  const contratosSoMedicao = contratos.filter((c) => ehSoMedicao(c.id));
   const naFila = minhaFila ? minhasDemandas.filter((d) => !d.concluida && (minhaFila.ordem || []).includes(d.id)).length : 0;
   const aguardandoPriorizacao = minhaFila ? minhasDemandas.filter((d) => !d.concluida && !(minhaFila.ordem || []).includes(d.id)).length : 0;
   const [mostrarNovaFrente, setMostrarNovaFrente] = useState(false);
@@ -164,7 +166,7 @@ export default function Sidebar() {
                 Nenhum contrato ainda.
               </div>
             )}
-            {contratos.map((c) => (
+            {contratosMeus.map((c) => (
               <NavLink
                 key={c.id}
                 to={`/contratos/${c.id}`}
@@ -194,6 +196,27 @@ export default function Sidebar() {
                 )}
               </NavLink>
             ))}
+            {contratosSoMedicao.length > 0 && (
+              <>
+                <div style={{ padding: "12px 24px 4px", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.55)", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                  Só medição · gestão de outra pessoa
+                </div>
+                {contratosSoMedicao.map((c) => (
+                  <NavLink
+                    key={c.id}
+                    to={`/contratos/${c.id}`}
+                    className={classeLink}
+                    style={{ display: "flex", alignItems: c.fornecedor ? "flex-start" : "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13 }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,.7)", flex: "0 0 auto", marginTop: c.fornecedor ? 5 : 0 }} />
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <span style={{ display: "block" }}>{c.titulo}</span>
+                      {c.fornecedor && <span style={{ display: "block", fontSize: 12, color: "rgba(255,255,255,.6)", marginTop: 1 }}>{c.fornecedor}</span>}
+                    </span>
+                  </NavLink>
+                ))}
+              </>
+            )}
             <NavLink to="/contratos" end className={classeLink} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13, fontWeight: 600 }}>
               Ver todos os contratos
             </NavLink>

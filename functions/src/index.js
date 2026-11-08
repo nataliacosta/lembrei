@@ -61,7 +61,7 @@ export const avisarNotificacao = onDocumentCreated({ document: "notificacoes/{id
   const prefs = mesclarPrefs(usuario.data()?.prefsNotificacoes);
   if (categoria && !prefs.tipos[categoria]) return;
   // Funcionalidade desligada (Contratos, Demandas, Frentes): sem push dela.
-  if (!notificacaoVisivel(n, mesclarFuncionalidades(usuario.data()?.funcionalidades))) return;
+  if (!notificacaoVisivel(n, mesclarFuncionalidades(usuario.data()?.funcionalidades), usuario.data()?.contratosSoMedicao || [])) return;
   prepararWebPush();
   const comAspas = n.tipo === "comentario" || n.tipo === "mencao";
   await enviarParaUsuario(n.destinatarioId, {

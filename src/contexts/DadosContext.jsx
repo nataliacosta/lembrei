@@ -7,7 +7,7 @@ import { contratoDaBase, ehBaseContrato } from "../lib/itens";
 import { watchDemandas, watchFila, watchFilasCompartilhadas } from "../lib/filas";
 import { limparNotificacoesAntigas, watchNotificacoes } from "../lib/notificacoes";
 import { itemVisivel, mesclarFuncionalidades, notificacaoVisivel } from "../lib/funcionalidades";
-import { watchFuncionalidades } from "../lib/push";
+import { watchContratosSoMedicao, watchFuncionalidades } from "../lib/push";
 import { watchPlanejamentos } from "../lib/orcamentosDb";
 
 // Dados que várias partes da tela usam ao mesmo tempo (painel, menu lateral,
@@ -28,6 +28,8 @@ export function DadosProvider({ children }) {
   const [filasCompartilhadas, setFilasCompartilhadas] = useState([]);
   const [notificacoes, setNotificacoes] = useState([]);
   const [planejamentos, setPlanejamentos] = useState([]);
+  // Contratos em que a pessoa só faz medição (sem lembrete de vencimento/aditivo).
+  const [contratosSoMedicao, setContratosSoMedicao] = useState([]);
   // Frentes, Contratos e Demandas podem ser desligados por cada pessoa (Configurações).
   const [funcionalidades, setFuncionalidades] = useState(() => mesclarFuncionalidades(null));
 
@@ -71,6 +73,11 @@ export function DadosProvider({ children }) {
 
   useEffect(() => {
     if (!user) return;
+    return watchContratosSoMedicao(user.uid, setContratosSoMedicao);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
     return watchContratos(user.uid, setContratos, (e) => setErroContratos(e.message || String(e)));
   }, [user]);
 
@@ -106,7 +113,7 @@ export function DadosProvider({ children }) {
     const frentesV = f.frentes ? frentes : [];
     const contratosV = f.contratos ? contratos : [];
     const itensV = itensAbertos.filter((i) => itemVisivel(i, f));
-    const notificacoesV = notificacoes.filter((n) => notificacaoVisivel(n, f));
+    const notificacoesV = notificacoes.filter((n) => notificacaoVisivel(n, f, contratosSoMedicao));
     const mapaFrentes = Object.fromEntries(frentesV.map((x) => [x.id, x]));
     const mapaContratos = Object.fromEntries(contratosV.map((c) => [c.id, c]));
     const contagemPorFrente = {};
@@ -123,7 +130,9 @@ export function DadosProvider({ children }) {
       carregandoItens,
       erroItens,
       erroContratos,
-      aditivosTI: f.contratos ? aditivosTI : [],
+      aditivosTI: f.contratos ? aditivosTI.filter((a) => !contratosSoMedicao.includes(a.contratoId)) : [],
+      contratosSoMedicao,
+      ehSoMedicao: (contratoId) => contratosSoMedicao.includes(contratoId),
       mapaFrentes,
       mapaContratos,
       contagemPorFrente,
@@ -142,7 +151,7 @@ export function DadosProvider({ children }) {
       notificacoes: notificacoesV,
       naoLidas: notificacoesV.filter((n) => !n.lida).length,
     };
-  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas, notificacoes, funcionalidades, planejamentos]);
+  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas, notificacoes, funcionalidades, planejamentos, contratosSoMedicao]);
 
   return <DadosContext.Provider value={valor}>{children}</DadosContext.Provider>;
 }

@@ -21,9 +21,11 @@ export function itemVisivel(item, f) {
 }
 
 // Notificação do sino (e push): pelo tipo e pelo link.
-export function notificacaoVisivel(n, f) {
+export function notificacaoVisivel(n, f, contratosSoMedicao = []) {
   const tipo = n?.tipo || "";
   const link = n?.link || "";
+  const doContrato = link.match(/^\/contratos\/([^/]+)\/aditivos/);
+  if (doContrato && contratosSoMedicao.includes(doContrato[1])) return false;
   if (tipo === "aditivo" || link.startsWith("/contratos")) return f.contratos;
   if (tipo.startsWith("demanda") || tipo === "fila_repriorizada" || link.startsWith("/demandas")) return f.demandas;
   if (link.startsWith("/frentes")) return f.frentes;

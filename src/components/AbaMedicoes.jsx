@@ -429,6 +429,7 @@ function CartaoDoMes({ contrato, podeEditar }) {
         ) : (
           proxima && (
             <div style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}>
+              {proxima.subida && "Subida · falta marcar como lançada no sistema · "}
               {atrasada ? "Atrasada · era " : "Prazo até "}
               {formatarDataRelativa(proxima.prazo).toLowerCase()}
               {[m.quem, m.responsavelNome].filter(Boolean).length > 0 && ` · ${[m.quem, m.responsavelNome].filter(Boolean).join(" · ")}`}
@@ -436,19 +437,25 @@ function CartaoDoMes({ contrato, podeEditar }) {
           )
         )}
         <div className="texto-ajuda" style={{ marginTop: 2 }}>
-          Ao salvar a medição, o mês já fica marcado como feito.
+          O lembrete sai do “O que fazer” quando você marcar a medição como lançada no sistema.
         </div>
       </div>
       {podeEditar && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {!feitaEsteMes && proxima && (
+          {!feitaEsteMes && proxima && !proxima.subida && (
             <button type="button" className="btn btn-ghost" disabled={salvando} onClick={() => marcar(proxima.chave, true)}>
               Marcar como feita sem planilha
             </button>
           )}
-          <Link to={linkNova} className={feitaEsteMes ? "btn btn-ghost" : "btn btn-primary"}>
-            Subir medição{!feitaEsteMes && proxima ? ` de ${proxima.nomeMes}` : ""}
-          </Link>
+          {!feitaEsteMes && proxima?.subida ? (
+            <Link to={`/contratos/${contrato.id}/medicoes/${proxima.mesReferencia}`} className="btn btn-primary">
+              Abrir medição de {proxima.nomeMes}
+            </Link>
+          ) : (
+            <Link to={linkNova} className={feitaEsteMes ? "btn btn-ghost" : "btn btn-primary"}>
+              Subir medição{!feitaEsteMes && proxima ? ` de ${proxima.nomeMes}` : ""}
+            </Link>
+          )}
         </div>
       )}
     </div>

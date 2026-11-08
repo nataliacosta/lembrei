@@ -137,6 +137,18 @@ export default function SubirMedicaoPage() {
   if (!opcoesMes.includes(mes)) opcoesMes.push(mes);
   opcoesMes.sort().reverse();
 
+  // Tira a linha da medição (antes de salvar) e reorganiza o que estava por índice.
+  function excluirLinha(i) {
+    if (!window.confirm(`Tirar a linha de ${lidas[i].recurso} desta medição?`)) return;
+    const reindexar = (mapa) => Object.fromEntries(Object.entries(mapa).filter(([k]) => Number(k) !== i).map(([k, v]) => [Number(k) > i ? Number(k) - 1 : Number(k), v]));
+    setLidas(lidas.filter((_, j) => j !== i));
+    setEscolhas(reindexar(escolhas));
+    setGuardar(reindexar(guardar));
+    setDivisoes(reindexar(divisoes));
+    setDividindo(null);
+    setEditandoAloc(null);
+  }
+
   async function salvar() {
     setErro("");
     if (jaExiste && !window.confirm(`Já existe a medição de ${rotuloMes(mes)}. Salvar vai substituir a anterior. Continuar?`)) return;
@@ -174,7 +186,7 @@ export default function SubirMedicaoPage() {
         novosRecursos: [...novos.values()],
         alocacoesExistentes: [...existentes.values()],
         // A medição das horas de outubro é feita em novembro: marca o ciclo seguinte.
-        marcarCiclo: contrato.medicao?.ativa ? somarMeses(mes, 1) : null,
+        ciclo: contrato.medicao?.ativa ? somarMeses(mes, 1) : null,
       });
       navigate(`/contratos/${contratoId}/medicoes/${mes}`, { replace: true });
     } catch (e) {
@@ -309,6 +321,7 @@ export default function SubirMedicaoPage() {
                     dividindo={dividindo === i}
                     onEditarAlocacao={podeEditar && centros.length ? () => (setDividindo(null), setEditandoAloc(editandoAloc === i ? null : i)) : null}
                     editandoAlocacao={editandoAloc === i}
+                    onExcluir={podeEditar ? () => excluirLinha(i) : null}
                   />,
                   editandoAloc === i && (
                     <tr key={`a${i}`}>
@@ -413,7 +426,7 @@ function tipoPagamento(tipo) {
   return tipo === "CC" ? "Centro de Custo" : tipo === "ODI" ? "ODI" : "";
 }
 
-function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guardar, onGuardar, onDividir, dividindo, onEditarAlocacao, editandoAlocacao }) {
+function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guardar, onGuardar, onDividir, dividindo, onEditarAlocacao, editandoAlocacao, onExcluir }) {
   const l = linha;
   const primeiro = l.recurso.split(" ")[0];
   const acao = (
@@ -426,6 +439,11 @@ function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guarda
       {onEditarAlocacao && (
         <button type="button" className="link-botao" style={{ fontSize: 12, display: "block", marginLeft: "auto", marginTop: 6 }} onClick={onEditarAlocacao} aria-expanded={editandoAlocacao}>
           Editar alocação
+        </button>
+      )}
+      {onExcluir && (
+        <button type="button" className="link-botao" style={{ fontSize: 12, display: "block", marginLeft: "auto", marginTop: 6, color: "var(--color-orange)" }} onClick={onExcluir}>
+          Excluir linha
         </button>
       )}
     </td>
