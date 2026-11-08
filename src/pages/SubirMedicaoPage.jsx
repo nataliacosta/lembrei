@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import CabecalhoContrato from "../components/CabecalhoContrato";
 import { CentroTag, EquipeFrente } from "../components/AbaMedicoes";
-import EditorDivisao, { EditorAlocacao, SeletoresParte } from "../components/EditorDivisao";
+import EditorDivisao, { EditorAlocacao, porIdDe, SeletoresParte } from "../components/EditorDivisao";
+import { useCentrosDisponiveis } from "../hooks/useCentrosDisponiveis";
 import { IconeDocumento } from "../components/Icones";
 import { watchContrato } from "../lib/contratos";
 import { proximaMedicao } from "../lib/medicao";
@@ -48,7 +49,9 @@ export default function SubirMedicaoPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [contrato, setContrato] = useState(undefined);
-  const [centros, setCentros] = useState([]);
+  const [centrosContrato, setCentros] = useState([]);
+  const { opcoes: opcoesCentros } = useCentrosDisponiveis();
+  const centros = useMemo(() => [...centrosContrato.map((c) => ({ ...c, origem: "contrato" })), ...opcoesCentros], [centrosContrato, opcoesCentros]);
   const [recursos, setRecursos] = useState([]);
   const [medicoes, setMedicoes] = useState([]);
   const [arquivoNome, setArquivoNome] = useState("");
@@ -79,7 +82,7 @@ export default function SubirMedicaoPage() {
     if (proxima) setMes(somarMeses(proxima.chave, -1));
   }, [contrato, lidas]);
 
-  const centrosPorId = useMemo(() => Object.fromEntries(centros.map((c) => [c.id, c])), [centros]);
+  const centrosPorId = useMemo(() => porIdDe(centros), [centros]);
   const equipesPorId = useMemo(() => Object.fromEntries(equipes.map((e) => [e.id, e])), [equipes]);
   const linhas = useMemo(() => {
     if (!lidas) return [];
@@ -317,9 +320,9 @@ export default function SubirMedicaoPage() {
                     onEscolher={(m) => setEscolhas({ ...escolhas, [i]: { ...(escolhas[i] || {}), ...m } })}
                     guardar={guardar[i] !== false}
                     onGuardar={(v) => setGuardar({ ...guardar, [i]: v })}
-                    onDividir={podeEditar && centros.length ? () => (setEditandoAloc(null), setDividindo(dividindo === i ? null : i)) : null}
+                    onDividir={podeEditar ? () => (setEditandoAloc(null), setDividindo(dividindo === i ? null : i)) : null}
                     dividindo={dividindo === i}
-                    onEditarAlocacao={podeEditar && centros.length ? () => (setDividindo(null), setEditandoAloc(editandoAloc === i ? null : i)) : null}
+                    onEditarAlocacao={podeEditar ? () => (setDividindo(null), setEditandoAloc(editandoAloc === i ? null : i)) : null}
                     editandoAlocacao={editandoAloc === i}
                     onExcluir={podeEditar ? () => excluirLinha(i) : null}
                   />,
@@ -477,7 +480,6 @@ function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guarda
           <div className={`escolha-rapida ${l.partes.length ? "" : "pendente"}`} aria-label={`CC/ODI, equipe e frente de ${l.recurso}`} role="group">
             <SeletoresParte parte={escolha} centros={centros} equipes={equipes} indice={0} onMudar={onEscolher} />
           </div>
-          {centros.length === 0 && <div className="texto-ajuda">Cadastre os CCs/ODIs na aba Medições.</div>}
           {l.recursoId && <div className="texto-ajuda">Sem alocação em {rotuloMesCurto(mes)}.</div>}
           {escolha.centroId && (
             <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--color-gray)", marginTop: 6, fontWeight: 400 }}>

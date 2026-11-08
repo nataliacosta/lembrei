@@ -15,6 +15,7 @@ import ContratoDetailPage from "./pages/ContratoDetailPage";
 import SubirMedicaoPage from "./pages/SubirMedicaoPage";
 import MedicaoPage from "./pages/MedicaoPage";
 import OrcamentosPage from "./pages/OrcamentosPage";
+import ControleOrcamentarioPage from "./pages/ControleOrcamentarioPage";
 import NovoOrcamentoPage from "./pages/NovoOrcamentoPage";
 import OrcamentoPage from "./pages/OrcamentoPage";
 import OrcamentoSharingPage from "./pages/OrcamentoSharingPage";
@@ -63,6 +64,8 @@ export default function App() {
         <Route path="/frentes/:frenteId/itens/:itemId" element={<ItemDetailPage />} />
         <Route path="/frentes/:frenteId/itens/:itemId/editar" element={<ItemFormPage />} />
         <Route path="/frentes/:frenteId/compartilhar" element={<SharingPage />} />
+        <Route path="/controle-orcamentario" element={<ControleOrcamentarioPage />} />
+        <Route path="/controle-orcamentario/:aba" element={<ControleOrcamentarioPage />} />
         <Route path="/orcamentos" element={<OrcamentosPage />} />
         <Route path="/orcamentos/novo" element={<NovoOrcamentoPage />} />
         <Route path="/orcamentos/:planejamentoId" element={<OrcamentosPage />} />

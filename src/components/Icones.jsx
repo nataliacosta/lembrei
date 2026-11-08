@@ -111,3 +111,12 @@ export function IconeFila(props) {
     </Svg>
   );
 }
+
+export function IconeGrafico(props) {
+  return (
+    <Svg {...props}>
+      <path d="M3 3v18h18" />
+      <path d="M7 15v3M12 10v8M17 6v12" />
+    </Svg>
+  );
+}
