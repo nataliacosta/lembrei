@@ -9,6 +9,7 @@ import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, firebaseConfigurado, googleProvider } from "../firebase";
 import { levarItensParaOsContratos, resgatarConvitesPendentes } from "../lib/firestore";
 import { resgatarConvitesPendentesContratos } from "../lib/contratos";
+import { resgatarConvitesPendentesPlanejamentos } from "../lib/orcamentosDb";
 import { garantirFila, resgatarConvitesPendentesFilas } from "../lib/filas";
 
 const AuthContext = createContext(null);
@@ -62,6 +63,11 @@ export function AuthProvider({ children }) {
           await resgatarConvitesPendentesContratos(firebaseUser.uid, firebaseUser.email);
         } catch (e) {
           console.error("Falha ao resgatar convites pendentes de contratos:", e);
+        }
+        try {
+          await resgatarConvitesPendentesPlanejamentos(firebaseUser.uid, firebaseUser.email);
+        } catch (e) {
+          console.error("Falha ao resgatar convites pendentes de orçamentos:", e);
         }
         // Leva os itens das antigas frentes "Contratos" para dentro dos
         // contratos (em segundo plano, sem atrasar a entrada).

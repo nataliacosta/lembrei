@@ -14,6 +14,10 @@ import ContratoFormPage from "./pages/ContratoFormPage";
 import ContratoDetailPage from "./pages/ContratoDetailPage";
 import SubirMedicaoPage from "./pages/SubirMedicaoPage";
 import MedicaoPage from "./pages/MedicaoPage";
+import OrcamentosPage from "./pages/OrcamentosPage";
+import NovoOrcamentoPage from "./pages/NovoOrcamentoPage";
+import OrcamentoPage from "./pages/OrcamentoPage";
+import OrcamentoSharingPage from "./pages/OrcamentoSharingPage";
 import ContratoSharingPage from "./pages/ContratoSharingPage";
 import AditivoFormPage from "./pages/AditivoFormPage";
 import AditivoDetailPage from "./pages/AditivoDetailPage";
@@ -59,6 +63,11 @@ export default function App() {
         <Route path="/frentes/:frenteId/itens/:itemId" element={<ItemDetailPage />} />
         <Route path="/frentes/:frenteId/itens/:itemId/editar" element={<ItemFormPage />} />
         <Route path="/frentes/:frenteId/compartilhar" element={<SharingPage />} />
+        <Route path="/orcamentos" element={<OrcamentosPage />} />
+        <Route path="/orcamentos/novo" element={<NovoOrcamentoPage />} />
+        <Route path="/orcamentos/:planejamentoId" element={<OrcamentosPage />} />
+        <Route path="/orcamentos/:planejamentoId/compartilhar" element={<OrcamentoSharingPage />} />
+        <Route path="/orcamentos/:planejamentoId/:versaoId" element={<OrcamentoPage />} />
         <Route path="/contratos" element={<ContratosListPage />} />
         <Route path="/contratos/novo" element={<ContratoFormPage />} />
         <Route path="/contratos/:contratoId" element={<ContratoDetailPage />} />

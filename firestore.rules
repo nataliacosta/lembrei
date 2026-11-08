@@ -314,6 +314,68 @@ service cloud.firestore {
       }
     }
 
+    // ---------- Orçamentos ----------
+    // planejamentos/{id}: um por ano, compartilhado como os contratos.
+    // As versões e o conteúdo seguem quem participa do planejamento.
+
+    function papelNoPlanejamento(pid) {
+      return get(/databases/$(database)/documents/planejamentos/$(pid)).data.membros[request.auth.uid];
+    }
+
+    function ehMembroPlanejamento(pid) {
+      return logado() && request.auth.uid in get(/databases/$(database)/documents/planejamentos/$(pid)).data.membrosUids;
+    }
+
+    function podeEditarPlanejamento(pid) {
+      return logado() && papelNoPlanejamento(pid) in ['proprietario', 'editor'];
+    }
+
+    function aceitandoConvitePlanejamento() {
+      return logado()
+        && !(request.auth.uid in resource.data.membrosUids)
+        && request.auth.token.email in resource.data.convitesPendentesEmails
+        && request.auth.uid in request.resource.data.membrosUids
+        && request.resource.data.membros[request.auth.uid] in ['editor', 'visualizador']
+        && request.resource.data.donoId == resource.data.donoId
+        && request.resource.data.ano == resource.data.ano
+        && request.resource.data.membros.diff(resource.data.membros).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    match /planejamentos/{pid} {
+      allow read: if logado()
+        && (request.auth.uid in resource.data.membrosUids
+            || request.auth.token.email in resource.data.convitesPendentesEmails);
+      allow create: if logado()
+        && request.auth.uid == request.resource.data.donoId
+        && request.resource.data.membros[request.auth.uid] == 'proprietario'
+        && request.resource.data.membrosUids == [request.auth.uid]
+        && request.resource.data.ano is int;
+      allow update: if (logado() && resource.data.membros[request.auth.uid] == 'proprietario'
+            && request.resource.data.donoId == resource.data.donoId)
+        || (logado() && resource.data.membros[request.auth.uid] == 'editor'
+            && request.resource.data.membros == resource.data.membros
+            && request.resource.data.membrosUids == resource.data.membrosUids
+            && request.resource.data.donoId == resource.data.donoId)
+        || aceitandoConvitePlanejamento();
+      allow delete: if logado() && resource.data.membros[request.auth.uid] == 'proprietario';
+
+      match /versoes/{vid} {
+        allow read: if ehMembroPlanejamento(pid);
+        allow create, update: if podeEditarPlanejamento(pid)
+          && request.resource.data.situacao in ['planejamento', 'efetivada']
+          && request.resource.data.visao in ['completa', 'condensada']
+          && request.resource.data.versao is string
+          && request.resource.data.versao.size() > 0
+          && request.resource.data.versao.size() <= 40;
+        allow delete: if podeEditarPlanejamento(pid);
+
+        match /conteudo/{docId} {
+          allow read: if ehMembroPlanejamento(pid);
+          allow write: if podeEditarPlanejamento(pid);
+        }
+      }
+    }
+
     // ---------- Fila de demandas ----------
     // filas/{donoId}: o id é o uid do dono. Membros convidados podem ver ou
     // editar (repriorizar, criar e atualizar demandas), nunca mudar o acesso.

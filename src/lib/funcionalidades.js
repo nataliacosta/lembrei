@@ -5,9 +5,10 @@ export const FUNCIONALIDADES = [
   { chave: "frentes", titulo: "Frentes", detalhe: "Organizar os itens por assunto" },
   { chave: "contratos", titulo: "Contratos", detalhe: "Contratos, aditivos, medição e itens de contrato" },
   { chave: "demandas", titulo: "Demandas", detalhe: "Fila de demandas com previsão de entrega" },
+  { chave: "orcamentos", titulo: "Orçamentos", detalhe: "Planejamento orçamentário anual e versões efetivadas" },
 ];
 
-export const FUNCIONALIDADES_PADRAO = { frentes: true, contratos: true, demandas: true };
+export const FUNCIONALIDADES_PADRAO = { frentes: true, contratos: true, demandas: true, orcamentos: true };
 
 export function mesclarFuncionalidades(f) {
   return { ...FUNCIONALIDADES_PADRAO, ...(f || {}) };
@@ -26,5 +27,6 @@ export function notificacaoVisivel(n, f) {
   if (tipo === "aditivo" || link.startsWith("/contratos")) return f.contratos;
   if (tipo.startsWith("demanda") || tipo === "fila_repriorizada" || link.startsWith("/demandas")) return f.demandas;
   if (link.startsWith("/frentes")) return f.frentes;
+  if (link.startsWith("/orcamentos")) return f.orcamentos;
   return true;
 }
