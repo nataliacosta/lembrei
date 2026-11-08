@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { dividir, dividirPorHoras, formatarNumero, formatarReais, lerNumero, rotuloMes } from "../lib/alocacoes";
+import { alocacaoNoMes, definirAlocacao, dividir, dividirPorHoras, formatarNumero, formatarReais, lerNumero, partesParaAlocacao, rotuloMes, somarMeses } from "../lib/alocacoes";
+import { salvarRecurso } from "../lib/medicoesContrato";
 
 // CC/ODI, equipe e frente de uma parte. A frente só aparece depois da equipe,
 // e a lista de frentes é a da equipe escolhida. Equipe e frente são opcionais.
@@ -177,6 +178,122 @@ export default function EditorDivisao({ linha, centros, equipes, partesIniciais,
         </button>
         <button type="button" className="btn btn-primary btn-sm" onClick={aplicar}>
           Aplicar divisão
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Edita a alocação de um recurso direto na medição (o mesmo cadastro da aba
+// Medições), valendo a partir do mês escolhido. Se o recurso ainda não existe,
+// cria com os dados da linha.
+export function EditorAlocacao({ contratoId, recurso, linha, centros, equipes, mes, onSalvo, onCancelar }) {
+  const [desde, setDesde] = useState(mes);
+  const [partes, setPartes] = useState(() => {
+    const a = recurso ? alocacaoNoMes(recurso, mes) : null;
+    const base = a?.partes?.length ? a.partes : partesParaAlocacao(linha.partes);
+    return base.length ? base.map((p) => ({ centroId: p.centroId || "", equipeId: p.equipeId || "", frenteId: p.frenteId || "", pct: formatarNumero(p.pct, p.pct % 1 ? 2 : 0) })) : [{ centroId: "", equipeId: "", frenteId: "", pct: "100" }];
+  });
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const num = (v) => lerNumero(v) || 0;
+  const soma = Math.round(partes.reduce((s, p) => s + num(p.pct), 0) * 100) / 100;
+  const somaOk = Math.abs(soma - 100) < 0.005;
+  const nome = recurso?.nome || linha.recurso;
+  const primeiro = nome.split(" ")[0];
+  const meses = [];
+  for (let i = -6; i <= 3; i++) meses.push(somarMeses(mes, i));
+  meses.reverse();
+
+  function mudar(i, m) {
+    setPartes(partes.map((p, j) => (j === i ? { ...p, ...m } : p)));
+  }
+
+  async function salvar() {
+    setErro("");
+    if (partes.some((p) => !p.centroId)) return setErro("Escolha o CC/ODI de cada parte.");
+    if (!somaOk) return setErro("A soma dos percentuais precisa dar 100%.");
+    const validas = partes.map((p) => {
+      const v = { centroId: p.centroId, pct: num(p.pct) };
+      if (p.equipeId) v.equipeId = p.equipeId;
+      if (p.equipeId && p.frenteId) v.frenteId = p.frenteId;
+      return v;
+    });
+    const chaves = validas.map((p) => `${p.centroId}|${p.equipeId || ""}|${p.frenteId || ""}`);
+    if (new Set(chaves).size !== chaves.length) return setErro("A mesma combinação de CC/ODI, equipe e frente aparece duas vezes.");
+    setSalvando(true);
+    try {
+      if (recurso) {
+        await salvarRecurso(contratoId, recurso.id, { ...recurso, alocacoes: definirAlocacao(recurso, desde, validas) });
+      } else {
+        await salvarRecurso(contratoId, null, { nome: linha.recurso, perfil: linha.perfil, valorHH: linha.valorHH, alocacoes: [{ desde, partes: validas }] });
+      }
+      onSalvo({ partes: validas, desde });
+    } catch (e) {
+      console.error(e);
+      setErro("Não deu pra salvar a alocação. Tente de novo.");
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div role="group" aria-label={`Alocação de ${nome}`}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ fontWeight: 700 }}>
+          Alocação de {nome}
+          {!recurso && <span style={{ fontWeight: 400, color: "var(--color-gray)", fontSize: 13 }}> · recurso novo neste contrato</span>}
+        </div>
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, margin: 0 }}>
+          <span style={{ color: "var(--color-gray)" }}>Vale a partir de</span>
+          <select value={desde} onChange={(e) => setDesde(e.target.value)} style={{ width: 180, padding: "6px 8px" }}>
+            {meses.map((m) => (
+              <option key={m} value={m}>
+                {rotuloMes(m)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+        <CabecalhoPartes classe="com-equipe" />
+        {partes.map((p, i) => (
+          <div key={i} className="linha-partes com-equipe">
+            <SeletoresParte parte={p} centros={centros} equipes={equipes} indice={i} onMudar={(m) => mudar(i, m)} />
+            <label style={{ display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
+              <input value={p.pct} onChange={(e) => mudar(i, { pct: e.target.value })} inputMode="decimal" aria-label={`Percentual ${i + 1}`} style={{ width: 64 }} />%
+            </label>
+            <button type="button" className="btn btn-ghost" style={{ padding: 0, width: 40 }} aria-label={`Remover parte ${i + 1}`} onClick={() => setPartes(partes.filter((_, j) => j !== i))} disabled={partes.length === 1}>
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 8 }}>
+        <button
+          type="button"
+          onClick={() => setPartes([...partes, { centroId: "", equipeId: "", frenteId: "", pct: formatarNumero(Math.max(0, Math.round((100 - soma) * 100) / 100), (100 - soma) % 1 ? 2 : 0) }])}
+          style={{ background: "none", border: "1px dashed var(--color-gray-light)", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, color: "var(--color-primary)", minHeight: 36 }}
+        >
+          + Dividir com outro CC/ODI
+        </button>
+        <span style={{ fontSize: 12, fontWeight: 600, color: somaOk ? "var(--color-primary-dark)" : "var(--color-orange)" }}>
+          Soma: {formatarNumero(soma, soma % 1 ? 2 : 0)}%{somaOk ? " ✓" : ""}
+        </span>
+      </div>
+      <div className="texto-ajuda">
+        Muda o cadastro de {primeiro} a partir do mês escolhido (os meses anteriores continuam como estavam). Ao salvar, esta linha da medição é preenchida de novo com a alocação nova.
+      </div>
+      {erro && (
+        <div className="texto-alerta" role="alert" style={{ fontSize: 13, marginTop: 8 }}>
+          {erro}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onCancelar}>
+          Cancelar
+        </button>
+        <button type="button" className="btn btn-primary btn-sm" onClick={salvar} disabled={salvando}>
+          {salvando ? "Salvando..." : "Salvar alocação"}
         </button>
       </div>
     </div>

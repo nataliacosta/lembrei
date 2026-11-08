@@ -3,11 +3,12 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import CabecalhoContrato from "../components/CabecalhoContrato";
 import { CentroTag, EquipeFrente, StatusMedicao } from "../components/AbaMedicoes";
-import EditorDivisao from "../components/EditorDivisao";
+import EditorDivisao, { EditorAlocacao } from "../components/EditorDivisao";
 import { watchContrato } from "../lib/contratos";
 import { formatarData } from "../lib/datas";
 import {
   definirAlocacao,
+  dividir,
   formatarHoras,
   formatarNumero,
   formatarReais,
@@ -73,6 +74,7 @@ export default function MedicaoPage() {
   const [editadas, setEditadas] = useState(null); // cópia das linhas enquanto edita
   const [paraAlocar, setParaAlocar] = useState({}); // índice → salvar a divisão como alocação
   const [dividindo, setDividindo] = useState(null);
+  const [editandoAloc, setEditandoAloc] = useState(null);
   const [equipes, setEquipes] = useState([]);
   const [recursos, setRecursos] = useState([]);
   const [copiado, setCopiado] = useState("");
@@ -86,6 +88,7 @@ export default function MedicaoPage() {
   useEffect(() => watchRecursos(contratoId, setRecursos), [contratoId]);
 
   const centrosPorId = useMemo(() => Object.fromEntries(centros.map((c) => [c.id, c])), [centros]);
+  const equipesPorId = useMemo(() => Object.fromEntries(equipes.map((e) => [e.id, e])), [equipes]);
   const uso = useMemo(() => usoDosCentros(medicoes, mes), [medicoes, mes]);
 
   if (contrato === undefined || medicao === undefined) return <div className="spinner-wrap">Carregando...</div>;
@@ -285,10 +288,10 @@ export default function MedicaoPage() {
         {podeEditar &&
           (editando ? (
             <span style={{ display: "flex", gap: 8 }}>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => (setEditadas(null), setParaAlocar({}), setDividindo(null))}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => (setEditadas(null), setParaAlocar({}), setDividindo(null), setEditandoAloc(null))}>
                 Cancelar
               </button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={salvarEdicao} disabled={ocupado || dividindo !== null}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={salvarEdicao} disabled={ocupado || dividindo !== null || editandoAloc !== null}>
                 Salvar alterações
               </button>
             </span>
@@ -341,13 +344,36 @@ export default function MedicaoPage() {
               );
               const acao = editando ? (
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                  <button type="button" className="link-botao" style={{ fontSize: 12 }} onClick={() => setDividindo(dividindo === i ? null : i)} aria-expanded={dividindo === i}>
+                  <button type="button" className="link-botao" style={{ fontSize: 12, display: "block", marginLeft: "auto" }} onClick={() => (setEditandoAloc(null), setDividindo(dividindo === i ? null : i))} aria-expanded={dividindo === i}>
                     {l.partes?.length > 1 ? "Editar divisão" : l.partes?.length ? "Dividir ou trocar" : "Escolher CC/ODI"}
+                  </button>
+                  <button type="button" className="link-botao" style={{ fontSize: 12, display: "block", marginLeft: "auto", marginTop: 6 }} onClick={() => (setDividindo(null), setEditandoAloc(editandoAloc === i ? null : i))} aria-expanded={editandoAloc === i}>
+                    Editar alocação
                   </button>
                 </td>
               ) : null;
+              const recursoDaLinha = recursos.find((x) => x.id === l.recursoId) || recursos.find((x) => normalizarNome(x.nome) === normalizarNome(l.recurso)) || null;
               const editor =
-                dividindo === i ? (
+                editandoAloc === i ? (
+                  <tr key={`a${i}`}>
+                    <td colSpan={9} className="editor">
+                      <EditorAlocacao
+                        contratoId={contratoId}
+                        recurso={recursoDaLinha}
+                        linha={l}
+                        centros={centros}
+                        equipes={equipes}
+                        mes={mes}
+                        onCancelar={() => setEditandoAloc(null)}
+                        onSalvo={({ partes, desde }) => {
+                          // Se a alocação nova vale para o mês desta medição, refaz a linha.
+                          if (desde <= mes) setEditadas(editadas.map((x, j) => (j === i ? { ...x, partes: dividir(x, partes, centrosPorId, equipesPorId) } : x)));
+                          setEditandoAloc(null);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ) : dividindo === i ? (
                   <tr key={`d${i}`}>
                     <td colSpan={9} className="editor">
                       <EditorDivisao

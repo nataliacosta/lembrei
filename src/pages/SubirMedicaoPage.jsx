@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import CabecalhoContrato from "../components/CabecalhoContrato";
 import { CentroTag, EquipeFrente } from "../components/AbaMedicoes";
-import EditorDivisao, { SeletoresParte } from "../components/EditorDivisao";
+import EditorDivisao, { EditorAlocacao, SeletoresParte } from "../components/EditorDivisao";
 import { IconeDocumento } from "../components/Icones";
 import { watchContrato } from "../lib/contratos";
 import { proximaMedicao } from "../lib/medicao";
@@ -61,6 +61,7 @@ export default function SubirMedicaoPage() {
   const [equipes, setEquipes] = useState([]);
   const [divisoes, setDivisoes] = useState({}); // índice da linha → { partes, salvarAlocacao }
   const [dividindo, setDividindo] = useState(null);
+  const [editandoAloc, setEditandoAloc] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const inputRef = useRef(null);
@@ -304,9 +305,36 @@ export default function SubirMedicaoPage() {
                     onEscolher={(m) => setEscolhas({ ...escolhas, [i]: { ...(escolhas[i] || {}), ...m } })}
                     guardar={guardar[i] !== false}
                     onGuardar={(v) => setGuardar({ ...guardar, [i]: v })}
-                    onDividir={podeEditar && centros.length ? () => setDividindo(dividindo === i ? null : i) : null}
+                    onDividir={podeEditar && centros.length ? () => (setEditandoAloc(null), setDividindo(dividindo === i ? null : i)) : null}
                     dividindo={dividindo === i}
+                    onEditarAlocacao={podeEditar && centros.length ? () => (setDividindo(null), setEditandoAloc(editandoAloc === i ? null : i)) : null}
+                    editandoAlocacao={editandoAloc === i}
                   />,
+                  editandoAloc === i && (
+                    <tr key={`a${i}`}>
+                      <td colSpan={9} className="editor">
+                        <EditorAlocacao
+                          contratoId={contratoId}
+                          recurso={recursos.find((r) => r.id === l.recursoId) || null}
+                          linha={l}
+                          centros={centros}
+                          equipes={equipes}
+                          mes={mes}
+                          onCancelar={() => setEditandoAloc(null)}
+                          onSalvo={() => {
+                            // A linha volta a seguir a alocação (agora atualizada).
+                            const semDivisao = { ...divisoes };
+                            delete semDivisao[i];
+                            const semEscolha = { ...escolhas };
+                            delete semEscolha[i];
+                            setDivisoes(semDivisao);
+                            setEscolhas(semEscolha);
+                            setEditandoAloc(null);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ),
                   dividindo === i && (
                     <tr key={`d${i}`}>
                       <td colSpan={9} className="editor">
@@ -385,14 +413,19 @@ function tipoPagamento(tipo) {
   return tipo === "CC" ? "Centro de Custo" : tipo === "ODI" ? "ODI" : "";
 }
 
-function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guardar, onGuardar, onDividir, dividindo }) {
+function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guardar, onGuardar, onDividir, dividindo, onEditarAlocacao, editandoAlocacao }) {
   const l = linha;
   const primeiro = l.recurso.split(" ")[0];
   const acao = (
     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
       {onDividir && (
-        <button type="button" className="link-botao" style={{ fontSize: 12 }} onClick={onDividir} aria-expanded={dividindo}>
+        <button type="button" className="link-botao" style={{ fontSize: 12, display: "block", marginLeft: "auto" }} onClick={onDividir} aria-expanded={dividindo}>
           {l.partes.length > 1 ? "Editar divisão" : "Dividir"}
+        </button>
+      )}
+      {onEditarAlocacao && (
+        <button type="button" className="link-botao" style={{ fontSize: 12, display: "block", marginLeft: "auto", marginTop: 6 }} onClick={onEditarAlocacao} aria-expanded={editandoAlocacao}>
+          Editar alocação
         </button>
       )}
     </td>
