@@ -26,12 +26,13 @@ function salvarPreferencia(chave, valor) {
 
 export default function Sidebar() {
   const { user } = useAuth();
-  const { frentes, contratos, contagemPorFrente, minhaFila, minhasDemandas, funcionalidades } = useDados();
+  const { frentes, contratos, contagemPorFrente, minhaFila, minhasDemandas, funcionalidades, planejamentos } = useDados();
   const naFila = minhaFila ? minhasDemandas.filter((d) => !d.concluida && (minhaFila.ordem || []).includes(d.id)).length : 0;
   const aguardandoPriorizacao = minhaFila ? minhasDemandas.filter((d) => !d.concluida && !(minhaFila.ordem || []).includes(d.id)).length : 0;
   const [mostrarNovaFrente, setMostrarNovaFrente] = useState(false);
   const [frentesAbertas, setFrentesAbertas] = useState(() => lerPreferencia("lembrei:sidebarFrentes", true));
   const [contratosAbertos, setContratosAbertos] = useState(() => lerPreferencia("lembrei:sidebarContratos", true));
+  const [orcamentosAbertos, setOrcamentosAbertos] = useState(() => lerPreferencia("lembrei:sidebarOrcamentos", true));
 
   function alternarFrentes() {
     setFrentesAbertas((atual) => {
@@ -45,6 +46,14 @@ export default function Sidebar() {
     setContratosAbertos((atual) => {
       const novo = !atual;
       salvarPreferencia("lembrei:sidebarContratos", novo);
+      return novo;
+    });
+  }
+
+  function alternarOrcamentos() {
+    setOrcamentosAbertos((atual) => {
+      const novo = !atual;
+      salvarPreferencia("lembrei:sidebarOrcamentos", novo);
       return novo;
     });
   }
@@ -194,6 +203,35 @@ export default function Sidebar() {
           </>
         )}
       </div>
+      )}
+
+      {funcionalidades.orcamentos && (
+        <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+          <SectionHeader aberto={orcamentosAbertos} onToggle={alternarOrcamentos}>
+            Orçamentos
+          </SectionHeader>
+          {orcamentosAbertos && (
+            <>
+              {planejamentos.map((p) => (
+                <NavLink
+                  key={p.id}
+                  to={`/orcamentos/${p.id}`}
+                  className={classeLink}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13 }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.ano >= new Date().getFullYear() ? "var(--color-accent)" : "#9aa5a4", flex: "0 0 auto" }} />
+                  Orçamento {p.ano}
+                </NavLink>
+              ))}
+              <NavLink to="/orcamentos" end className={classeLink} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13, fontWeight: 600 }}>
+                Ver todos os orçamentos
+              </NavLink>
+              <Link to="/orcamentos/novo" className="sidebar-acao">
+                + Novo orçamento
+              </Link>
+            </>
+          )}
+        </div>
       )}
 
       {mostrarNovaFrente && <NovaFrenteModal onClose={() => setMostrarNovaFrente(false)} />}

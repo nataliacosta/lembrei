@@ -8,6 +8,7 @@ import { watchDemandas, watchFila, watchFilasCompartilhadas } from "../lib/filas
 import { limparNotificacoesAntigas, watchNotificacoes } from "../lib/notificacoes";
 import { itemVisivel, mesclarFuncionalidades, notificacaoVisivel } from "../lib/funcionalidades";
 import { watchFuncionalidades } from "../lib/push";
+import { watchPlanejamentos } from "../lib/orcamentosDb";
 
 // Dados que várias partes da tela usam ao mesmo tempo (painel, menu lateral,
 // busca, barra do celular): carregados uma vez só e mantidos em tempo real.
@@ -26,6 +27,7 @@ export function DadosProvider({ children }) {
   const [minhasDemandas, setMinhasDemandas] = useState([]);
   const [filasCompartilhadas, setFilasCompartilhadas] = useState([]);
   const [notificacoes, setNotificacoes] = useState([]);
+  const [planejamentos, setPlanejamentos] = useState([]);
   // Frentes, Contratos e Demandas podem ser desligados por cada pessoa (Configurações).
   const [funcionalidades, setFuncionalidades] = useState(() => mesclarFuncionalidades(null));
 
@@ -60,6 +62,11 @@ export function DadosProvider({ children }) {
   useEffect(() => {
     if (!user) return;
     return watchFrentes(user.uid, setFrentes);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    return watchPlanejamentos(user.uid, setPlanejamentos);
   }, [user]);
 
   useEffect(() => {
@@ -131,10 +138,11 @@ export function DadosProvider({ children }) {
       minhaFila: f.demandas ? minhaFila : null,
       minhasDemandas: f.demandas ? minhasDemandas : [],
       filasCompartilhadas: f.demandas ? filasCompartilhadas : [],
+      planejamentos: f.orcamentos ? planejamentos : [],
       notificacoes: notificacoesV,
       naoLidas: notificacoesV.filter((n) => !n.lida).length,
     };
-  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas, notificacoes, funcionalidades]);
+  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas, notificacoes, funcionalidades, planejamentos]);
 
   return <DadosContext.Provider value={valor}>{children}</DadosContext.Provider>;
 }
