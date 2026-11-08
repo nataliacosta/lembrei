@@ -11,7 +11,7 @@ import AbaMedicoes from "../components/AbaMedicoes";
 import { AbasContrato } from "../components/CabecalhoContrato";
 import { CONTRATO_STATUS, PAPEIS, TIPO_POR_KEY } from "../lib/constants";
 import { alertaVencimento, descreverVencimento, diasAte, formatarData, formatarDataRelativa, inicioDoDia } from "../lib/datas";
-import { chaveDoMes, nomeDoMes, proximaMedicao } from "../lib/medicao";
+import { chaveDoMes, nomeDaMedicao, proximaMedicao } from "../lib/medicao";
 import { IconeCheck } from "../components/Icones";
 import { watchItensDoContrato } from "../lib/firestore";
 import {
@@ -430,7 +430,7 @@ function CartaoMedicao({ contrato }) {
       </div>
       {proxima && (
         <div className="info-linha">
-          <span style={{ textTransform: "capitalize" }}>{proxima.nomeMes}</span>
+          <span>Medição de {proxima.nomeMes}</span>
           <span className={atrasada ? "texto-alerta" : ""}>
             {atrasada ? "atrasada · " : "até "}
             {formatarDataRelativa(proxima.prazo).toLowerCase()}
@@ -441,7 +441,7 @@ function CartaoMedicao({ contrato }) {
       <div style={{ padding: "6px 16px 14px" }}>
         {feitaEsteMes && (
           <div style={{ fontSize: 13, marginBottom: 8 }}>
-            <IconeCheck size={14} /> Medição de {nomeDoMes(hoje.getMonth())} feita
+            <IconeCheck size={14} /> Medição de {nomeDaMedicao(hoje.getMonth())} feita
           </div>
         )}
         <Link to={`/contratos/${contrato.id}/medicoes`} className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }}>
