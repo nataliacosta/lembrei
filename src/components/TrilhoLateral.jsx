@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useDados } from "../contexts/DadosContext";
-import { IconeDocumento, IconeFila, IconeLista, IconePasta } from "./Icones";
+import { IconeDocumento, IconeFila, IconeGrafico, IconeLista, IconePasta } from "./Icones";
 
 // Menu lateral estreito, só com ícones: aparece no tablet em pé (ver
 // .trilho-lateral no CSS), no lugar do menu lateral completo.
@@ -12,6 +12,7 @@ export default function TrilhoLateral() {
   const itens = [
     { to: "/dashboard", rotulo: "O que fazer", Icone: IconeLista, badge: totalAtrasados },
     funcionalidades.demandas && { to: "/demandas", rotulo: "Demandas", Icone: IconeFila, badge: aguardando },
+    funcionalidades.orcamentos && { to: "/controle-orcamentario", rotulo: "Controle orçamentário", Icone: IconeGrafico },
     funcionalidades.frentes && { to: "/frentes", rotulo: "Frentes", Icone: IconePasta },
     funcionalidades.contratos && { to: "/contratos", rotulo: "Contratos", Icone: IconeDocumento },
   ].filter(Boolean);

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { NavLink, useLocation, useMatch } from "react-router-dom";
-import { IconeDocumento, IconeFila, IconeLista, IconeMais, IconePasta } from "./Icones";
+import { IconeDocumento, IconeFila, IconeGrafico, IconeLista, IconeMais, IconePasta } from "./Icones";
 import { useDados } from "../contexts/DadosContext";
 
 // Telas de formulário ocupam a tela toda no celular, com Cancelar/Salvar no
@@ -31,11 +31,13 @@ export default function TabBar() {
           ? "/novo"
           : null;
   const classe = ({ isActive }) => (isActive ? "ativo" : "");
+  const emOrcamento = /^\/(controle-orcamentario|orcamentos)(\/|$)/.test(pathname);
+  const qtdAbas = 1 + [funcionalidades.demandas, linkNovo, funcionalidades.frentes, funcionalidades.contratos, funcionalidades.orcamentos].filter(Boolean).length;
 
   if (emFormulario) return null;
 
   return (
-    <nav className="tab-bar" aria-label="Navegação principal">
+    <nav className={`tab-bar ${qtdAbas >= 6 ? "seis-abas" : ""}`} aria-label="Navegação principal">
       <NavLink to="/dashboard" className={classe}>
         <IconeLista size={22} />
         Hoje
@@ -61,6 +63,12 @@ export default function TabBar() {
       <NavLink to="/contratos" className={classe}>
         <IconeDocumento size={22} />
         Contratos
+      </NavLink>
+      )}
+      {funcionalidades.orcamentos && (
+      <NavLink to="/controle-orcamentario" className={() => (emOrcamento ? "ativo" : "")}>
+        <IconeGrafico size={22} />
+        Orçamento
       </NavLink>
       )}
     </nav>

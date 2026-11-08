@@ -2647,3 +2647,31 @@ label {
     font-size: 16px;
   }
 }
+
+/* Com 6 abas na barra de baixo (Orçamento ligado), os nomes ficam um pouco menores. */
+@media (max-width: 760px) {
+  .tab-bar.seis-abas a {
+    font-size: 10.5px;
+  }
+}
+/* "Orçamentos ›" no Controle orçamentário: só onde não há o menu lateral completo. */
+.link-orcamentos {
+  display: none;
+}
+@media (max-width: 1099px) {
+  .link-orcamentos {
+    display: inline;
+  }
+}
+@media (min-width: 761px) and (max-width: 1099px) {
+  .tabela-controle .esconde-tablet {
+    display: none;
+  }
+  .controle-numeros {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .controle-numeros b {
+    font-size: 17px;
+  }
+}
