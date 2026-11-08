@@ -4,7 +4,6 @@ import { useAuth } from "../contexts/AuthContext";
 import { formatarNumero, formatarReais, lerNumero } from "../lib/alocacoes";
 import {
   anualDe,
-  camposPendentes,
   chaveGrupo,
   CLASSIFICACOES,
   linhasCondensadas,
@@ -20,7 +19,6 @@ import { atualizarVersao, excluirVersao, salvarConteudo, watchConteudo, watchPla
 import { dataBr, PillSituacao } from "./OrcamentosPage";
 
 const rotulo = { display: "block", fontSize: 11, fontWeight: 700, color: "var(--color-gray)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" };
-const n2 = (v) => (v ? formatarNumero(v) : "—");
 
 export default function OrcamentoPage() {
   const { planejamentoId: pid, versaoId: vid } = useParams();
@@ -50,7 +48,6 @@ export default function OrcamentoPage() {
   const aba = !ehCompleta || params.get("visao") === "condensada" ? "condensada" : "completa";
   const vigente = versaoVigente(versoes);
   const substituida = versao.situacao === "efetivada" && vigente && vigente.id !== versao.id;
-  const pendentes = condensadas.filter((l) => camposPendentes(l).length).length;
 
   async function salvar(novo) {
     setErroSalvar("");
@@ -71,14 +68,11 @@ export default function OrcamentoPage() {
   };
   const excluirLinhaCompleta = (id) => salvar({ completa: (conteudo.completa || []).filter((l) => l.id !== id) });
 
-  // Visão condensada: campos extras (na completa ficam em "extras"; na condensada, na própria linha).
-  const mudarExtra = (linhaCond, campo, valor) => {
-    if (ehCompleta) {
-      const extras = { ...(conteudo.extras || {}) };
-      extras[linhaCond.chave] = { ...(extras[linhaCond.chave] || {}), [campo]: valor };
-      return salvar({ extras });
-    }
-    return salvar({ condensada: (conteudo.condensada || []).map((l) => (l.id === linhaCond.id ? { ...l, [campo]: valor } : l)) });
+  // Visão condensada montada da completa: os campos extras ficam em "extras", pela chave do grupo.
+  const salvarExtras = (linhaCond, valores) => {
+    const extras = { ...(conteudo.extras || {}) };
+    extras[linhaCond.chave] = { ...(extras[linhaCond.chave] || {}), ...valores };
+    return salvar({ extras });
   };
   const salvarLinhaCondensada = (linha) => {
     const lista = conteudo.condensada || [];
@@ -196,10 +190,9 @@ export default function OrcamentoPage() {
       ) : (
         <TabelaCondensada
           linhas={condensadas}
-          pendentes={pendentes}
           daCompleta={ehCompleta}
           podeEditar={podeEditar}
-          onMudarExtra={mudarExtra}
+          onSalvarExtras={salvarExtras}
           onSalvar={salvarLinhaCondensada}
           onExcluir={excluirLinhaCondensada}
         />
@@ -277,14 +270,95 @@ function EditorDados({ versao, onSalvar, onCancelar, onExcluir }) {
   );
 }
 
+// ---------- Pedaços comuns das duas visões ----------
+
+// Barrinhas de jan a dez (só para ver em que meses o valor cai).
+function MiniGrafico({ meses }) {
+  const mx = Math.max(...(meses || []).map((v) => Number(v) || 0), 0) || 1;
+  return (
+    <span className="mini-grafico" aria-hidden="true">
+      {(meses || []).map((v, i) => (
+        <span key={i} style={{ height: Math.max(2, Math.round(((Number(v) || 0) / mx) * 22)), background: v ? "var(--color-brand)" : "var(--color-border)" }} />
+      ))}
+    </span>
+  );
+}
+
+const mil = (v) => (v ? `${formatarNumero(v / 1000, (v / 1000) % 1 ? 2 : 0)}k` : "—");
+
+function SeletorVisualizacao({ modo, onModo }) {
+  return (
+    <>
+      <span style={{ fontSize: 13, color: "var(--color-gray)" }}>Ver:</span>
+      <button type="button" className="chip" aria-pressed={modo === "resumo"} onClick={() => onModo("resumo")}>
+        Resumo
+      </button>
+      <button type="button" className="chip" aria-pressed={modo === "mes"} onClick={() => onModo("mes")}>
+        Por mês
+      </button>
+    </>
+  );
+}
+
+// Lista só com os valores: meses em milhares (para caber) e o anual completo.
+function TabelaPorMes({ linhas, titulo, sub, rotuloPrimeira }) {
+  const tot = totaisPorMes(linhas);
+  return (
+    <div className="lista-card">
+      <table className="tabela-med tabela-orc2">
+        <thead>
+          <tr>
+            <th>{rotuloPrimeira}</th>
+            {MESES.map((m) => (
+              <th key={m} className="num mes">
+                {m}
+              </th>
+            ))}
+            <th className="num">Anual</th>
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map((l, i) => (
+            <tr key={l.id || l.chave || i}>
+              <td>
+                <div style={{ fontWeight: 700 }}>{titulo(l) || "—"}</div>
+                <div className="sub">{sub(l)}</div>
+              </td>
+              {(l.meses || []).map((v, j) => (
+                <td key={j} className="num mes">
+                  {mil(v)}
+                </td>
+              ))}
+              <td className="num">
+                <b>{formatarReais(anualDe(l))}</b>
+              </td>
+            </tr>
+          ))}
+          {linhas.length > 0 && (
+            <tr className="total">
+              <td>Total</td>
+              {tot.meses.map((v, j) => (
+                <td key={j} className="num mes">
+                  {mil(v)}
+                </td>
+              ))}
+              <td className="num">{formatarReais(tot.anual)}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ---------- Visão completa ----------
 
 function TabelaCompleta({ linhas, podeEditar, onSalvar, onExcluir }) {
   const [busca, setBusca] = useState("");
-  const [mostrarMeses, setMostrarMeses] = useState(true);
+  const [modo, setModo] = useState("resumo");
   const [agrupamento, setAgrupamento] = useState("");
   const [tiPaga, setTiPaga] = useState("");
-  const [editando, setEditando] = useState(null);
+  const [aberta, setAberta] = useState(null); // id da linha aberta ou "nova"
   const agrupamentos = [...new Set(linhas.map((l) => l.agrupamento).filter(Boolean))].sort();
   const termo = busca.trim().toLowerCase();
   const visiveis = linhas.filter(
@@ -294,22 +368,20 @@ function TabelaCompleta({ linhas, podeEditar, onSalvar, onExcluir }) {
       (!tiPaga || (tiPaga === "sim" ? l.tiPaga : !l.tiPaga))
   );
   const tot = totaisPorMes(visiveis);
-  const colunas = 11 + (mostrarMeses ? 12 : 0) + (podeEditar ? 1 : 0);
   const sugestoes = {
     projeto: [...new Set(linhas.map((l) => l.projeto).filter(Boolean))],
     fornecedor: [...new Set(linhas.map((l) => l.fornecedor).filter(Boolean))],
     linha: [...new Set(linhas.map((l) => l.linha).filter(Boolean))],
     agrupamento: agrupamentos,
   };
+  const COLS = 8;
 
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", margin: "14px 0 8px", flexWrap: "wrap" }}>
         <div className="chips-row" style={{ alignItems: "center" }}>
-          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar item, pessoa, projeto…" aria-label="Buscar" style={{ width: 240, padding: "7px 12px" }} />
-          <button type="button" className="chip" aria-pressed={mostrarMeses} onClick={() => setMostrarMeses(!mostrarMeses)}>
-            Meses: {mostrarMeses ? "mostrando" : "ocultos"}
-          </button>
+          <SeletorVisualizacao modo={modo} onModo={setModo} />
+          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar item, pessoa, linha…" aria-label="Buscar" style={{ width: 220, padding: "7px 12px" }} />
           <select value={agrupamento} onChange={(e) => setAgrupamento(e.target.value)} aria-label="Filtrar por agrupamento" style={{ width: "auto", borderRadius: 17, padding: "7px 12px", fontSize: 13 }}>
             <option value="">Todos os agrupamentos</option>
             {agrupamentos.map((a) => (
@@ -322,119 +394,138 @@ function TabelaCompleta({ linhas, podeEditar, onSalvar, onExcluir }) {
             <option value="nao">TI paga: não</option>
           </select>
         </div>
-        {podeEditar && (
-          <button type="button" className="link-botao" onClick={() => setEditando("nova")}>
+        {podeEditar && modo === "resumo" && (
+          <button type="button" className="link-botao" onClick={() => setAberta("nova")}>
             + Nova linha
           </button>
         )}
       </div>
-      <div className="lista-card tabela-rolagem">
-        <table className="tabela-med tabela-orc">
-          <thead>
-            <tr>
-              <th className="fixa" />
-              <th className="grupo" colSpan={4}>
-                Dados básicos
-              </th>
-              <th className="grupo" colSpan={3 + (mostrarMeses ? 12 : 0)}>
-                Valores
-              </th>
-              <th className="grupo" colSpan={3}>
-                Planilha governança
-              </th>
-              {podeEditar && <th />}
-            </tr>
-            <tr>
-              <th className="fixa">Item</th>
-              <th>Pessoa</th>
-              <th>TI paga?</th>
-              <th>Quem paga</th>
-              <th>Quem se beneficia</th>
-              <th className="num">Valor unit.</th>
-              <th className="num">Qtd</th>
-              {mostrarMeses && MESES.map((m) => <th key={m} className="num">{m}</th>)}
-              <th className="num">Anual</th>
-              <th>Projeto</th>
-              <th>Fornecedor</th>
-              <th>Linha</th>
-              {podeEditar && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {editando === "nova" && (
+
+      {modo === "mes" ? (
+        <TabelaPorMes linhas={visiveis} rotuloPrimeira="Item · Linha" titulo={(l) => l.item} sub={(l) => [l.linha, l.projeto].filter(Boolean).join(" · ")} />
+      ) : (
+        <div className="lista-card">
+          <table className="tabela-med tabela-orc2">
+            <thead>
               <tr>
-                <td colSpan={colunas} className="editor">
-                  <EditorLinhaCompleta linha={null} sugestoes={sugestoes} onCancelar={() => setEditando(null)} onSalvar={async (l) => (await onSalvar(l), setEditando(null))} />
-                </td>
+                <th>Item · Pessoa</th>
+                <th>Linha · Projeto · Fornecedor</th>
+                <th>TI paga?</th>
+                <th>Quem paga → se beneficia</th>
+                <th className="num">Unitário × qtd</th>
+                <th className="so-largo">Jan → Dez</th>
+                <th className="num">Anual</th>
+                <th />
               </tr>
-            )}
-            {visiveis.length === 0 && editando !== "nova" && (
-              <tr>
-                <td colSpan={colunas} style={{ color: "var(--color-gray)" }}>
-                  {linhas.length ? "Nenhuma linha com esses filtros." : "Nenhuma linha ainda."}
-                </td>
-              </tr>
-            )}
-            {visiveis.map((l) =>
-              editando === l.id ? (
-                <tr key={l.id}>
-                  <td colSpan={colunas} className="editor">
-                    <EditorLinhaCompleta
-                      linha={l}
-                      sugestoes={sugestoes}
-                      onCancelar={() => setEditando(null)}
-                      onSalvar={async (nova) => (await onSalvar(nova), setEditando(null))}
-                      onExcluir={async () => {
-                        if (!window.confirm(`Excluir a linha “${l.item || "sem nome"}”?`)) return;
-                        await onExcluir(l.id);
-                        setEditando(null);
-                      }}
-                    />
+            </thead>
+            <tbody>
+              {aberta === "nova" && (
+                <tr>
+                  <td colSpan={COLS} className="editor">
+                    <EditorLinhaCompleta linha={null} sugestoes={sugestoes} onCancelar={() => setAberta(null)} onSalvar={async (l) => (await onSalvar(l), setAberta(null))} />
                   </td>
                 </tr>
-              ) : (
-                <tr key={l.id}>
-                  <td className="fixa">
-                    <b>{l.item || "—"}</b>
-                    <div style={{ fontSize: 12, color: "var(--color-gray)" }}>{[l.agrupamento, l.tipo].filter(Boolean).join(" · ")}</div>
+              )}
+              {visiveis.length === 0 && aberta !== "nova" && (
+                <tr>
+                  <td colSpan={COLS} style={{ color: "var(--color-gray)" }}>
+                    {linhas.length ? "Nenhuma linha com esses filtros." : "Nenhuma linha ainda."}
                   </td>
-                  <td>{l.pessoa || "—"}</td>
-                  <td>{l.tiPaga ? "Sim" : "Não"}</td>
-                  <td>{l.quemPaga || "—"}</td>
-                  <td>{l.quemSeBeneficia || "—"}</td>
-                  <td className="num">{l.valorUnitario != null ? formatarNumero(l.valorUnitario) : "—"}</td>
-                  <td className="num">{l.quantidade != null ? formatarNumero(l.quantidade, l.quantidade % 1 ? 2 : 0) : "—"}</td>
-                  {mostrarMeses && l.meses?.map((v, i) => <td key={i} className="num">{n2(v)}</td>)}
-                  <td className="num">
-                    <b>{formatarNumero(anualDe(l))}</b>
-                  </td>
-                  <td>{l.projeto || "—"}</td>
-                  <td>{l.fornecedor || "—"}</td>
-                  <td>{l.linha || "—"}</td>
-                  {podeEditar && (
+                </tr>
+              )}
+              {visiveis.map((l) => {
+                const estaAberta = aberta === l.id;
+                return [
+                  <tr key={l.id} className={estaAberta ? "aberta" : ""}>
                     <td>
-                      <button type="button" className="link-botao" style={{ fontSize: 12 }} onClick={() => setEditando(l.id)}>
-                        Editar
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{l.item || "—"}</div>
+                      <div className="sub">{[l.pessoa, l.agrupamento, l.tipo].filter(Boolean).join(" · ")}</div>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{l.linha || "—"}</div>
+                      <div className="sub">{[l.projeto, l.fornecedor].filter(Boolean).join(" · ")}</div>
+                    </td>
+                    <td>
+                      {l.tiPaga ? (
+                        <span className="pill" style={{ background: "#e0f5ef", color: "var(--color-primary-dark)" }}>
+                          TI paga
+                        </span>
+                      ) : (
+                        <span className="pill" style={{ background: "#eceeee", color: "var(--color-gray)" }}>
+                          Não
+                        </span>
+                      )}
+                    </td>
+                    <td>{[l.quemPaga, l.quemSeBeneficia].some(Boolean) ? `${l.quemPaga || "—"} → ${l.quemSeBeneficia || "—"}` : "—"}</td>
+                    <td className="num">
+                      <div>{l.valorUnitario != null ? formatarNumero(l.valorUnitario) : "—"}</div>
+                      {l.quantidade != null && <div className="sub">× {formatarNumero(l.quantidade, l.quantidade % 1 ? 2 : 0)}</div>}
+                    </td>
+                    <td className="so-largo">
+                      <MiniGrafico meses={l.meses} />
+                    </td>
+                    <td className="num">
+                      <b style={{ fontSize: 14 }}>{formatarReais(anualDe(l))}</b>
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <button type="button" className="link-botao" onClick={() => setAberta(estaAberta ? null : l.id)} aria-expanded={estaAberta}>
+                        {estaAberta ? "Fechar ▴" : "Abrir ▾"}
                       </button>
                     </td>
-                  )}
+                  </tr>,
+                  estaAberta && (
+                    <tr key={`${l.id}-aberta`}>
+                      <td colSpan={COLS} className="editor">
+                        {podeEditar ? (
+                          <EditorLinhaCompleta
+                            linha={l}
+                            sugestoes={sugestoes}
+                            onCancelar={() => setAberta(null)}
+                            onSalvar={async (nova) => (await onSalvar(nova), setAberta(null))}
+                            onExcluir={async () => {
+                              if (!window.confirm(`Excluir a linha “${l.item || "sem nome"}”?`)) return;
+                              await onExcluir(l.id);
+                              setAberta(null);
+                            }}
+                          />
+                        ) : (
+                          <MesesSoLeitura meses={l.meses} />
+                        )}
+                      </td>
+                    </tr>
+                  ),
+                ];
+              })}
+              {visiveis.length > 0 && (
+                <tr className="total">
+                  <td colSpan={6}>Total{visiveis.length !== linhas.length ? " (filtrado)" : ""}</td>
+                  <td className="num">
+                    <b style={{ fontSize: 14 }}>{formatarReais(tot.anual)}</b>
+                  </td>
+                  <td />
                 </tr>
-              )
-            )}
-            {visiveis.length > 0 && (
-              <tr className="total">
-                <td className="fixa">Total{visiveis.length !== linhas.length ? " (filtrado)" : ""}</td>
-                <td colSpan={6} />
-                {mostrarMeses && tot.meses.map((v, i) => <td key={i} className="num">{formatarNumero(v)}</td>)}
-                <td className="num">{formatarNumero(tot.anual)}</td>
-                <td colSpan={3 + (podeEditar ? 1 : 0)} />
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="texto-ajuda">
+        {modo === "mes" ? "Os meses estão em milhares (k) para caber; o anual vem completo." : "“Abrir” mostra e edita todos os campos, inclusive os 12 meses. Mudar uma linha aqui atualiza a visão condensada."}
       </div>
-      <div className="texto-ajuda">A tabela rola para o lado; o item fica fixo à esquerda. Mudar uma linha aqui atualiza a visão condensada na hora.</div>
     </>
+  );
+}
+
+function MesesSoLeitura({ meses }) {
+  return (
+    <div className="grade-meses">
+      {MESES.map((m, i) => (
+        <div key={m} className="mes-cartao">
+          <span>{m}</span>
+          <b>{meses?.[i] ? formatarNumero(meses[i]) : "—"}</b>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -606,237 +697,282 @@ function EditorLinhaCompleta({ linha, sugestoes, onSalvar, onCancelar, onExcluir
 
 // ---------- Visão condensada ----------
 
-// Campo que salva ao sair (texto) ou ao escolher (lista).
-function CampoInline({ valor, opcoes, numero, onSalvar, desabilitado, rotuloAcessivel }) {
-  const inicial = numero ? (valor == null || valor === "" ? "" : formatarNumero(valor)) : valor || "";
-  const [v, setV] = useState(inicial);
-  useEffect(() => setV(inicial), [inicial]);
-  const vazio = !String(v).trim();
-  if (opcoes) {
-    return (
-      <select className={`campo ${vazio ? "vazio" : ""}`} value={v} disabled={desabilitado} aria-label={rotuloAcessivel} onChange={(e) => (setV(e.target.value), onSalvar(e.target.value))}>
-        <option value="">Escolher…</option>
-        {opcoes.map((o) => (
-          <option key={o}>{o}</option>
-        ))}
-        {v && !opcoes.includes(v) && <option>{v}</option>}
-      </select>
-    );
-  }
+const CORES_TIPO = { Projeto: "#e3eefc", Licenciamento: "#f1e8fb", "Serviço/sustentação": "#e0f5ef", MOP: "#fdf1d8" };
+
+function Etiqueta({ texto, cor }) {
+  if (!texto) return <span style={{ color: "var(--color-gray)" }}>—</span>;
   return (
-    <input
-      className={`campo ${vazio && !numero ? "vazio" : ""}`}
-      value={v}
-      disabled={desabilitado}
-      aria-label={rotuloAcessivel}
-      inputMode={numero ? "decimal" : undefined}
-      onChange={(e) => setV(e.target.value)}
-      onBlur={() => {
-        if (v === inicial) return;
-        onSalvar(numero ? lerNumero(v) : v.trim());
-      }}
-      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-    />
+    <span className="pill" style={{ background: cor || "#eceeee", color: "var(--color-dark)" }}>
+      {texto}
+    </span>
   );
 }
 
-function TabelaCondensada({ linhas, pendentes, daCompleta, podeEditar, onMudarExtra, onSalvar, onExcluir }) {
-  const [editando, setEditando] = useState(null);
-  const tot = totaisPorMes(linhas);
-  const colunas = 9 + 12 + (!daCompleta && podeEditar ? 1 : 0);
-  const extra = (l, campo, props = {}) => (
-    <CampoInline valor={l[campo]} desabilitado={!podeEditar} onSalvar={(v) => onMudarExtra(l, campo, v).catch(() => {})} rotuloAcessivel={`${campo} de ${l.projeto}`} {...props} />
-  );
+function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSalvar, onExcluir }) {
+  const [busca, setBusca] = useState("");
+  const [modo, setModo] = useState("resumo");
+  const [aberta, setAberta] = useState(null); // chave/id da linha aberta ou "nova"
+  const termo = busca.trim().toLowerCase();
+  const visiveis = linhas.filter((l) => !termo || [l.linha, l.projeto, l.fornecedor, l.odi, l.diretoria, l.area].some((x) => String(x || "").toLowerCase().includes(termo)));
+  const tot = totaisPorMes(visiveis);
+  const idDe = (l) => l.id || l.chave;
+  const COLS = 8;
+
   return (
     <>
-      {pendentes > 0 && (
-        <div style={{ margin: "14px 0 8px", padding: "10px 14px", borderRadius: 10, background: "var(--color-orange-soft)", border: "1px solid var(--color-orange-border)", fontSize: 13 }}>
-          <b>
-            {pendentes} {pendentes === 1 ? "linha com campos" : "linhas com campos"} a preencher
-          </b>{" "}
-          (em laranja).{daCompleta ? " Os valores mensais vêm da visão completa, somando por Projeto + Fornecedor + Linha." : ""}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", margin: "14px 0 8px", flexWrap: "wrap" }}>
+        <div className="chips-row" style={{ alignItems: "center" }}>
+          <SeletorVisualizacao modo={modo} onModo={setModo} />
+          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar linha, projeto, ODI…" aria-label="Buscar" style={{ width: 240, padding: "7px 12px" }} />
         </div>
-      )}
-      {!daCompleta && podeEditar && (
-        <div style={{ display: "flex", justifyContent: "flex-end", margin: "12px 0 6px" }}>
-          <button type="button" className="link-botao" onClick={() => setEditando("nova")}>
+        {!daCompleta && podeEditar && modo === "resumo" && (
+          <button type="button" className="link-botao" onClick={() => setAberta("nova")}>
             + Nova linha
           </button>
-        </div>
-      )}
-      <div className="lista-card tabela-rolagem" style={{ marginTop: pendentes > 0 || (!daCompleta && podeEditar) ? 0 : 14 }}>
-        <table className="tabela-med tabela-orc">
-          <thead>
-            <tr>
-              <th className="fixa">Projeto · Fornecedor · Linha</th>
-              <th>ODI</th>
-              <th>Capex ano anterior</th>
-              <th>Tipo</th>
-              <th>Classificação</th>
-              <th>Diretoria</th>
-              <th>Área atendida</th>
-              <th>Resp. orçamento</th>
-              {MESES.map((m) => (
-                <th key={m} className="num">
-                  {m}
-                </th>
-              ))}
-              <th className="num">Anual</th>
-              {!daCompleta && podeEditar && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {editando === "nova" && (
+        )}
+      </div>
+
+      {modo === "mes" ? (
+        <TabelaPorMes linhas={visiveis} rotuloPrimeira="Linha · Projeto · Fornecedor" titulo={(l) => l.linha} sub={(l) => [l.projeto, l.fornecedor].filter(Boolean).join(" · ")} />
+      ) : (
+        <div className="lista-card">
+          <table className="tabela-med tabela-orc2">
+            <thead>
               <tr>
-                <td colSpan={colunas} className="editor">
-                  <EditorLinhaCondensada linha={null} onCancelar={() => setEditando(null)} onSalvar={async (l) => (await onSalvar(l), setEditando(null))} />
-                </td>
+                <th>Linha · Projeto · Fornecedor</th>
+                <th>ODI</th>
+                <th>Tipo</th>
+                <th>Classificação</th>
+                <th>Resp.</th>
+                <th className="so-largo">Jan → Dez</th>
+                <th className="num">Anual</th>
+                <th />
               </tr>
-            )}
-            {linhas.length === 0 && editando !== "nova" && (
-              <tr>
-                <td colSpan={colunas} style={{ color: "var(--color-gray)" }}>
-                  Nenhuma linha ainda.
-                </td>
-              </tr>
-            )}
-            {linhas.map((l) =>
-              editando === l.id ? (
-                <tr key={l.id}>
-                  <td colSpan={colunas} className="editor">
-                    <EditorLinhaCondensada
-                      linha={l}
-                      onCancelar={() => setEditando(null)}
-                      onSalvar={async (nova) => (await onSalvar(nova), setEditando(null))}
-                      onExcluir={async () => {
-                        if (!window.confirm(`Excluir a linha ${l.projeto} · ${l.fornecedor} · ${l.linha}?`)) return;
-                        await onExcluir(l.id);
-                        setEditando(null);
-                      }}
-                    />
+            </thead>
+            <tbody>
+              {aberta === "nova" && (
+                <tr>
+                  <td colSpan={COLS} className="editor">
+                    <EditorCondensada linha={null} daCompleta={false} onCancelar={() => setAberta(null)} onSalvar={async (l) => (await onSalvar(l), setAberta(null))} />
                   </td>
                 </tr>
-              ) : (
-                <tr key={l.id || l.chave} className={camposPendentes(l).length ? "pendente" : ""}>
-                  <td className="fixa">
-                    <b>{l.projeto || "—"}</b>
-                    <div style={{ fontSize: 12, color: "var(--color-gray)" }}>
-                      {[l.fornecedor, l.linha].filter(Boolean).join(" · ") || "—"}
-                      {daCompleta && l.qtdRecursos ? ` · ${l.qtdRecursos} ${l.qtdRecursos === 1 ? "recurso" : "recursos"}` : ""}
-                    </div>
+              )}
+              {visiveis.length === 0 && aberta !== "nova" && (
+                <tr>
+                  <td colSpan={COLS} style={{ color: "var(--color-gray)" }}>
+                    {linhas.length ? "Nenhuma linha com essa busca." : "Nenhuma linha ainda."}
                   </td>
-                  <td>{extra(l, "odi")}</td>
-                  <td>{extra(l, "capexAnoAnterior", { numero: true })}</td>
-                  <td>{extra(l, "tipo", { opcoes: TIPOS })}</td>
-                  <td>{extra(l, "classificacao", { opcoes: CLASSIFICACOES })}</td>
-                  <td>{extra(l, "diretoria")}</td>
-                  <td>{extra(l, "area")}</td>
-                  <td>{extra(l, "responsavel", { opcoes: RESPONSAVEIS })}</td>
-                  {(l.meses || []).map((v, i) => (
-                    <td key={i} className="num">
-                      {n2(v)}
-                    </td>
-                  ))}
-                  <td className="num">
-                    <b>{formatarNumero(l.anual ?? anualDe(l))}</b>
-                  </td>
-                  {!daCompleta && podeEditar && (
+                </tr>
+              )}
+              {visiveis.map((l) => {
+                const estaAberta = aberta === idDe(l);
+                return [
+                  <tr key={idDe(l)} className={estaAberta ? "aberta" : ""}>
                     <td>
-                      <button type="button" className="link-botao" style={{ fontSize: 12 }} onClick={() => setEditando(l.id)}>
-                        Editar
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{l.linha || "—"}</div>
+                      <div className="sub">
+                        {[l.projeto, l.fornecedor].filter(Boolean).join(" · ")}
+                        {daCompleta && l.qtdRecursos ? ` · ${l.qtdRecursos} ${l.qtdRecursos === 1 ? "recurso" : "recursos"}` : ""}
+                      </div>
+                    </td>
+                    <td>{l.odi || <span style={{ color: "var(--color-gray)" }}>—</span>}</td>
+                    <td>
+                      <Etiqueta texto={l.tipo} cor={CORES_TIPO[l.tipo]} />
+                    </td>
+                    <td>
+                      <Etiqueta texto={l.classificacao} />
+                    </td>
+                    <td>{l.responsavel || "—"}</td>
+                    <td className="so-largo">
+                      <MiniGrafico meses={l.meses} />
+                    </td>
+                    <td className="num">
+                      <b style={{ fontSize: 14 }}>{formatarReais(l.anual ?? anualDe(l))}</b>
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <button type="button" className="link-botao" onClick={() => setAberta(estaAberta ? null : idDe(l))} aria-expanded={estaAberta}>
+                        {estaAberta ? "Fechar ▴" : "Abrir ▾"}
                       </button>
                     </td>
-                  )}
-                </tr>
-              )
-            )}
-            {linhas.length > 0 && (
-              <tr className="total">
-                <td className="fixa">Total</td>
-                <td colSpan={7} />
-                {tot.meses.map((v, i) => (
-                  <td key={i} className="num">
-                    {formatarNumero(v)}
+                  </tr>,
+                  estaAberta && (
+                    <tr key={`${idDe(l)}-aberta`}>
+                      <td colSpan={COLS} className="editor">
+                        <EditorCondensada
+                          linha={l}
+                          daCompleta={daCompleta}
+                          somenteLeitura={!podeEditar}
+                          onCancelar={() => setAberta(null)}
+                          onSalvar={async (nova) => {
+                            if (daCompleta) await onSalvarExtras(l, nova);
+                            else await onSalvar(nova);
+                            setAberta(null);
+                          }}
+                          onExcluir={
+                            daCompleta
+                              ? null
+                              : async () => {
+                                  if (!window.confirm(`Excluir a linha ${l.linha || l.projeto}?`)) return;
+                                  await onExcluir(l.id);
+                                  setAberta(null);
+                                }
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ),
+                ];
+              })}
+              {visiveis.length > 0 && (
+                <tr className="total">
+                  <td colSpan={6}>Total{visiveis.length !== linhas.length ? " (filtrado)" : ""}</td>
+                  <td className="num">
+                    <b style={{ fontSize: 14 }}>{formatarReais(tot.anual)}</b>
                   </td>
-                ))}
-                <td className="num">{formatarNumero(tot.anual)}</td>
-                {!daCompleta && podeEditar && <td />}
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  <td />
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
       <div className="texto-ajuda">
-        Tipo: Projeto, Licenciamento, MOP, Serviço/sustentação ou N/A. Classificação: Obrigatório, Mandatório, Desejável ou N/A. Responsável: TI ou Cliente. Os campos salvam ao sair de cada um.
+        {modo === "mes"
+          ? "Os meses estão em milhares (k) para caber; o anual vem completo."
+          : `“Abrir” mostra os 12 meses e os outros campos (capex, diretoria, área) para editar. Nenhum campo é obrigatório.${daCompleta ? " Os valores vêm da visão completa, somando por Projeto + Fornecedor + Linha." : ""}`}
       </div>
     </>
   );
 }
 
-function EditorLinhaCondensada({ linha, onSalvar, onCancelar, onExcluir }) {
-  const [l, setL] = useState(() => ({ projeto: "", fornecedor: "", linha: "", ...(linha || {}), meses: (linha?.meses || Array(12).fill(0)).map(textoMes) }));
+// Meses (editáveis só na versão cadastrada direto na condensada) e campos da condensada.
+function EditorCondensada({ linha, daCompleta, somenteLeitura, onSalvar, onCancelar, onExcluir }) {
+  const [l, setL] = useState(() => ({
+    projeto: "",
+    fornecedor: "",
+    linha: "",
+    odi: "",
+    tipo: "",
+    classificacao: "",
+    diretoria: "",
+    area: "",
+    responsavel: "",
+    ...(linha || {}),
+    capexAnoAnterior: linha?.capexAnoAnterior != null && linha.capexAnoAnterior !== "" ? formatarNumero(linha.capexAnoAnterior) : "",
+    meses: (linha?.meses || Array(12).fill(0)).map(textoMes),
+  }));
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const mudar = (m) => setL({ ...l, ...m });
   const meses = l.meses.map((v) => lerNumero(v) || 0);
   const anual = meses.reduce((s, v) => s + Math.round(v * 100), 0) / 100;
+
   async function salvar() {
-    if (!String(l.projeto).trim()) return setErro("Escreva o projeto.");
+    setErro("");
+    if (!daCompleta && !String(l.linha).trim() && !String(l.projeto).trim()) return setErro("Escreva ao menos a linha ou o projeto.");
     setSalvando(true);
-    const { chave, anual: _a, qtdRecursos, ...resto } = l;
-    void chave;
-    void _a;
-    void qtdRecursos;
-    const nova = { ...resto, id: linha?.id || novoIdLinha(), projeto: l.projeto.trim(), fornecedor: l.fornecedor.trim(), linha: l.linha.trim(), meses };
+    const extras = {
+      odi: String(l.odi || "").trim(),
+      capexAnoAnterior: lerNumero(l.capexAnoAnterior),
+      tipo: l.tipo,
+      classificacao: l.classificacao,
+      diretoria: String(l.diretoria || "").trim(),
+      area: String(l.area || "").trim(),
+      responsavel: l.responsavel,
+    };
     try {
-      await onSalvar({ ...nova, chave: chaveGrupo(nova) });
+      if (daCompleta) await onSalvar(extras);
+      else {
+        const nova = { id: linha?.id || novoIdLinha(), projeto: String(l.projeto).trim(), fornecedor: String(l.fornecedor).trim(), linha: String(l.linha).trim(), meses, ...extras };
+        await onSalvar({ ...nova, chave: chaveGrupo(nova) });
+      }
     } catch {
       setSalvando(false);
     }
   }
+
+  const texto = (chave, titulo) => (
+    <label>
+      <span style={rotulo}>{titulo}</span>
+      <input value={l[chave] ?? ""} onChange={(e) => mudar({ [chave]: e.target.value })} disabled={somenteLeitura} />
+    </label>
+  );
+  const lista = (chave, titulo, opcoes) => (
+    <label>
+      <span style={rotulo}>{titulo}</span>
+      <select value={l[chave] || ""} onChange={(e) => mudar({ [chave]: e.target.value })} disabled={somenteLeitura}>
+        <option value="">—</option>
+        {opcoes.map((o) => (
+          <option key={o}>{o}</option>
+        ))}
+        {l[chave] && !opcoes.includes(l[chave]) && <option>{l[chave]}</option>}
+      </select>
+    </label>
+  );
+
   return (
-    <div role="group" aria-label={linha ? `Editar linha ${linha.projeto}` : "Nova linha condensada"}>
-      <div style={{ fontWeight: 700, marginBottom: 10 }}>{linha ? `Editar linha · ${linha.projeto}` : "Nova linha"}</div>
-      <div className="grade-campos">
-        {["projeto", "fornecedor", "linha"].map((c) => (
-          <label key={c}>
-            <span style={rotulo}>{c === "projeto" ? "Projeto" : c === "fornecedor" ? "Fornecedor" : "Linha"}</span>
-            <input value={l[c]} onChange={(e) => setL({ ...l, [c]: e.target.value })} />
-          </label>
-        ))}
+    <div role="group" aria-label={linha ? `Linha ${linha.linha || linha.projeto}` : "Nova linha condensada"}>
+      {!daCompleta && (
+        <div className="grade-campos" style={{ marginBottom: 10 }}>
+          {texto("linha", "Linha")}
+          {texto("projeto", "Projeto")}
+          {texto("fornecedor", "Fornecedor")}
+        </div>
+      )}
+      {daCompleta || somenteLeitura ? (
+        <MesesSoLeitura meses={linha?.meses} />
+      ) : (
+        <>
+          <div className="grade-meses">
+            {MESES.map((m, i) => (
+              <label key={m}>
+                <span style={{ ...rotulo, fontSize: 10 }}>{m}</span>
+                <input value={l.meses[i]} onChange={(e) => mudar({ meses: l.meses.map((x, j) => (j === i ? e.target.value : x)) })} inputMode="decimal" aria-label={`Valor de ${m}`} />
+              </label>
+            ))}
+          </div>
+          <div className="texto-ajuda">
+            Valor anual: <b>{formatarReais(anual)}</b>.
+          </div>
+        </>
+      )}
+      <div className="grade-campos" style={{ marginTop: 12 }}>
+        {texto("odi", "ODI")}
+        <label>
+          <span style={rotulo}>Capex ano anterior</span>
+          <input value={l.capexAnoAnterior} onChange={(e) => mudar({ capexAnoAnterior: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" disabled={somenteLeitura} />
+        </label>
+        {lista("tipo", "Tipo", TIPOS)}
+        {lista("classificacao", "Classificação", CLASSIFICACOES)}
+        {texto("diretoria", "Diretoria")}
+        {texto("area", "Área atendida")}
+        {lista("responsavel", "Responsável orçamento", RESPONSAVEIS)}
       </div>
-      <div className="grade-meses" style={{ marginTop: 10 }}>
-        {MESES.map((m, i) => (
-          <label key={m}>
-            <span style={{ ...rotulo, fontSize: 10 }}>{m}</span>
-            <input value={l.meses[i]} onChange={(e) => setL({ ...l, meses: l.meses.map((x, j) => (j === i ? e.target.value : x)) })} inputMode="decimal" aria-label={`Valor de ${m}`} />
-          </label>
-        ))}
-      </div>
-      <div className="texto-ajuda">
-        Valor anual: <b>{formatarReais(anual)}</b>. ODI, tipo, classificação e os outros campos você preenche direto na tabela.
-      </div>
+      {daCompleta && <div className="texto-ajuda">Todos os campos são opcionais. Os valores por mês vêm da visão completa{linha?.qtdRecursos ? ` (${linha.qtdRecursos} ${linha.qtdRecursos === 1 ? "recurso" : "recursos"})` : ""}.</div>}
       {erro && (
         <div className="texto-alerta" role="alert" style={{ fontSize: 13, marginTop: 8 }}>
           {erro}
         </div>
       )}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 12, maxWidth: 1000 }}>
-        <span>
-          {onExcluir && (
-            <button type="button" className="btn btn-ghost btn-sm" style={{ color: "var(--color-orange)", borderColor: "var(--color-orange-border)" }} onClick={onExcluir}>
-              Excluir linha
+      {!somenteLeitura && (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 12, maxWidth: 1000 }}>
+          <span>
+            {onExcluir && (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ color: "var(--color-orange)", borderColor: "var(--color-orange-border)" }} onClick={onExcluir}>
+                Excluir linha
+              </button>
+            )}
+          </span>
+          <span style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onCancelar}>
+              Cancelar
             </button>
-          )}
-        </span>
-        <span style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onCancelar}>
-            Cancelar
-          </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={salvar} disabled={salvando}>
-            Salvar linha
-          </button>
-        </span>
-      </div>
+            <button type="button" className="btn btn-primary btn-sm" onClick={salvar} disabled={salvando}>
+              {salvando ? "Salvando..." : "Salvar"}
+            </button>
+          </span>
+        </div>
+      )}
     </div>
   );
 }

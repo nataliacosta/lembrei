@@ -127,7 +127,6 @@ function GrupoAno({ planejamento }) {
                   {v.visao === "completa"
                     ? `Completa · ${plural(v.qtdCompleta || 0, "recurso", "recursos")} → ${plural(v.qtdCondensada || 0, "linha condensada", "linhas condensadas")}`
                     : `Condensada · ${plural(v.qtdCondensada || 0, "linha", "linhas")}`}
-                  {v.pendentes > 0 && <span className="texto-alerta"> · {v.pendentes} com campos a preencher</span>}
                   {v.observacao && ` · ${v.observacao}`}
                 </div>
               </div>

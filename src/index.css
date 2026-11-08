@@ -2485,3 +2485,63 @@ label {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* Visões do orçamento sem rolagem para o lado */
+.tabela-orc2 td {
+  vertical-align: middle;
+}
+.tabela-orc2 .sub {
+  font-size: 12px;
+  color: var(--color-gray);
+  margin-top: 2px;
+}
+.tabela-orc2 tr.aberta td {
+  background: #f7fbfa;
+}
+.tabela-orc2 tr.total td {
+  background: #f5f6f6;
+  font-weight: 700;
+  border-top: 2px solid var(--color-border);
+}
+.tabela-orc2 .mes {
+  font-size: 12px;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+.mini-grafico {
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 22px;
+}
+.mini-grafico > span {
+  width: 5px;
+  border-radius: 1px;
+}
+.mes-cartao {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+}
+.mes-cartao span {
+  font-size: 11px;
+  color: var(--color-gray);
+  text-transform: uppercase;
+}
+.mes-cartao b {
+  font-size: 13px;
+}
+@media (max-width: 1100px) {
+  .tabela-orc2 .so-largo {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .tabela-orc2 {
+    display: block;
+    overflow-x: auto;
+  }
+}
