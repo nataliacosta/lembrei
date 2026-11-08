@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { IconeCheck } from "./Icones";
 import { marcarMedicaoFeita } from "../lib/contratos";
-import { chaveDoMes, nomeDoMes, proximaMedicao } from "../lib/medicao";
+import { chaveDoMes, nomeDaMedicao, proximaMedicao } from "../lib/medicao";
 import { formatarDataRelativa, inicioDoDia } from "../lib/datas";
 import {
   alocacaoNoMes,
@@ -415,7 +415,7 @@ function CartaoDoMes({ contrato, podeEditar }) {
     <div className="lista-card" style={{ marginTop: 16, padding: "14px 18px", display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", borderColor: atrasada ? "var(--color-orange-border)" : "#00d4c0" }}>
       <div style={{ flex: "1 1 300px" }}>
         <div className={atrasada ? "texto-alerta" : ""} style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: atrasada ? undefined : "var(--color-primary-dark)" }}>
-          Medição de {feitaEsteMes ? nomeDoMes(hoje.getMonth()) : proxima?.nomeMes}
+          Medição de {feitaEsteMes ? nomeDaMedicao(hoje.getMonth()) : proxima?.nomeMes}
         </div>
         {feitaEsteMes ? (
           <div style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}>
