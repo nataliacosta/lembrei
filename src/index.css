@@ -2330,3 +2330,19 @@ label {
     display: none;
   }
 }
+
+/* Linha sem alocação na tela de subir medição: CC/ODI em cima, equipe e frente lado a lado. */
+.escolha-rapida {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.escolha-rapida > select {
+  padding: 6px 8px;
+}
+.escolha-rapida > select:first-child {
+  grid-column: 1 / -1;
+}
+.escolha-rapida.pendente > select:first-child {
+  border-color: var(--color-orange-border);
+}
