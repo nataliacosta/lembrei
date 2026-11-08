@@ -29,14 +29,14 @@ function tipoPagamento(tipo) {
   return tipo === "CC" ? "Centro de Custo" : tipo === "ODI" ? "ODI" : "";
 }
 
-async function baixarPlanilha(medicao, contrato) {
+async function baixarPlanilha(medicao, contrato, { chaves = null, codigos = [] } = {}) {
   const { default: writeXlsxFile } = await import("write-excel-file/browser");
   const titulo = (t) => ({ value: t, fontWeight: "bold" });
   const data = (iso) => (iso ? { value: new Date(`${iso}T12:00:00`), type: Date, format: "dd/mm/yyyy" } : null);
   const numero = (v, format = "#,##0.00") => (v == null ? null : { value: Number(v), type: Number, format });
   const linhas = [
     ["Data início", "Data fim", "Nome do Recurso", "Perfil do Recurso", "Valor HH (Perfil)", "Quantidade de Horas", "Valor Total", "Justificativa", "Tipo pagamento", "Centro de Custos / ODI", "Equipe", "Frente"].map(titulo),
-    ...linhasParaExportar(medicao.linhas || []).map((l) => [
+    ...linhasParaExportar(medicao.linhas || [], chaves).map((l) => [
       data(l.inicio),
       data(l.fim),
       { value: l.recurso },
@@ -51,7 +51,9 @@ async function baixarPlanilha(medicao, contrato) {
       { value: l.frente },
     ]),
   ];
-  const nome = `medicao_${(contrato.titulo || "contrato").replace(/[^\p{L}\p{N}]+/gu, "_").slice(0, 40)}_${medicao.mes}.xlsx`;
+  const limpar = (t) => String(t).replace(/[^\p{L}\p{N}-]+/gu, "_");
+  const sufixo = codigos.length ? `_${codigos.map(limpar).join("_")}`.slice(0, 80) : "";
+  const nome = `medicao_${limpar(contrato.titulo || "contrato").slice(0, 40)}_${medicao.mes}${sufixo}.xlsx`;
   const blob = await writeXlsxFile(linhas, { columns: [12, 12, 28, 30, 14, 12, 14, 28, 16, 20, 16, 22].map((width) => ({ width })) }).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -75,6 +77,7 @@ export default function MedicaoPage() {
   const [paraAlocar, setParaAlocar] = useState({}); // índice → salvar a divisão como alocação
   const [dividindo, setDividindo] = useState(null);
   const [editandoAloc, setEditandoAloc] = useState(null);
+  const [exportando, setExportando] = useState(false);
   const [equipes, setEquipes] = useState([]);
   const [recursos, setRecursos] = useState([]);
   const [copiado, setCopiado] = useState("");
@@ -185,8 +188,8 @@ export default function MedicaoPage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" className="btn btn-ghost" onClick={() => baixarPlanilha(medicao, contrato).catch((e) => (console.error(e), window.alert("Não deu pra gerar a planilha.")))}>
-            Baixar planilha preenchida
+          <button type="button" className="btn btn-ghost" onClick={() => setExportando(!exportando)} aria-expanded={exportando}>
+            Baixar planilha ▾
           </button>
           {podeEditar && (
             <button type="button" className={medicao.status === "lancada" ? "btn btn-ghost" : "btn btn-primary"} onClick={alternarLancada} disabled={ocupado}>
@@ -195,6 +198,34 @@ export default function MedicaoPage() {
           )}
         </div>
       </div>
+
+      {exportando && (
+        <PainelExport
+          porCentro={totaisPorCentro(medicao.linhas || [])}
+          linhas={medicao.linhas || []}
+          centrosPorId={centrosPorId}
+          onCancelar={() => setExportando(false)}
+          onBaixar={async ({ chaves, separar }) => {
+            const porChave = Object.fromEntries(totaisPorCentro(medicao.linhas || []).map((t) => [t.centroId || "sem", t]));
+            const codigoDe = (k) => (k === "sem" ? "sem_CC" : porChave[k]?.codigo || k);
+            const todos = chaves.length === Object.keys(porChave).length;
+            try {
+              if (separar) {
+                for (const k of chaves) {
+                  await baixarPlanilha(medicao, contrato, { chaves: [k], codigos: [codigoDe(k)] });
+                  await new Promise((r) => setTimeout(r, 400));
+                }
+              } else {
+                await baixarPlanilha(medicao, contrato, todos ? {} : { chaves, codigos: chaves.map(codigoDe) });
+              }
+              setExportando(false);
+            } catch (e) {
+              console.error(e);
+              window.alert("Não deu pra gerar a planilha.");
+            }
+          }}
+        />
+      )}
 
       <div className="medicao-numeros">
         <div className="lista-card">
@@ -492,6 +523,97 @@ function TabelaTotais({ titulo, colunaNome, itens, nome }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// Escolher quais CC/ODIs vão na planilha (e se sai um arquivo para cada).
+function PainelExport({ porCentro, linhas, centrosPorId, onCancelar, onBaixar }) {
+  const chaveDe = (t) => t.centroId || "sem";
+  const [marcados, setMarcados] = useState(() => porCentro.filter((t) => t.centroId).map(chaveDe));
+  const [separar, setSeparar] = useState(false);
+  const [baixando, setBaixando] = useState(false);
+  const responsaveis = [...new Set(porCentro.map((t) => (t.centroId ? centrosPorId[t.centroId]?.responsavel : "")).filter(Boolean))].sort();
+  const escolhidos = porCentro.filter((t) => marcados.includes(chaveDe(t)));
+  const total = escolhidos.reduce((s, t) => s + Math.round(t.valor * 100), 0) / 100;
+  const qtdLinhas = linhasParaExportar(linhas, marcados).length;
+
+  function alternar(k) {
+    setMarcados(marcados.includes(k) ? marcados.filter((x) => x !== k) : [...marcados, k]);
+  }
+
+  async function baixar() {
+    setBaixando(true);
+    await onBaixar({ chaves: porCentro.map(chaveDe).filter((k) => marcados.includes(k)), separar });
+    setBaixando(false);
+  }
+
+  return (
+    <div className="lista-card painel-export" role="dialog" aria-label="Quais CC/ODIs vão na planilha?">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ fontWeight: 700, fontSize: 15 }}>Quais CC/ODIs vão na planilha?</div>
+        <span style={{ fontSize: 13 }}>
+          <button type="button" className="link-botao" onClick={() => setMarcados(porCentro.filter((t) => t.centroId).map(chaveDe))}>
+            Marcar todos
+          </button>
+          {" · "}
+          <button type="button" className="link-botao" onClick={() => setMarcados([])}>
+            Desmarcar
+          </button>
+        </span>
+      </div>
+      {responsaveis.length > 0 && (
+        <div className="chips-row" style={{ marginTop: 10, alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "var(--color-gray)" }}>Por responsável:</span>
+          {responsaveis.map((r) => {
+            const deles = porCentro.filter((t) => t.centroId && centrosPorId[t.centroId]?.responsavel === r).map(chaveDe);
+            const ativo = deles.length === marcados.length && deles.every((k) => marcados.includes(k));
+            return (
+              <button key={r} type="button" className="chip" aria-pressed={ativo} onClick={() => setMarcados(deles)}>
+                {r}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div style={{ marginTop: 8 }}>
+        {porCentro.map((t) => {
+          const k = chaveDe(t);
+          const c = t.centroId ? centrosPorId[t.centroId] : null;
+          return (
+            <label key={k} className="linha-export">
+              <input type="checkbox" checked={marcados.includes(k)} onChange={() => alternar(k)} />
+              <span>
+                {t.centroId ? <CentroTag tipo={t.tipo} codigo={t.codigo} /> : <span style={{ color: "var(--color-gray)" }}>Linhas sem CC/ODI</span>}
+                {c?.descricao && <span style={{ display: "block", fontSize: 12, color: "var(--color-gray)" }}>{c.descricao}</span>}
+              </span>
+              <span>{c?.responsavel || ""}</span>
+              <span style={{ textAlign: "right", fontWeight: 700 }}>{formatarReais(t.valor)}</span>
+            </label>
+          );
+        })}
+      </div>
+      <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, marginTop: 10, fontWeight: 400 }}>
+        <input type="checkbox" checked={separar} onChange={(e) => setSeparar(e.target.checked)} style={{ width: 18, height: 18 }} />
+        Um arquivo para cada CC/ODI marcado
+      </label>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 14, flexWrap: "wrap", borderTop: "1px solid var(--color-border)", paddingTop: 12 }}>
+        <span style={{ fontSize: 13 }}>
+          <b>
+            {escolhidos.length} de {porCentro.length}
+          </b>{" "}
+          CC/ODIs · <b>{formatarReais(total)}</b> · {qtdLinhas} {qtdLinhas === 1 ? "linha" : "linhas"}
+        </span>
+        <span style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onCancelar}>
+            Cancelar
+          </button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={baixar} disabled={baixando || !marcados.length}>
+            {baixando ? "Gerando..." : separar && marcados.length > 1 ? `Baixar ${marcados.length} planilhas` : "Baixar planilha"}
+          </button>
+        </span>
+      </div>
+      <div className="texto-ajuda">O nome do arquivo leva os códigos escolhidos. Linhas divididas entram só com a parte de cada CC/ODI escolhido.</div>
     </div>
   );
 }

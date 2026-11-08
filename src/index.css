@@ -2346,3 +2346,35 @@ label {
 .escolha-rapida.pendente > select:first-child {
   border-color: var(--color-orange-border);
 }
+
+/* Escolha de CC/ODIs para baixar a planilha da medição. */
+.painel-export {
+  margin: 14px 0 0 auto;
+  max-width: 640px;
+  padding: 16px 18px;
+  box-shadow: 0 12px 32px rgba(0, 51, 45, 0.18);
+}
+.linha-export {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 130px 120px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-top: 1px solid #f0f0f0;
+  font-size: 13px;
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
+}
+.linha-export input {
+  width: 18px;
+  height: 18px;
+}
+@media (max-width: 600px) {
+  .linha-export {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+  }
+  .linha-export > span:nth-child(3) {
+    display: none;
+  }
+}
