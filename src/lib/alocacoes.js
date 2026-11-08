@@ -133,6 +133,14 @@ export const COLUNAS = {
 const OBRIGATORIAS = ["recurso", "horas", "valorTotal"];
 const NOMES_COLUNAS = { recurso: "Nome do Recurso", horas: "Quantidade de Horas", valorTotal: "Valor Total" };
 
+// Texto da célula sem espaços nas pontas nem caracteres invisíveis.
+function limparTexto(valor) {
+  return String(valor ?? "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Recebe as linhas da planilha (a 1ª com os títulos) e devolve as linhas da
 // medição. Linhas sem recurso e sem valor (rodapé, linhas vazias) são ignoradas.
 export function lerPlanilha(linhasBrutas) {
@@ -155,9 +163,11 @@ export function lerPlanilha(linhasBrutas) {
   const linhas = [];
   for (const linha of linhasBrutas.slice(idxTitulo + 1)) {
     if (!linha) continue;
-    const recurso = String(pegar(linha, "recurso") ?? "").trim();
+    const recurso = limparTexto(pegar(linha, "recurso"));
     const valorTotal = lerNumero(pegar(linha, "valorTotal"));
-    if (!recurso && !valorTotal) continue;
+    const horas = lerNumero(pegar(linha, "horas"));
+    // Linha em branco (sem recurso, ou sem horas e sem valor): fica de fora.
+    if (!recurso || (!horas && !valorTotal)) continue;
     const inicio = lerData(pegar(linha, "inicio"));
     const fim = lerData(pegar(linha, "fim"));
     const justificativa = String(pegar(linha, "justificativa") ?? "").trim();
@@ -167,7 +177,7 @@ export function lerPlanilha(linhasBrutas) {
       recurso,
       perfil: String(pegar(linha, "perfil") ?? "").trim(),
       valorHH: lerNumero(pegar(linha, "valorHH")),
-      horas: lerNumero(pegar(linha, "horas")) || 0,
+      horas: horas || 0,
       valorTotal: valorTotal || 0,
       justificativa,
     });
