@@ -1,6 +1,22 @@
 import { useState } from "react";
-import { alocacaoNoMes, definirAlocacao, dividir, dividirPorHoras, formatarNumero, formatarReais, lerNumero, partesParaAlocacao, rotuloMes, somarMeses } from "../lib/alocacoes";
+import { alocacaoNoMes, chaveCentro, definirAlocacao, dividir, dividirPorHoras, formatarNumero, formatarReais, lerNumero, partesParaAlocacao, resolverCentro, rotuloMes, somarMeses } from "../lib/alocacoes";
+import SeletorCentro from "./SeletorCentro";
 import { salvarRecurso } from "../lib/medicoesContrato";
+
+// Mapa por id (a chave "ODI:123" da lista única e o id antigo dos CCs/ODIs do contrato).
+export function porIdDe(centros) {
+  return Object.fromEntries((centros || []).map((c) => [c.id, c]));
+}
+
+// Parte pronta para gravar na alocação: com tipo e código.
+export function parteComCodigo(p, centros, extra = {}) {
+  const c = resolverCentro(p, porIdDe(centros));
+  if (!c) return null;
+  const v = { centroId: chaveCentro(c.tipo, c.codigo), tipo: c.tipo, codigo: c.codigo, ...extra };
+  if (p.equipeId) v.equipeId = p.equipeId;
+  if (p.equipeId && p.frenteId) v.frenteId = p.frenteId;
+  return v;
+}
 
 // CC/ODI, equipe e frente de uma parte. A frente só aparece depois da equipe,
 // e a lista de frentes é a da equipe escolhida. Equipe e frente são opcionais.
@@ -8,15 +24,13 @@ export function SeletoresParte({ parte, centros, equipes, onMudar, indice }) {
   const equipe = equipes.find((e) => e.id === parte.equipeId);
   return (
     <>
-      <select value={parte.centroId || ""} onChange={(e) => onMudar({ centroId: e.target.value })} aria-label={`CC ou ODI ${indice + 1}`}>
-        <option value="">Escolher CC/ODI…</option>
-        {centros.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.tipo} {c.codigo}
-            {c.descricao ? ` · ${c.descricao}` : ""}
-          </option>
-        ))}
-      </select>
+      <SeletorCentro
+        valor={parte.centroId || (parte.codigo ? chaveCentro(parte.tipo, parte.codigo) : "")}
+        opcoes={centros.filter((c) => c.origem !== "contrato")}
+        porId={porIdDe(centros)}
+        rotulo={`CC ou ODI ${indice + 1}`}
+        onEscolher={(c) => onMudar(c)}
+      />
       <select value={parte.equipeId || ""} onChange={(e) => onMudar({ equipeId: e.target.value, frenteId: "" })} aria-label={`Equipe ${indice + 1}`}>
         <option value="">Sem equipe</option>
         {equipes.map((e) => (
@@ -57,7 +71,7 @@ export default function EditorDivisao({ linha, centros, equipes, partesIniciais,
   const [modo, setModo] = useState("pct");
   const [partes, setPartes] = useState(() =>
     partesIniciais?.length
-      ? partesIniciais.map((p) => ({ centroId: p.centroId || "", equipeId: p.equipeId || "", frenteId: p.frenteId || "", valor: formatarNumero(p.pct, p.pct % 1 ? 2 : 0) }))
+      ? partesIniciais.map((p) => ({ centroId: p.centroId || "", tipo: p.tipo, codigo: p.codigo, equipeId: p.equipeId || "", frenteId: p.frenteId || "", valor: formatarNumero(p.pct, p.pct % 1 ? 2 : 0) }))
       : [{ centroId: "", equipeId: "", frenteId: "", valor: "100" }]
   );
   const [salvarAlocacao, setSalvarAlocacao] = useState(false);
@@ -95,7 +109,7 @@ export default function EditorDivisao({ linha, centros, equipes, partesIniciais,
   function calcular() {
     const centrosPorId = Object.fromEntries(centros.map((c) => [c.id, c]));
     const equipesPorId = Object.fromEntries(equipes.map((e) => [e.id, e]));
-    const base = partes.map((p) => ({ centroId: p.centroId, equipeId: p.equipeId || null, frenteId: p.frenteId || null }));
+    const base = partes.map((p) => ({ centroId: p.centroId, tipo: p.tipo, codigo: p.codigo, equipeId: p.equipeId || null, frenteId: p.frenteId || null }));
     return modo === "pct"
       ? dividir(linha, base.map((b, i) => ({ ...b, pct: num(partes[i].valor) })), centrosPorId, equipesPorId)
       : dividirPorHoras(linha, base.map((b, i) => ({ ...b, horas: num(partes[i].valor) })), centrosPorId, equipesPorId);
@@ -192,7 +206,7 @@ export function EditorAlocacao({ contratoId, recurso, linha, centros, equipes, m
   const [partes, setPartes] = useState(() => {
     const a = recurso ? alocacaoNoMes(recurso, mes) : null;
     const base = a?.partes?.length ? a.partes : partesParaAlocacao(linha.partes);
-    return base.length ? base.map((p) => ({ centroId: p.centroId || "", equipeId: p.equipeId || "", frenteId: p.frenteId || "", pct: formatarNumero(p.pct, p.pct % 1 ? 2 : 0) })) : [{ centroId: "", equipeId: "", frenteId: "", pct: "100" }];
+    return base.length ? base.map((p) => ({ centroId: p.centroId || "", tipo: p.tipo, codigo: p.codigo, equipeId: p.equipeId || "", frenteId: p.frenteId || "", pct: formatarNumero(p.pct, p.pct % 1 ? 2 : 0) })) : [{ centroId: "", equipeId: "", frenteId: "", pct: "100" }];
   });
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -213,12 +227,8 @@ export function EditorAlocacao({ contratoId, recurso, linha, centros, equipes, m
     setErro("");
     if (partes.some((p) => !p.centroId)) return setErro("Escolha o CC/ODI de cada parte.");
     if (!somaOk) return setErro("A soma dos percentuais precisa dar 100%.");
-    const validas = partes.map((p) => {
-      const v = { centroId: p.centroId, pct: num(p.pct) };
-      if (p.equipeId) v.equipeId = p.equipeId;
-      if (p.equipeId && p.frenteId) v.frenteId = p.frenteId;
-      return v;
-    });
+    const validas = partes.map((p) => parteComCodigo(p, centros, { pct: num(p.pct) }));
+    if (validas.some((v) => !v)) return setErro("Escolha o CC/ODI de cada parte.");
     const chaves = validas.map((p) => `${p.centroId}|${p.equipeId || ""}|${p.frenteId || ""}`);
     if (new Set(chaves).size !== chaves.length) return setErro("A mesma combinação de CC/ODI, equipe e frente aparece duas vezes.");
     setSalvando(true);

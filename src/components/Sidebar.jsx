@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
 import { CONTRATO_STATUS } from "../lib/constants";
 import { situacaoDoContrato } from "../lib/agenda";
-import { IconeFila, IconeLista } from "./Icones";
+import { IconeFila, IconeGrafico, IconeLista } from "./Icones";
 
 function lerPreferencia(chave, padrao) {
   try {
@@ -105,6 +105,16 @@ export default function Sidebar() {
             {naFila}
           </span>
         ) : null}
+      </NavLink>
+      )}
+      {funcionalidades.orcamentos && (
+      <NavLink
+        to="/controle-orcamentario"
+        className={classeLink}
+        style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 24px", color: "#fff", fontSize: 14, fontWeight: 700 }}
+      >
+        <IconeGrafico size={16} />
+        Controle orçamentário
       </NavLink>
       )}
 

@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import CabecalhoContrato from "../components/CabecalhoContrato";
 import { CentroTag, EquipeFrente, StatusMedicao } from "../components/AbaMedicoes";
-import EditorDivisao, { EditorAlocacao } from "../components/EditorDivisao";
+import EditorDivisao, { EditorAlocacao, porIdDe } from "../components/EditorDivisao";
+import { useCentrosDisponiveis } from "../hooks/useCentrosDisponiveis";
 import { watchContrato } from "../lib/contratos";
 import { formatarData } from "../lib/datas";
 import {
@@ -22,9 +23,8 @@ import {
   totaisPorCentro,
   totaisPorEquipe,
   totaisPorFrente,
-  usoDosCentros,
 } from "../lib/alocacoes";
-import { atualizarMedicao, excluirMedicao, marcarLancada, salvarRecurso, watchCentros, watchEquipes, watchMedicao, watchMedicoes, watchRecursos } from "../lib/medicoesContrato";
+import { atualizarMedicao, excluirMedicao, marcarLancada, salvarRecurso, watchCentros, watchEquipes, watchMedicao, watchRecursos } from "../lib/medicoesContrato";
 
 function tipoPagamento(tipo) {
   return tipo === "CC" ? "Centro de Custo" : tipo === "ODI" ? "ODI" : "";
@@ -72,8 +72,9 @@ export default function MedicaoPage() {
   const navigate = useNavigate();
   const [contrato, setContrato] = useState(undefined);
   const [medicao, setMedicao] = useState(undefined);
-  const [medicoes, setMedicoes] = useState([]);
-  const [centros, setCentros] = useState([]);
+  const [centrosContrato, setCentros] = useState([]);
+  const { opcoes: opcoesCentros } = useCentrosDisponiveis();
+  const centros = useMemo(() => [...centrosContrato.map((c) => ({ ...c, origem: "contrato" })), ...opcoesCentros], [centrosContrato, opcoesCentros]);
   const [editadas, setEditadas] = useState(null); // cópia das linhas enquanto edita
   const [paraAlocar, setParaAlocar] = useState({}); // índice → salvar a divisão como alocação
   const [dividindo, setDividindo] = useState(null);
@@ -86,14 +87,12 @@ export default function MedicaoPage() {
 
   useEffect(() => watchContrato(contratoId, setContrato), [contratoId]);
   useEffect(() => watchMedicao(contratoId, mes, setMedicao), [contratoId, mes]);
-  useEffect(() => watchMedicoes(contratoId, setMedicoes), [contratoId]);
   useEffect(() => watchCentros(contratoId, setCentros), [contratoId]);
   useEffect(() => watchEquipes(contratoId, setEquipes), [contratoId]);
   useEffect(() => watchRecursos(contratoId, setRecursos), [contratoId]);
 
-  const centrosPorId = useMemo(() => Object.fromEntries(centros.map((c) => [c.id, c])), [centros]);
+  const centrosPorId = useMemo(() => porIdDe(centros), [centros]);
   const equipesPorId = useMemo(() => Object.fromEntries(equipes.map((e) => [e.id, e])), [equipes]);
-  const uso = useMemo(() => usoDosCentros(medicoes, mes), [medicoes, mes]);
 
   if (contrato === undefined || medicao === undefined) return <div className="spinner-wrap">Carregando...</div>;
   if (!contrato) return <div className="spinner-wrap">Contrato não encontrado (ou você não tem acesso).</div>;
@@ -267,9 +266,6 @@ export default function MedicaoPage() {
           <tbody>
             {porCentro.map((t) => {
               const c = t.centroId ? centrosPorId[t.centroId] : null;
-              const u = t.centroId ? uso[t.centroId] : null;
-              const orc = c?.orcamentoMensal ? { valor: u?.mes || 0, base: c.orcamentoMensal, nome: "mensal" } : c?.orcamentoAnual ? { valor: u?.ano || 0, base: c.orcamentoAnual, nome: "anual" } : null;
-              const pct = orc ? Math.round((orc.valor / orc.base) * 100) : null;
               const chave = t.centroId || "sem";
               return (
                 <tr key={chave} className={t.centroId ? "" : "falta"}>
@@ -282,10 +278,8 @@ export default function MedicaoPage() {
                   <td className="num">{formatarHoras(t.horas)}</td>
                   <td className="num">
                     <b>{formatarReais(t.valor)}</b>
-                    {pct !== null && (
-                      <div className={pct > 100 ? "texto-alerta" : ""} style={{ fontSize: 12, color: pct > 100 ? undefined : "var(--color-gray)" }}>
-                        {pct}% do orçamento {orc.nome}
-                      </div>
+                    {t.centroId && (
+                      <div style={{ fontSize: 12, color: "var(--color-gray)" }}>{c?.origem === "orcamento" ? `no orçamento ${c.ano}` : "fora do orçamento"}</div>
                     )}
                   </td>
                   <td style={{ textAlign: "right" }}>

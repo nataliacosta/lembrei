@@ -19,13 +19,11 @@ import {
   rotuloMesCurto,
   somaPct,
   somarMeses,
-  usoDosCentros,
+  resolverCentro,
 } from "../lib/alocacoes";
 import {
-  excluirCentro,
   excluirEquipe,
   excluirRecurso,
-  salvarCentro,
   salvarEquipe,
   salvarRecurso,
   watchCentros,
@@ -33,7 +31,8 @@ import {
   watchMedicoes,
   watchRecursos,
 } from "../lib/medicoesContrato";
-import { CabecalhoPartes, SeletoresParte } from "./EditorDivisao";
+import { CabecalhoPartes, parteComCodigo, porIdDe, SeletoresParte } from "./EditorDivisao";
+import { useCentrosDisponiveis } from "../hooks/useCentrosDisponiveis";
 
 export function CentroTag({ tipo, codigo }) {
   return (
@@ -66,11 +65,11 @@ function Partes({ partes, centrosPorId, equipesPorId = {}, empilhar = true }) {
   return (
     <span style={{ display: "inline-flex", flexDirection: empilhar ? "column" : "row", flexWrap: "wrap", gap: empilhar ? 4 : "4px 12px" }}>
       {partes.map((p, i) => {
-        const c = centrosPorId[p.centroId];
+        const c = resolverCentro(p, centrosPorId);
         return (
           <span key={i}>
             <span style={{ whiteSpace: "nowrap" }}>
-              <CentroTag tipo={c?.tipo} codigo={c?.codigo || "(excluído)"} /> <span style={{ color: "var(--color-gray)", fontSize: 12 }}>{formatarNumero(p.pct, p.pct % 1 ? 2 : 0)}%</span>
+              <CentroTag tipo={c?.tipo} codigo={c?.codigo || "(sem código)"} /> <span style={{ color: "var(--color-gray)", fontSize: 12 }}>{formatarNumero(p.pct, p.pct % 1 ? 2 : 0)}%</span>
             </span>
             <EquipeFrente {...nomesEquipeFrente(p, equipesPorId)} />
           </span>
@@ -120,7 +119,6 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
   const mesAtual = mesDe(new Date());
   const [mesVer, setMesVer] = useState(mesAtual);
   const [editandoRecurso, setEditandoRecurso] = useState(null); // id, "novo" ou null
-  const [editandoCentro, setEditandoCentro] = useState(null);
   const [equipes, setEquipes] = useState([]);
   const [editandoEquipe, setEditandoEquipe] = useState(null);
 
@@ -129,10 +127,23 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
   useEffect(() => watchEquipes(contratoId, setEquipes, (e) => setErro(e.message)), [contratoId]);
   useEffect(() => watchMedicoes(contratoId, setMedicoes, (e) => setErro(e.message)), [contratoId]);
 
-  const centrosPorId = useMemo(() => Object.fromEntries(centros.map((c) => [c.id, c])), [centros]);
+  // CCs/ODIs: a lista única e, para alocações antigas, os que ficavam dentro do contrato.
+  const { opcoes } = useCentrosDisponiveis();
+  const centrosTodos = useMemo(() => [...centros.map((c) => ({ ...c, origem: "contrato" })), ...opcoes], [centros, opcoes]);
+  const centrosPorId = useMemo(() => porIdDe(centrosTodos), [centrosTodos]);
+
+  // Alocações antigas (com o id do CC/ODI do contrato) passam a guardar o código.
+  useEffect(() => {
+    if (!podeEditar || !centros.length) return;
+    for (const r of recursos) {
+      const precisa = (r.alocacoes || []).some((a) => a.partes.some((p) => !p.codigo && centrosPorId[p.centroId]));
+      if (!precisa) continue;
+      const alocacoes = r.alocacoes.map((a) => ({ ...a, partes: a.partes.map((p) => (p.codigo ? p : parteComCodigo(p, centrosTodos, { pct: p.pct }) || p)) }));
+      salvarRecurso(contratoId, r.id, { ...r, alocacoes }).catch((e) => console.error("Falha ao atualizar alocações antigas:", e));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [podeEditar, centros.length, recursos.length]);
   const equipesPorId = useMemo(() => Object.fromEntries(equipes.map((e) => [e.id, e])), [equipes]);
-  const mesUso = medicoes[0]?.mes || somarMeses(mesAtual, -1);
-  const uso = useMemo(() => usoDosCentros(medicoes, mesUso), [medicoes, mesUso]);
 
   return (
     <div>
@@ -223,7 +234,7 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
               editandoRecurso === r.id ? (
                 <tr key={r.id}>
                   <td colSpan={4} className="editor">
-                    <EditorRecurso contratoId={contratoId} recurso={r} recursos={recursos} centros={centros} equipes={equipes} mesInicial={mesVer} onFechar={() => setEditandoRecurso(null)} />
+                    <EditorRecurso contratoId={contratoId} recurso={r} recursos={recursos} centros={centrosTodos} equipes={equipes} mesInicial={mesVer} onFechar={() => setEditandoRecurso(null)} />
                   </td>
                 </tr>
               ) : (
@@ -233,7 +244,7 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
             {editandoRecurso === "novo" && (
               <tr>
                 <td colSpan={4} className="editor">
-                  <EditorRecurso contratoId={contratoId} recurso={null} recursos={recursos} centros={centros} equipes={equipes} mesInicial={mesVer} onFechar={() => setEditandoRecurso(null)} />
+                  <EditorRecurso contratoId={contratoId} recurso={null} recursos={recursos} centros={centrosTodos} equipes={equipes} mesInicial={mesVer} onFechar={() => setEditandoRecurso(null)} />
                 </td>
               </tr>
             )}
@@ -309,59 +320,9 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
         </table>
       </div>
 
-      <Secao
-        titulo={`CCs e ODIs · ${centros.length}`}
-        acao={
-          podeEditar && (
-            <button type="button" className="link-botao" onClick={() => setEditandoCentro("novo")}>
-              + Novo CC ou ODI
-            </button>
-          )
-        }
-      />
-      <div className="lista-card tabela-rolagem">
-        <table className="tabela-med">
-          <thead>
-            <tr>
-              <th>Código</th>
-              <th>Descrição</th>
-              <th>Responsável</th>
-              <th className="num">Orçamento mensal</th>
-              <th>Usado em {rotuloMesCurto(mesUso)}</th>
-              <th>Usado no ano</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {centros.length === 0 && editandoCentro !== "novo" && (
-              <tr>
-                <td colSpan={7} style={{ color: "var(--color-gray)", fontSize: 14 }}>
-                  Nenhum CC ou ODI cadastrado.
-                </td>
-              </tr>
-            )}
-            {centros.map((c) =>
-              editandoCentro === c.id ? (
-                <tr key={c.id}>
-                  <td colSpan={7} className="editor">
-                    <EditorCentro contratoId={contratoId} centro={c} recursos={recursos} onFechar={() => setEditandoCentro(null)} />
-                  </td>
-                </tr>
-              ) : (
-                <LinhaCentro key={c.id} centro={c} uso={uso[c.id]} podeEditar={podeEditar} onEditar={() => setEditandoCentro(c.id)} />
-              )
-            )}
-            {editandoCentro === "novo" && (
-              <tr>
-                <td colSpan={7} className="editor">
-                  <EditorCentro contratoId={contratoId} centro={null} recursos={recursos} onFechar={() => setEditandoCentro(null)} />
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="texto-ajuda" style={{ marginTop: 20 }}>
+        Os CCs e ODIs agora ficam numa lista única, em <Link to="/controle-orcamentario/odis">Controle orçamentário › ODIs e CCs</Link>: os do orçamento entram sozinhos e os outros você cadastra lá (ou direto na hora de escolher).
       </div>
-      <div className="texto-ajuda">“Usado” soma as medições deste contrato. Tudo nesta aba é visto por quem participa do contrato.</div>
     </div>
   );
 }
@@ -503,7 +464,7 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const historico = recurso ? historicoDeAlocacoes(recurso) : [];
-  const centrosPorId = Object.fromEntries(centros.map((c) => [c.id, c]));
+  const centrosPorId = porIdDe(centros);
   const equipesPorId = Object.fromEntries(equipes.map((e) => [e.id, e]));
   const soma = somaPct(partes.filter((p) => p.centroId));
   const primeiroNome = (nome || "").trim().split(" ")[0];
@@ -518,14 +479,7 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
     if (!nome.trim()) return setErro("Escreva o nome do recurso.");
     const repetido = recursos.find((r) => r.id !== recurso?.id && normalizarNome(r.nome) === normalizarNome(nome));
     if (repetido) return setErro(`Já existe um recurso chamado “${repetido.nome}” neste contrato.`);
-    const validas = partes
-      .filter((p) => p.centroId)
-      .map((p) => {
-        const v = { centroId: p.centroId, pct: Number(String(p.pct).replace(",", ".")) || 0 };
-        if (p.equipeId) v.equipeId = p.equipeId;
-        if (p.equipeId && p.frenteId) v.frenteId = p.frenteId;
-        return v;
-      });
+    const validas = partes.filter((p) => p.centroId || p.codigo).map((p) => parteComCodigo(p, centros, { pct: Number(String(p.pct).replace(",", ".")) || 0 })).filter(Boolean);
     if (validas.length && Math.abs(somaPct(validas) - 100) > 0.001) return setErro("A soma dos percentuais precisa dar 100%.");
     const ids = validas.map((p) => `${p.centroId}|${p.equipeId || ""}|${p.frenteId || ""}`);
     if (new Set(ids).size !== ids.length) return setErro("A mesma combinação de CC/ODI, equipe e frente aparece duas vezes.");
@@ -570,11 +524,7 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
       </div>
       <div className="texto-ajuda">Nome como vem na planilha do fornecedor. Com o valor HH preenchido, a medição avisa quando o fornecedor cobrar diferente.</div>
 
-      {centros.length === 0 ? (
-        <div className="texto-ajuda texto-alerta" style={{ marginTop: 14 }}>
-          Cadastre um CC ou ODI (mais abaixo) para poder alocar o recurso.
-        </div>
-      ) : (
+      {(
         <>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
             <label style={{ flex: "0 1 200px", margin: 0 }}>
@@ -807,156 +757,6 @@ function EditorEquipe({ contratoId, equipe, recursos, onFechar }) {
           </button>
           <button type="submit" className="btn btn-primary btn-sm" disabled={salvando}>
             {salvando ? "Salvando..." : "Salvar equipe"}
-          </button>
-        </span>
-      </div>
-    </form>
-  );
-}
-
-function Uso({ valor, orcamento, rotuloOrcamento }) {
-  const pct = orcamento ? Math.round((valor / orcamento) * 100) : null;
-  const acima = pct !== null && pct > 100;
-  return (
-    <>
-      <div style={{ fontWeight: 600 }}>{formatarReais(valor || 0)}</div>
-      {pct !== null ? (
-        <>
-          <div className={`barra-uso ${acima ? "acima" : ""}`}>
-            <span style={{ width: `${Math.min(pct, 100)}%` }} />
-          </div>
-          <div className={acima ? "texto-alerta" : ""} style={{ fontSize: 12, color: acima ? undefined : "var(--color-gray)" }}>
-            {pct}% do {rotuloOrcamento}
-            {acima ? " · acima do orçamento" : ""}
-          </div>
-        </>
-      ) : (
-        <div style={{ fontSize: 12, color: "var(--color-gray)" }}>sem orçamento {rotuloOrcamento}</div>
-      )}
-    </>
-  );
-}
-
-function LinhaCentro({ centro, uso, podeEditar, onEditar }) {
-  return (
-    <tr>
-      <td>
-        <CentroTag tipo={centro.tipo} codigo={centro.codigo} />
-      </td>
-      <td style={{ fontWeight: 600 }}>{centro.descricao || "—"}</td>
-      <td>{centro.responsavel || "—"}</td>
-      <td className="num">
-        {centro.orcamentoMensal != null ? formatarReais(centro.orcamentoMensal) : "—"}
-        {centro.orcamentoAnual != null && <div style={{ fontSize: 12, color: "var(--color-gray)" }}>{formatarReais(centro.orcamentoAnual)} no ano</div>}
-      </td>
-      <td style={{ minWidth: 150 }}>
-        <Uso valor={uso?.mes || 0} orcamento={centro.orcamentoMensal} rotuloOrcamento="mensal" />
-      </td>
-      <td style={{ minWidth: 140 }}>
-        <Uso valor={uso?.ano || 0} orcamento={centro.orcamentoAnual} rotuloOrcamento="anual" />
-      </td>
-      <td style={{ textAlign: "right" }}>
-        {podeEditar && (
-          <button type="button" className="link-botao" onClick={onEditar}>
-            Editar
-          </button>
-        )}
-      </td>
-    </tr>
-  );
-}
-
-function EditorCentro({ contratoId, centro, recursos, onFechar }) {
-  const [tipo, setTipo] = useState(centro?.tipo || "CC");
-  const [codigo, setCodigo] = useState(centro?.codigo || "");
-  const [descricao, setDescricao] = useState(centro?.descricao || "");
-  const [responsavel, setResponsavel] = useState(centro?.responsavel || "");
-  const [mensal, setMensal] = useState(centro?.orcamentoMensal != null ? formatarNumero(centro.orcamentoMensal) : "");
-  const [anual, setAnual] = useState(centro?.orcamentoAnual != null ? formatarNumero(centro.orcamentoAnual) : "");
-  const [erro, setErro] = useState("");
-  const [salvando, setSalvando] = useState(false);
-
-  async function salvar(e) {
-    e.preventDefault();
-    if (!codigo.trim()) return setErro("Escreva o código.");
-    setSalvando(true);
-    try {
-      await salvarCentro(contratoId, centro?.id, { tipo, codigo, descricao, responsavel, orcamentoMensal: lerNumero(mensal), orcamentoAnual: lerNumero(anual) });
-      onFechar();
-    } catch (err) {
-      console.error(err);
-      setErro("Não deu pra salvar. Tente de novo.");
-      setSalvando(false);
-    }
-  }
-
-  async function excluir() {
-    const emUso = recursos.filter((r) => (r.alocacoes || []).some((a) => a.partes.some((p) => p.centroId === centro.id)));
-    const aviso = emUso.length
-      ? `${centro.tipo} ${centro.codigo} aparece nas alocações de ${emUso.map((r) => r.nome).join(", ")}. Excluir mesmo assim? Essas alocações vão ficar sem esse CC/ODI.`
-      : `Excluir ${centro.tipo} ${centro.codigo}? As medições já salvas não mudam.`;
-    if (!window.confirm(aviso)) return;
-    await excluirCentro(contratoId, centro.id);
-    onFechar();
-  }
-
-  return (
-    <form onSubmit={salvar} aria-label={centro ? `Editar ${centro.tipo} ${centro.codigo}` : "Novo CC ou ODI"}>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <div>
-          <span style={rotulo}>Tipo</span>
-          <div className="chips-row" role="group" aria-label="Tipo" style={{ minHeight: 40, alignItems: "center" }}>
-            {[
-              ["CC", "Centro de custo"],
-              ["ODI", "ODI"],
-            ].map(([k, l]) => (
-              <button key={k} type="button" className="chip" aria-pressed={tipo === k} onClick={() => setTipo(k)}>
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
-        <label style={{ flex: "0 1 140px", margin: 0 }}>
-          <span style={rotulo}>Código</span>
-          <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Ex: 4100-221" maxLength={60} autoFocus />
-        </label>
-        <label style={{ flex: "1 1 180px", margin: 0 }}>
-          <span style={rotulo}>Descrição</span>
-          <input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex: Infraestrutura · Datacenter" maxLength={200} />
-        </label>
-        <label style={{ flex: "1 1 160px", margin: 0 }}>
-          <span style={rotulo}>Responsável</span>
-          <input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Quem responde por ele" maxLength={120} />
-        </label>
-        <label style={{ flex: "0 1 140px", margin: 0 }}>
-          <span style={rotulo}>Orç. mensal</span>
-          <input value={mensal} onChange={(e) => setMensal(e.target.value)} placeholder="R$ 0,00" inputMode="decimal" />
-        </label>
-        <label style={{ flex: "0 1 140px", margin: 0 }}>
-          <span style={rotulo}>Orç. anual</span>
-          <input value={anual} onChange={(e) => setAnual(e.target.value)} placeholder="R$ 0,00" inputMode="decimal" />
-        </label>
-      </div>
-      <div className="texto-ajuda">Os orçamentos são opcionais. O anual não precisa ser 12× o mensal.</div>
-      {erro && (
-        <div className="texto-alerta" role="alert" style={{ fontSize: 13, marginTop: 10 }}>
-          {erro}
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", marginTop: 12, flexWrap: "wrap" }}>
-        <span>
-          {centro && (
-            <button type="button" className="btn btn-ghost btn-sm" style={{ color: "var(--color-orange)", borderColor: "var(--color-orange-border)" }} onClick={excluir}>
-              Excluir
-            </button>
-          )}
-        </span>
-        <span style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onFechar}>
-            Cancelar
-          </button>
-          <button type="submit" className="btn btn-primary btn-sm" disabled={salvando}>
-            {salvando ? "Salvando..." : "Salvar"}
           </button>
         </span>
       </div>

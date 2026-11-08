@@ -5,7 +5,9 @@
 //                    orcamentoMensal, orcamentoAnual }   (orçamentos podem ser null)
 // - equipes/{id}:  { nome, responsavel, frentes: [{ id, nome }] }
 // - recursos/{id}: { nome, perfil, valorHH,
-//                    alocacoes: [{ desde: "2026-10", partes: [{ centroId, equipeId?, frenteId?, pct }] }] }
+//                    alocacoes: [{ desde: "2026-10", partes: [{ centroId, tipo, codigo, equipeId?, frenteId?, pct }] }] }
+//   O CC/ODI é identificado pelo código: centroId = "ODI:18207245" (ver chaveCentro).
+//   Alocações antigas guardavam só o id do CC/ODI do contrato; resolverCentro entende os dois.
 //   Equipe e frente são opcionais; a frente pertence a uma equipe.
 //   Cada alocação vale do mês "desde" até a próxima; assim as mudanças de um
 //   mês não alteram os meses anteriores.
@@ -194,6 +196,29 @@ export function mesDasLinhas(linhas) {
 
 // ---------- Preencher CC/ODI ----------
 
+// ---------- CC/ODI pelo código ----------
+
+export function chaveCentro(tipo, codigo) {
+  return `${tipo === "CC" ? "CC" : "ODI"}:${String(codigo ?? "").trim()}`;
+}
+
+// { tipo, codigo } de uma parte: pelo código gravado, pelo mapa (lista única ou
+// CCs/ODIs antigos do contrato, por id) ou pela própria chave "ODI:123".
+export function resolverCentro(p, centrosPorId = {}) {
+  if (p?.codigo) return { tipo: p.tipo === "CC" ? "CC" : "ODI", codigo: String(p.codigo).trim() };
+  const c = p?.centroId ? centrosPorId[p.centroId] : null;
+  if (c?.codigo) return { tipo: c.tipo === "CC" ? "CC" : "ODI", codigo: String(c.codigo).trim() };
+  const m = String(p?.centroId || "").match(/^(CC|ODI):(.+)$/);
+  if (m) return { tipo: m[1], codigo: m[2] };
+  return null;
+}
+
+// Chave de uma parte já calculada (medição): pelo código.
+export function chaveParte(p) {
+  if (!p) return "sem";
+  return p.codigo ? chaveCentro(p.tipo, p.codigo) : p.centroId || "sem";
+}
+
 // Equipe e frente (nomes copiados na medição, para ela não mudar se renomearem depois).
 function equipeEFrente(p, equipesPorId) {
   const equipe = p.equipeId ? equipesPorId?.[p.equipeId] : null;
@@ -208,7 +233,7 @@ function equipeEFrente(p, equipesPorId) {
 
 // Divide horas e valor pelas partes (em %); os centavos que sobram ficam na última.
 export function dividir(linha, partes, centrosPorId, equipesPorId = {}) {
-  const validas = (partes || []).filter((p) => p.centroId && Number(p.pct) > 0);
+  const validas = (partes || []).filter((p) => resolverCentro(p, centrosPorId) && Number(p.pct) > 0);
   if (!validas.length) return [];
   const totalC = centavos(linha.valorTotal);
   const horasC = centavos(linha.horas);
@@ -220,11 +245,11 @@ export function dividir(linha, partes, centrosPorId, equipesPorId = {}) {
     const h = ultima ? restoH : Math.round((horasC * Number(p.pct)) / 100);
     restoV -= v;
     restoH -= h;
-    const centro = centrosPorId[p.centroId];
+    const centro = resolverCentro(p, centrosPorId);
     return {
-      centroId: p.centroId,
-      tipo: centro?.tipo || "",
-      codigo: centro?.codigo || "",
+      centroId: chaveCentro(centro.tipo, centro.codigo),
+      tipo: centro.tipo,
+      codigo: centro.codigo,
       ...equipeEFrente(p, equipesPorId),
       pct: Number(p.pct),
       horas: deCentavos(h),
@@ -236,7 +261,7 @@ export function dividir(linha, partes, centrosPorId, equipesPorId = {}) {
 // Divide pelas horas de cada parte: o valor sai proporcional às horas, e o %
 // é calculado (com 2 casas; a última parte fecha os 100%).
 export function dividirPorHoras(linha, partes, centrosPorId, equipesPorId = {}) {
-  const validas = (partes || []).filter((p) => p.centroId && Number(p.horas) > 0);
+  const validas = (partes || []).filter((p) => resolverCentro(p, centrosPorId) && Number(p.horas) > 0);
   if (!validas.length) return [];
   const totalC = centavos(linha.valorTotal);
   const horasTotalC = centavos(linha.horas);
@@ -249,11 +274,11 @@ export function dividirPorHoras(linha, partes, centrosPorId, equipesPorId = {}) 
     const pctC = ultima ? restoPct : horasTotalC ? Math.round((hC * 10000) / horasTotalC) : 0;
     restoV -= v;
     restoPct -= pctC;
-    const centro = centrosPorId[p.centroId];
+    const centro = resolverCentro(p, centrosPorId);
     return {
-      centroId: p.centroId,
-      tipo: centro?.tipo || "",
-      codigo: centro?.codigo || "",
+      centroId: chaveCentro(centro.tipo, centro.codigo),
+      tipo: centro.tipo,
+      codigo: centro.codigo,
       ...equipeEFrente(p, equipesPorId),
       pct: pctC / 100,
       horas: deCentavos(hC),
@@ -265,7 +290,7 @@ export function dividirPorHoras(linha, partes, centrosPorId, equipesPorId = {}) 
 // Partes de uma linha já dividida, no formato da alocação (para "salvar como alocação").
 export function partesParaAlocacao(partes) {
   return (partes || []).map((p) => {
-    const a = { centroId: p.centroId, pct: p.pct };
+    const a = { centroId: chaveParte(p), tipo: p.tipo, codigo: p.codigo, pct: p.pct };
     if (p.equipeId) a.equipeId = p.equipeId;
     if (p.frenteId) a.frenteId = p.frenteId;
     return a;
@@ -305,7 +330,7 @@ export function totaisPorCentro(linhas) {
   };
   for (const l of linhas) {
     if (!l.partes?.length) somar("sem", { centroId: null, tipo: "", codigo: "" }, l.horas, l.valorTotal);
-    else for (const p of l.partes) somar(p.centroId, { centroId: p.centroId, tipo: p.tipo, codigo: p.codigo }, p.horas, p.valor);
+    else for (const p of l.partes) somar(chaveParte(p), { centroId: chaveParte(p), tipo: p.tipo, codigo: p.codigo }, p.horas, p.valor);
   }
   return [...mapa.values()]
     .map(({ horasC, valorC, ...resto }) => ({ ...resto, horas: deCentavos(horasC), valor: deCentavos(valorC) }))
@@ -336,22 +361,6 @@ export function totaisPorEquipe(linhas) {
 
 export function totaisPorFrente(linhas) {
   return totaisPor(linhas, (p) => (p.frente ? `${p.equipeId || p.equipe}|${p.frenteId || p.frente}` : null), (p) => ({ equipe: p.equipe, frente: p.frente }));
-}
-
-// Quanto cada CC/ODI usou no mês e no ano (somando as medições salvas do contrato).
-export function usoDosCentros(medicoes, mes) {
-  const ano = mes.slice(0, 4);
-  const uso = {};
-  for (const m of medicoes) {
-    if (!m.mes || m.mes.slice(0, 4) !== ano || m.mes > mes) continue;
-    for (const t of totaisPorCentro(m.linhas || [])) {
-      if (!t.centroId) continue;
-      const u = (uso[t.centroId] ||= { mesC: 0, anoC: 0 });
-      u.anoC += centavos(t.valor);
-      if (m.mes === mes) u.mesC += centavos(t.valor);
-    }
-  }
-  return Object.fromEntries(Object.entries(uso).map(([k, v]) => [k, { mes: deCentavos(v.mesC), ano: deCentavos(v.anoC) }]));
 }
 
 export function formatarReais(valor) {
@@ -388,8 +397,8 @@ export function linhasParaExportar(linhas, chaves = null) {
       if (entra("sem")) saida.push({ ...base, centroId: null, horas: l.horas, valor: l.valorTotal, tipoPagamento: "", centro: "", equipe: "", frente: "" });
     } else
       for (const p of l.partes)
-        if (entra(p.centroId))
-          saida.push({ centroId: p.centroId, ...base, horas: p.horas, valor: p.valor, tipoPagamento: p.tipo === "CC" ? "Centro de Custo" : "ODI", centro: p.codigo, equipe: p.equipe || "", frente: p.frente || "" });
+        if (entra(chaveParte(p)))
+          saida.push({ centroId: chaveParte(p), ...base, horas: p.horas, valor: p.valor, tipoPagamento: p.tipo === "CC" ? "Centro de Custo" : "ODI", centro: p.codigo, equipe: p.equipe || "", frente: p.frente || "" });
   }
   return saida;
 }

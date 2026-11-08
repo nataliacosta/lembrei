@@ -2545,3 +2545,105 @@ label {
     overflow-x: auto;
   }
 }
+
+/* Campo com busca para escolher CC/ODI */
+.seletor-centro {
+  position: relative;
+  min-width: 0;
+}
+.seletor-centro > input {
+  width: 100%;
+}
+.seletor-centro-lista {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  min-width: 300px;
+  top: calc(100% + 4px);
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 51, 45, 0.16);
+  max-height: 320px;
+  overflow-y: auto;
+}
+.seletor-centro-grupo {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #fafbfb;
+  position: sticky;
+  top: 0;
+}
+.seletor-centro-opcao {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  cursor: pointer;
+  border-top: 1px solid #f3f4f4;
+  font-size: 13px;
+}
+.seletor-centro-opcao.ativa {
+  background: #eef6f5;
+}
+.seletor-centro-desc {
+  color: var(--color-gray);
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seletor-centro-vazio {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--color-gray);
+}
+.seletor-centro-novo {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Controle orçamentário: no celular, sem rolagem para o lado */
+.tabela-controle .so-mob {
+  display: none;
+}
+@media (max-width: 760px) {
+  .tabela-orc2.tabela-controle {
+    display: table;
+    overflow: visible;
+  }
+  .tabela-controle .esconde-mob {
+    display: none;
+  }
+  .tabela-controle .so-mob {
+    display: block;
+  }
+  .tabela-controle th,
+  .tabela-controle td {
+    padding-left: 6px;
+    padding-right: 6px;
+    font-size: 13px;
+  }
+  .controle-numeros {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .controle-numeros b {
+    font-size: 16px;
+  }
+}

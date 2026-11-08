@@ -237,6 +237,16 @@ service cloud.firestore {
       allow read: if logado();
       allow write: if logado() && request.auth.uid == uid;
 
+      // CCs/ODIs "fora do orçamento" da pessoa (lista única das alocações).
+      match /centros/{centroId} {
+        allow read, delete: if logado() && request.auth.uid == uid;
+        allow create, update: if logado() && request.auth.uid == uid
+          && request.resource.data.tipo in ['CC', 'ODI']
+          && request.resource.data.codigo is string
+          && request.resource.data.codigo.size() > 0
+          && request.resource.data.codigo.size() <= 60;
+      }
+
       // Aparelhos com notificação push ativada: só a própria pessoa vê e
       // mexe (as Cloud Functions leem pelo Admin SDK).
       match /dispositivos/{dispositivoId} {
