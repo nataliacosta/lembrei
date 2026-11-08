@@ -27,12 +27,17 @@ export default function ControleOrcamentarioPage() {
   return (
     <div className="page-shell" style={{ paddingTop: 24, paddingBottom: 80, maxWidth: 1280 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>Controle orçamentário</h1>
+        <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>Controle orçamentário</h1>
+            <Link to="/orcamentos" className="link-orcamentos" style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>
+              Orçamentos ›
+            </Link>
+          </div>
           <div style={{ fontSize: 14, color: "var(--color-gray)", marginTop: 4 }}>Orçado na última versão efetivada × realizado nas medições lançadas no sistema</div>
         </div>
         {aba !== "odis" && anos.length > 0 && (
-          <label style={{ width: 280, margin: 0 }}>
+          <label style={{ width: 280, maxWidth: "100%", margin: 0 }}>
             <span style={rotulo}>Ano</span>
             <select value={ano} onChange={(e) => setAno(Number(e.target.value))}>
               {anos.map((a) => (
@@ -132,7 +137,7 @@ function VisaoGeral({ ano, vigente }) {
               <th className="num">Realizado</th>
               <th className="num">Saldo</th>
               <th className="esconde-mob">Uso</th>
-              {idxMes !== null && <th className="num esconde-mob">Mês atual</th>}
+              {idxMes !== null && <th className="num esconde-mob esconde-tablet">Mês atual</th>}
               <th />
             </tr>
           </thead>
@@ -171,7 +176,7 @@ function VisaoGeral({ ano, vigente }) {
                     </div>
                   </td>
                   {idxMes !== null && (
-                    <td className="num esconde-mob">
+                    <td className="num esconde-mob esconde-tablet">
                       {o.orcado.meses[idxMes] || o.realizado.meses[idxMes] ? (
                         <div>
                           {formatarNumero(o.realizado.meses[idxMes])} <span style={{ color: "var(--color-gray)", fontSize: 12 }}>de</span> {formatarNumero(o.orcado.meses[idxMes])}
