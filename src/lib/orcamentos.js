@@ -146,7 +146,6 @@ export function resumoDaVersao(versao, conteudo) {
     ...totaisDoOrcamento(versao, conteudo),
     qtdCompleta: versao.visao === "completa" ? (conteudo.completa || []).length : 0,
     qtdCondensada: condensada.length,
-    pendentes: condensada.filter((l) => camposPendentes(l).length).length,
   };
 }
 
