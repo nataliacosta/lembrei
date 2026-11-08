@@ -53,6 +53,27 @@ export function excluirCentro(contratoId, id) {
   return deleteDoc(doc(db, "contratos", contratoId, "centros", id));
 }
 
+// ---------- Equipes (cada uma com as suas frentes) ----------
+
+export function watchEquipes(contratoId, callback, onError) {
+  return ouvir(query(ref(contratoId, "equipes"), orderBy("nome")), callback, onError);
+}
+
+export async function salvarEquipe(contratoId, id, dados) {
+  const valores = {
+    nome: dados.nome.trim(),
+    responsavel: (dados.responsavel || "").trim(),
+    frentes: (dados.frentes || []).map((f) => ({ id: f.id, nome: f.nome.trim() })).filter((f) => f.nome),
+    atualizadoEm: serverTimestamp(),
+  };
+  if (id) return updateDoc(doc(db, "contratos", contratoId, "equipes", id), valores);
+  return addDoc(ref(contratoId, "equipes"), { ...valores, criadoEm: serverTimestamp() });
+}
+
+export function excluirEquipe(contratoId, id) {
+  return deleteDoc(doc(db, "contratos", contratoId, "equipes", id));
+}
+
 // ---------- Recursos ----------
 
 export function watchRecursos(contratoId, callback, onError) {

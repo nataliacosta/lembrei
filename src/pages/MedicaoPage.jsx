@@ -2,22 +2,27 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import CabecalhoContrato from "../components/CabecalhoContrato";
-import { CentroTag, StatusMedicao } from "../components/AbaMedicoes";
+import { CentroTag, EquipeFrente, StatusMedicao } from "../components/AbaMedicoes";
+import EditorDivisao from "../components/EditorDivisao";
 import { watchContrato } from "../lib/contratos";
 import { formatarData } from "../lib/datas";
 import {
-  dividir,
+  definirAlocacao,
   formatarHoras,
   formatarNumero,
   formatarReais,
   linhasParaExportar,
+  normalizarNome,
+  partesParaAlocacao,
   periodoCurto,
   rotuloMes,
   totaisDaMedicao,
   totaisPorCentro,
+  totaisPorEquipe,
+  totaisPorFrente,
   usoDosCentros,
 } from "../lib/alocacoes";
-import { atualizarMedicao, excluirMedicao, marcarLancada, watchCentros, watchMedicao, watchMedicoes } from "../lib/medicoesContrato";
+import { atualizarMedicao, excluirMedicao, marcarLancada, salvarRecurso, watchCentros, watchEquipes, watchMedicao, watchMedicoes, watchRecursos } from "../lib/medicoesContrato";
 
 function tipoPagamento(tipo) {
   return tipo === "CC" ? "Centro de Custo" : tipo === "ODI" ? "ODI" : "";
@@ -29,7 +34,7 @@ async function baixarPlanilha(medicao, contrato) {
   const data = (iso) => (iso ? { value: new Date(`${iso}T12:00:00`), type: Date, format: "dd/mm/yyyy" } : null);
   const numero = (v, format = "#,##0.00") => (v == null ? null : { value: Number(v), type: Number, format });
   const linhas = [
-    ["Data início", "Data fim", "Nome do Recurso", "Perfil do Recurso", "Valor HH (Perfil)", "Quantidade de Horas", "Valor Total", "Justificativa", "Tipo pagamento", "Centro de Custos / ODI"].map(titulo),
+    ["Data início", "Data fim", "Nome do Recurso", "Perfil do Recurso", "Valor HH (Perfil)", "Quantidade de Horas", "Valor Total", "Justificativa", "Tipo pagamento", "Centro de Custos / ODI", "Equipe", "Frente"].map(titulo),
     ...linhasParaExportar(medicao.linhas || []).map((l) => [
       data(l.inicio),
       data(l.fim),
@@ -41,10 +46,12 @@ async function baixarPlanilha(medicao, contrato) {
       { value: l.justificativa || "" },
       { value: l.tipoPagamento },
       { value: l.centro },
+      { value: l.equipe },
+      { value: l.frente },
     ]),
   ];
   const nome = `medicao_${(contrato.titulo || "contrato").replace(/[^\p{L}\p{N}]+/gu, "_").slice(0, 40)}_${medicao.mes}.xlsx`;
-  const blob = await writeXlsxFile(linhas, { columns: [12, 12, 28, 30, 14, 12, 14, 28, 16, 20].map((width) => ({ width })) }).toBlob();
+  const blob = await writeXlsxFile(linhas, { columns: [12, 12, 28, 30, 14, 12, 14, 28, 16, 20, 16, 22].map((width) => ({ width })) }).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -63,8 +70,11 @@ export default function MedicaoPage() {
   const [medicao, setMedicao] = useState(undefined);
   const [medicoes, setMedicoes] = useState([]);
   const [centros, setCentros] = useState([]);
-  const [editando, setEditando] = useState(false);
-  const [trocas, setTrocas] = useState({});
+  const [editadas, setEditadas] = useState(null); // cópia das linhas enquanto edita
+  const [paraAlocar, setParaAlocar] = useState({}); // índice → salvar a divisão como alocação
+  const [dividindo, setDividindo] = useState(null);
+  const [equipes, setEquipes] = useState([]);
+  const [recursos, setRecursos] = useState([]);
   const [copiado, setCopiado] = useState("");
   const [ocupado, setOcupado] = useState(false);
 
@@ -72,6 +82,8 @@ export default function MedicaoPage() {
   useEffect(() => watchMedicao(contratoId, mes, setMedicao), [contratoId, mes]);
   useEffect(() => watchMedicoes(contratoId, setMedicoes), [contratoId]);
   useEffect(() => watchCentros(contratoId, setCentros), [contratoId]);
+  useEffect(() => watchEquipes(contratoId, setEquipes), [contratoId]);
+  useEffect(() => watchRecursos(contratoId, setRecursos), [contratoId]);
 
   const centrosPorId = useMemo(() => Object.fromEntries(centros.map((c) => [c.id, c])), [centros]);
   const uso = useMemo(() => usoDosCentros(medicoes, mes), [medicoes, mes]);
@@ -87,7 +99,7 @@ export default function MedicaoPage() {
 
   const papel = contrato.membros?.[user.uid];
   const podeEditar = papel === "proprietario" || papel === "editor";
-  const linhas = medicao.linhas || [];
+  const linhas = editadas || medicao.linhas || [];
   const porCentro = totaisPorCentro(linhas);
   const semCentro = linhas.filter((l) => !l.partes?.length).length;
   const criadoEm = medicao.criadoEm?.toDate ? medicao.criadoEm.toDate() : null;
@@ -113,14 +125,29 @@ export default function MedicaoPage() {
     setOcupado(false);
   }
 
-  async function salvarTrocas() {
-    const novas = linhas.map((l, i) => (trocas[i] ? { ...l, partes: dividir(l, [{ centroId: trocas[i], pct: 100 }], centrosPorId) } : l));
-    const t = totaisDaMedicao(novas);
+  const editando = editadas !== null;
+
+  async function salvarEdicao() {
+    const t = totaisDaMedicao(editadas);
     setOcupado(true);
     try {
-      await atualizarMedicao(contratoId, mes, { linhas: novas, total: t.total, horas: t.horas });
-      setEditando(false);
-      setTrocas({});
+      await atualizarMedicao(contratoId, mes, { linhas: editadas, total: t.total, horas: t.horas });
+      // Divisões marcadas para virar alocação a partir deste mês.
+      const feitos = new Set();
+      for (const [i, sim] of Object.entries(paraAlocar)) {
+        if (!sim) continue;
+        const l = editadas[i];
+        const r = recursos.find((x) => x.id === l.recursoId) || recursos.find((x) => normalizarNome(x.nome) === normalizarNome(l.recurso));
+        const chave = r?.id || normalizarNome(l.recurso);
+        if (feitos.has(chave)) continue;
+        feitos.add(chave);
+        const partes = partesParaAlocacao(l.partes);
+        if (r) await salvarRecurso(contratoId, r.id, { ...r, alocacoes: definirAlocacao(r, mes, partes) });
+        else await salvarRecurso(contratoId, null, { nome: l.recurso, perfil: l.perfil, valorHH: l.valorHH, alocacoes: [{ desde: mes, partes }] });
+      }
+      setEditadas(null);
+      setParaAlocar({});
+      setDividindo(null);
     } catch (e) {
       console.error(e);
       window.alert("Não deu pra salvar. Tente de novo.");
@@ -231,25 +258,43 @@ export default function MedicaoPage() {
       </div>
       {semCentro > 0 && (
         <div className="texto-ajuda texto-alerta">
-          {semCentro} {semCentro === 1 ? "linha está" : "linhas estão"} sem CC/ODI. Use “Editar CC/ODI das linhas” para completar.
+          {semCentro} {semCentro === 1 ? "linha está" : "linhas estão"} sem CC/ODI. Use “Editar ou dividir linhas” para completar.
         </div>
       )}
+
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <TabelaTotais titulo="Por equipe" colunaNome="Equipe" itens={totaisPorEquipe(linhas)} nome={(t) => (t.sem ? <span style={{ color: "var(--color-gray)" }}>Sem equipe</span> : <b>{t.equipe}</b>)} />
+        <TabelaTotais
+          titulo="Por frente"
+          colunaNome="Equipe › Frente"
+          itens={totaisPorFrente(linhas)}
+          nome={(t) =>
+            t.sem ? (
+              <span style={{ color: "var(--color-gray)" }}>Sem frente</span>
+            ) : (
+              <>
+                <span style={{ color: "var(--color-gray)" }}>{t.equipe} ›</span> <b>{t.frente}</b>
+              </>
+            )
+          }
+        />
+      </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "28px 0 8px", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "var(--color-gray)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Linhas · {linhas.length}</h2>
         {podeEditar &&
           (editando ? (
             <span style={{ display: "flex", gap: 8 }}>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => (setEditando(false), setTrocas({}))}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => (setEditadas(null), setParaAlocar({}), setDividindo(null))}>
                 Cancelar
               </button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={salvarTrocas} disabled={ocupado || !Object.keys(trocas).length}>
-                Salvar CC/ODI
+              <button type="button" className="btn btn-primary btn-sm" onClick={salvarEdicao} disabled={ocupado || dividindo !== null}>
+                Salvar alterações
               </button>
             </span>
           ) : (
-            <button type="button" className="link-botao" onClick={() => setEditando(true)}>
-              Editar CC/ODI das linhas
+            <button type="button" className="link-botao" onClick={() => setEditadas((medicao.linhas || []).map((l) => ({ ...l })))}>
+              Editar ou dividir linhas
             </button>
           ))}
       </div>
@@ -267,7 +312,8 @@ export default function MedicaoPage() {
               <th className="num">Horas</th>
               <th className="num">Valor total</th>
               <th>Tipo pagamento</th>
-              <th>CC / ODI</th>
+              <th>CC / ODI · Equipe · Frente</th>
+              {editando && <th />}
             </tr>
           </thead>
           <tbody>
@@ -293,46 +339,63 @@ export default function MedicaoPage() {
                   <td className="num">{formatarNumero(l.valorTotal)}</td>
                 </>
               );
-              if (editando) {
-                return (
-                  <tr key={i} className={l.partes?.length ? "" : "falta"}>
-                    {base}
-                    <td colSpan={2} style={{ minWidth: 240 }}>
-                      <select value={trocas[i] || ""} onChange={(e) => setTrocas({ ...trocas, [i]: e.target.value })} aria-label={`CC ou ODI de ${l.recurso}`} style={{ padding: "6px 8px" }}>
-                        <option value="">
-                          {l.partes?.length ? `Como está (${l.partes.map((p) => `${p.tipo} ${p.codigo}${l.partes.length > 1 ? ` ${p.pct}%` : ""}`).join(" + ")})` : "Escolher CC/ODI…"}
-                        </option>
-                        {centros.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.tipo} {c.codigo}
-                            {c.descricao ? ` · ${c.descricao}` : ""} (100%)
-                          </option>
-                        ))}
-                      </select>
+              const acao = editando ? (
+                <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  <button type="button" className="link-botao" style={{ fontSize: 12 }} onClick={() => setDividindo(dividindo === i ? null : i)} aria-expanded={dividindo === i}>
+                    {l.partes?.length > 1 ? "Editar divisão" : l.partes?.length ? "Dividir ou trocar" : "Escolher CC/ODI"}
+                  </button>
+                </td>
+              ) : null;
+              const editor =
+                dividindo === i ? (
+                  <tr key={`d${i}`}>
+                    <td colSpan={9} className="editor">
+                      <EditorDivisao
+                        linha={l}
+                        centros={centros}
+                        equipes={equipes}
+                        partesIniciais={l.partes}
+                        mes={mes}
+                        permitirSalvarAlocacao
+                        onCancelar={() => setDividindo(null)}
+                        onAplicar={({ partes, salvarAlocacao }) => {
+                          setEditadas(editadas.map((x, j) => (j === i ? { ...x, partes } : x)));
+                          setParaAlocar({ ...paraAlocar, [i]: salvarAlocacao });
+                          setDividindo(null);
+                        }}
+                      />
                     </td>
                   </tr>
-                );
-              }
+                ) : null;
               if (!l.partes?.length) {
                 return (
-                  <tr key={i} className="falta">
-                    {base}
-                    <td colSpan={2} className="texto-alerta" style={{ fontSize: 12, fontWeight: 600 }}>
-                      Sem CC/ODI
-                    </td>
-                  </tr>
+                  [
+                    <tr key={i} className="falta">
+                      {base}
+                      <td colSpan={2} className="texto-alerta" style={{ fontSize: 12, fontWeight: 600 }}>
+                        Sem CC/ODI
+                      </td>
+                      {acao}
+                    </tr>,
+                    editor,
+                  ]
                 );
               }
               if (l.partes.length === 1) {
                 const p = l.partes[0];
                 return (
-                  <tr key={i}>
-                    {base}
-                    <td>{tipoPagamento(p.tipo)}</td>
-                    <td>
-                      <CentroTag tipo={p.tipo} codigo={p.codigo} />
-                    </td>
-                  </tr>
+                  [
+                    <tr key={i}>
+                      {base}
+                      <td>{tipoPagamento(p.tipo)}</td>
+                      <td>
+                        <CentroTag tipo={p.tipo} codigo={p.codigo} />
+                        <EquipeFrente equipe={p.equipe} frente={p.frente} />
+                      </td>
+                      {acao}
+                    </tr>,
+                    editor,
+                  ]
                 );
               }
               return [
@@ -341,7 +404,9 @@ export default function MedicaoPage() {
                   <td colSpan={2} style={{ fontSize: 12, color: "var(--color-gray)" }}>
                     dividido em {l.partes.length} ↓
                   </td>
+                  {acao}
                 </tr>,
+                editor,
                 ...l.partes.map((p, j) => (
                   <tr key={`${i}-${j}`} className="sub">
                     <td />
@@ -353,7 +418,9 @@ export default function MedicaoPage() {
                     <td>{tipoPagamento(p.tipo)}</td>
                     <td>
                       <CentroTag tipo={p.tipo} codigo={p.codigo} />
+                      <EquipeFrente equipe={p.equipe} frente={p.frente} />
                     </td>
+                    {editando && <td />}
                   </tr>
                 )),
               ];
@@ -369,6 +436,36 @@ export default function MedicaoPage() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function TabelaTotais({ titulo, colunaNome, itens, nome }) {
+  return (
+    <div style={{ flex: "1 1 380px", minWidth: 0 }}>
+      <h2 style={{ margin: "28px 0 8px", fontSize: 12, fontWeight: 700, color: "var(--color-gray)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{titulo}</h2>
+      <div className="lista-card tabela-rolagem">
+        <table className="tabela-med">
+          <thead>
+            <tr>
+              <th>{colunaNome}</th>
+              <th className="num">Horas</th>
+              <th className="num">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {itens.map((t) => (
+              <tr key={t.chave}>
+                <td>{nome(t)}</td>
+                <td className="num">{formatarHoras(t.horas)}</td>
+                <td className="num">
+                  <b>{formatarReais(t.valor)}</b>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

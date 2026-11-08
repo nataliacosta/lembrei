@@ -2283,3 +2283,50 @@ label {
   gap: 8px;
   align-items: center;
 }
+.linha-partes.com-equipe {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 96px 44px;
+}
+.linha-partes.com-valor {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 104px 110px 44px;
+}
+.linha-partes > .btn {
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+}
+.cabecalho-partes {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.equipe-frente {
+  font-size: 12px;
+  color: var(--color-gray);
+  margin-top: 2px;
+}
+.chip-frente {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 10px;
+  background: #eceeee;
+  margin: 2px 4px 2px 0;
+}
+@media (max-width: 760px) {
+  .linha-partes.com-equipe,
+  .linha-partes.com-valor {
+    grid-template-columns: 1fr 1fr;
+  }
+  .linha-partes.com-equipe > select:first-child,
+  .linha-partes.com-valor > select:first-child {
+    grid-column: 1 / -1;
+  }
+  .cabecalho-partes {
+    display: none;
+  }
+}

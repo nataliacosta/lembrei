@@ -23,13 +23,17 @@ import {
 } from "../lib/alocacoes";
 import {
   excluirCentro,
+  excluirEquipe,
   excluirRecurso,
   salvarCentro,
+  salvarEquipe,
   salvarRecurso,
   watchCentros,
+  watchEquipes,
   watchMedicoes,
   watchRecursos,
 } from "../lib/medicoesContrato";
+import { CabecalhoPartes, SeletoresParte } from "./EditorDivisao";
 
 export function CentroTag({ tipo, codigo }) {
   return (
@@ -40,15 +44,35 @@ export function CentroTag({ tipo, codigo }) {
   );
 }
 
-function Partes({ partes, centrosPorId }) {
+// "Equipe Infra · Datacenter" (vazio quando não tem equipe).
+export function EquipeFrente({ equipe, frente }) {
+  if (!equipe) return null;
+  return (
+    <div className="equipe-frente">
+      Equipe {equipe}
+      {frente ? ` · ${frente}` : ""}
+    </div>
+  );
+}
+
+function nomesEquipeFrente(p, equipesPorId) {
+  const e = p.equipeId ? equipesPorId[p.equipeId] : null;
+  const f = e && p.frenteId ? (e.frentes || []).find((x) => x.id === p.frenteId) : null;
+  return { equipe: e?.nome || "", frente: f?.nome || "" };
+}
+
+function Partes({ partes, centrosPorId, equipesPorId = {}, empilhar = true }) {
   if (!partes?.length) return <span style={{ color: "var(--color-gray)" }}>—</span>;
   return (
-    <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "4px 10px", alignItems: "center" }}>
+    <span style={{ display: "inline-flex", flexDirection: empilhar ? "column" : "row", flexWrap: "wrap", gap: empilhar ? 4 : "4px 12px" }}>
       {partes.map((p, i) => {
         const c = centrosPorId[p.centroId];
         return (
-          <span key={i} style={{ whiteSpace: "nowrap" }}>
-            <CentroTag tipo={c?.tipo} codigo={c?.codigo || "(excluído)"} /> <span style={{ color: "var(--color-gray)", fontSize: 12 }}>{p.pct}%</span>
+          <span key={i}>
+            <span style={{ whiteSpace: "nowrap" }}>
+              <CentroTag tipo={c?.tipo} codigo={c?.codigo || "(excluído)"} /> <span style={{ color: "var(--color-gray)", fontSize: 12 }}>{formatarNumero(p.pct, p.pct % 1 ? 2 : 0)}%</span>
+            </span>
+            <EquipeFrente {...nomesEquipeFrente(p, equipesPorId)} />
           </span>
         );
       })}
@@ -97,12 +121,16 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
   const [mesVer, setMesVer] = useState(mesAtual);
   const [editandoRecurso, setEditandoRecurso] = useState(null); // id, "novo" ou null
   const [editandoCentro, setEditandoCentro] = useState(null);
+  const [equipes, setEquipes] = useState([]);
+  const [editandoEquipe, setEditandoEquipe] = useState(null);
 
   useEffect(() => watchCentros(contratoId, setCentros, (e) => setErro(e.message)), [contratoId]);
   useEffect(() => watchRecursos(contratoId, setRecursos, (e) => setErro(e.message)), [contratoId]);
+  useEffect(() => watchEquipes(contratoId, setEquipes, (e) => setErro(e.message)), [contratoId]);
   useEffect(() => watchMedicoes(contratoId, setMedicoes, (e) => setErro(e.message)), [contratoId]);
 
   const centrosPorId = useMemo(() => Object.fromEntries(centros.map((c) => [c.id, c])), [centros]);
+  const equipesPorId = useMemo(() => Object.fromEntries(equipes.map((e) => [e.id, e])), [equipes]);
   const mesUso = medicoes[0]?.mes || somarMeses(mesAtual, -1);
   const uso = useMemo(() => usoDosCentros(medicoes, mesUso), [medicoes, mesUso]);
 
@@ -195,17 +223,17 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
               editandoRecurso === r.id ? (
                 <tr key={r.id}>
                   <td colSpan={4} className="editor">
-                    <EditorRecurso contratoId={contratoId} recurso={r} recursos={recursos} centros={centros} mesInicial={mesVer} onFechar={() => setEditandoRecurso(null)} />
+                    <EditorRecurso contratoId={contratoId} recurso={r} recursos={recursos} centros={centros} equipes={equipes} mesInicial={mesVer} onFechar={() => setEditandoRecurso(null)} />
                   </td>
                 </tr>
               ) : (
-                <LinhaRecurso key={r.id} recurso={r} mes={mesVer} centrosPorId={centrosPorId} podeEditar={podeEditar} onEditar={() => setEditandoRecurso(r.id)} />
+                <LinhaRecurso key={r.id} recurso={r} mes={mesVer} centrosPorId={centrosPorId} equipesPorId={equipesPorId} podeEditar={podeEditar} onEditar={() => setEditandoRecurso(r.id)} />
               )
             )}
             {editandoRecurso === "novo" && (
               <tr>
                 <td colSpan={4} className="editor">
-                  <EditorRecurso contratoId={contratoId} recurso={null} recursos={recursos} centros={centros} mesInicial={mesVer} onFechar={() => setEditandoRecurso(null)} />
+                  <EditorRecurso contratoId={contratoId} recurso={null} recursos={recursos} centros={centros} equipes={equipes} mesInicial={mesVer} onFechar={() => setEditandoRecurso(null)} />
                 </td>
               </tr>
             )}
@@ -214,6 +242,71 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
       </div>
       <div className="texto-ajuda">
         Na medição, cada linha é ligada ao recurso pelo nome, usando a alocação do mês da medição. Dá para mudar até subir a medição.
+      </div>
+
+      <Secao
+        titulo={`Equipes e frentes · ${equipes.length} ${equipes.length === 1 ? "equipe" : "equipes"}`}
+        acao={
+          podeEditar && (
+            <button type="button" className="link-botao" onClick={() => setEditandoEquipe("nova")}>
+              + Nova equipe
+            </button>
+          )
+        }
+      />
+      <div className="lista-card tabela-rolagem">
+        <table className="tabela-med">
+          <thead>
+            <tr>
+              <th>Equipe</th>
+              <th>Responsável</th>
+              <th>Frentes</th>
+              <th>Recursos alocados em {rotuloMesCurto(mesVer)}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {equipes.length === 0 && editandoEquipe !== "nova" && (
+              <tr>
+                <td colSpan={5} style={{ color: "var(--color-gray)", fontSize: 14 }}>
+                  Nenhuma equipe cadastrada. Equipe e frente são opcionais nas alocações.
+                </td>
+              </tr>
+            )}
+            {equipes.map((e) =>
+              editandoEquipe === e.id ? (
+                <tr key={e.id}>
+                  <td colSpan={5} className="editor">
+                    <EditorEquipe contratoId={contratoId} equipe={e} recursos={recursos} onFechar={() => setEditandoEquipe(null)} />
+                  </td>
+                </tr>
+              ) : (
+                <tr key={e.id}>
+                  <td style={{ fontWeight: 600 }}>{e.nome}</td>
+                  <td>{e.responsavel || "—"}</td>
+                  <td>
+                    {(e.frentes || []).length ? (e.frentes || []).map((f) => <span key={f.id} className="chip-frente">{f.nome}</span>) : <span style={{ color: "var(--color-gray)" }}>—</span>}
+                  </td>
+                  <td>{alocadosNaEquipe(recursos, e.id, mesVer) || <span style={{ color: "var(--color-gray)" }}>—</span>}</td>
+                  <td style={{ textAlign: "right" }}>
+                    {podeEditar && (
+                      <button type="button" className="link-botao" onClick={() => setEditandoEquipe(e.id)}>
+                        Editar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            )}
+            {editandoEquipe === "nova" && (
+              <tr>
+                <td colSpan={5} className="editor">
+                  <EditorEquipe contratoId={contratoId} equipe={null} recursos={recursos} onFechar={() => setEditandoEquipe(null)} />
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       <Secao
@@ -362,7 +455,7 @@ function CartaoDoMes({ contrato, podeEditar }) {
   );
 }
 
-function LinhaRecurso({ recurso, mes, centrosPorId, podeEditar, onEditar }) {
+function LinhaRecurso({ recurso, mes, centrosPorId, equipesPorId, podeEditar, onEditar }) {
   const atual = alocacaoNoMes(recurso, mes);
   const proxima = proximaAlocacao(recurso, mes);
   return (
@@ -373,10 +466,10 @@ function LinhaRecurso({ recurso, mes, centrosPorId, podeEditar, onEditar }) {
       </td>
       <td className="num">{recurso.valorHH != null ? formatarReais(recurso.valorHH) : "—"}</td>
       <td>
-        {atual ? <Partes partes={atual.partes} centrosPorId={centrosPorId} /> : <span className="texto-alerta" style={{ fontSize: 12 }}>Sem alocação em {rotuloMesCurto(mes)}</span>}
+        {atual ? <Partes partes={atual.partes} centrosPorId={centrosPorId} equipesPorId={equipesPorId} /> : <span className="texto-alerta" style={{ fontSize: 12 }}>Sem alocação em {rotuloMesCurto(mes)}</span>}
         {proxima && (
           <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 4 }}>
-            A partir de {rotuloMesCurto(proxima.desde)}: <Partes partes={proxima.partes} centrosPorId={centrosPorId} />
+            A partir de {rotuloMesCurto(proxima.desde)}: <Partes partes={proxima.partes} centrosPorId={centrosPorId} equipesPorId={equipesPorId} empilhar={false} />
           </div>
         )}
       </td>
@@ -391,19 +484,20 @@ function LinhaRecurso({ recurso, mes, centrosPorId, podeEditar, onEditar }) {
   );
 }
 
-function EditorRecurso({ contratoId, recurso, recursos, centros, mesInicial, onFechar }) {
+function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesInicial, onFechar }) {
   const [nome, setNome] = useState(recurso?.nome || "");
   const [perfil, setPerfil] = useState(recurso?.perfil || "");
   const [valorHH, setValorHH] = useState(recurso?.valorHH != null ? formatarNumero(recurso.valorHH) : "");
   const [desde, setDesde] = useState(mesInicial);
   const [partes, setPartes] = useState(() => {
     const a = recurso ? alocacaoNoMes(recurso, mesInicial) : null;
-    return a ? a.partes.map((p) => ({ ...p })) : [{ centroId: "", pct: 100 }];
+    return a ? a.partes.map((p) => ({ equipeId: "", frenteId: "", ...p })) : [{ centroId: "", equipeId: "", frenteId: "", pct: 100 }];
   });
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const historico = recurso ? historicoDeAlocacoes(recurso) : [];
   const centrosPorId = Object.fromEntries(centros.map((c) => [c.id, c]));
+  const equipesPorId = Object.fromEntries(equipes.map((e) => [e.id, e]));
   const soma = somaPct(partes.filter((p) => p.centroId));
   const primeiroNome = (nome || "").trim().split(" ")[0];
 
@@ -417,10 +511,17 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, mesInicial, onF
     if (!nome.trim()) return setErro("Escreva o nome do recurso.");
     const repetido = recursos.find((r) => r.id !== recurso?.id && normalizarNome(r.nome) === normalizarNome(nome));
     if (repetido) return setErro(`Já existe um recurso chamado “${repetido.nome}” neste contrato.`);
-    const validas = partes.filter((p) => p.centroId).map((p) => ({ centroId: p.centroId, pct: Number(String(p.pct).replace(",", ".")) || 0 }));
+    const validas = partes
+      .filter((p) => p.centroId)
+      .map((p) => {
+        const v = { centroId: p.centroId, pct: Number(String(p.pct).replace(",", ".")) || 0 };
+        if (p.equipeId) v.equipeId = p.equipeId;
+        if (p.equipeId && p.frenteId) v.frenteId = p.frenteId;
+        return v;
+      });
     if (validas.length && Math.abs(somaPct(validas) - 100) > 0.001) return setErro("A soma dos percentuais precisa dar 100%.");
-    const ids = validas.map((p) => p.centroId);
-    if (new Set(ids).size !== ids.length) return setErro("O mesmo CC/ODI aparece duas vezes.");
+    const ids = validas.map((p) => `${p.centroId}|${p.equipeId || ""}|${p.frenteId || ""}`);
+    if (new Set(ids).size !== ids.length) return setErro("A mesma combinação de CC/ODI, equipe e frente aparece duas vezes.");
     const alocacoes = validas.length ? definirAlocacao(recurso, desde, validas) : recurso?.alocacoes || [];
     setSalvando(true);
     try {
@@ -485,30 +586,26 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, mesInicial, onF
           </div>
           <span style={{ ...rotulo, marginTop: 14 }}>Para onde vai</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <CabecalhoPartes classe="com-equipe" />
             {partes.map((p, i) => (
-              <div key={i} className="linha-partes">
-                <select value={p.centroId} onChange={(e) => mudarParte(i, { centroId: e.target.value })} aria-label={`CC ou ODI ${i + 1}`}>
-                  <option value="">Escolher CC/ODI…</option>
-                  {centros.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.tipo} {c.codigo}
-                      {c.descricao ? ` · ${c.descricao}` : ""}
-                    </option>
-                  ))}
-                </select>
+              <div key={i} className="linha-partes com-equipe">
+                <SeletoresParte parte={p} centros={centros} equipes={equipes} indice={i} onMudar={(m) => mudarParte(i, m)} />
                 <label style={{ display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
                   <input value={p.pct} onChange={(e) => mudarParte(i, { pct: e.target.value })} inputMode="decimal" aria-label={`Percentual ${i + 1}`} style={{ width: 64 }} />%
                 </label>
-                <button type="button" className="btn btn-ghost" style={{ padding: 0, width: 40 }} aria-label={`Remover CC/ODI ${i + 1}`} onClick={() => setPartes(partes.filter((_, j) => j !== i))} disabled={partes.length === 1}>
+                <button type="button" className="btn btn-ghost" style={{ padding: 0, width: 40 }} aria-label={`Remover parte ${i + 1}`} onClick={() => setPartes(partes.filter((_, j) => j !== i))} disabled={partes.length === 1}>
                   ×
                 </button>
               </div>
             ))}
+            <div className="texto-ajuda" style={{ marginTop: 0 }}>
+              Equipe e frente são opcionais. A lista de frentes muda conforme a equipe escolhida.
+            </div>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 8 }}>
             <button
               type="button"
-              onClick={() => setPartes([...partes, { centroId: "", pct: Math.max(0, Math.round((100 - soma) * 100) / 100) }])}
+              onClick={() => setPartes([...partes, { centroId: "", equipeId: "", frenteId: "", pct: Math.max(0, Math.round((100 - soma) * 100) / 100) }])}
               style={{ background: "none", border: "1px dashed var(--color-gray-light)", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, color: "var(--color-primary)", minHeight: 36 }}
             >
               + Dividir com outro CC/ODI
@@ -532,7 +629,7 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, mesInicial, onF
                     {h.ate ? `${rotuloMesCurto(h.desde)} a ${rotuloMesCurto(h.ate)}` : `Desde ${rotuloMesCurto(h.desde)}`}
                     {vigente ? " (atual)" : h.desde > mesDe(new Date()) ? " (agendada)" : ""}
                   </span>
-                  <Partes partes={h.partes} centrosPorId={centrosPorId} />
+                  <Partes partes={h.partes} centrosPorId={centrosPorId} equipesPorId={equipesPorId} empilhar={false} />
                   {historico.length > 1 && (
                     <button type="button" className="link-botao" style={{ fontSize: 12, color: "var(--color-orange)" }} onClick={() => removerPeriodo(h.desde)}>
                       remover
@@ -564,6 +661,145 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, mesInicial, onF
           </button>
           <button type="submit" className="btn btn-primary btn-sm" disabled={salvando}>
             {salvando ? "Salvando..." : recurso ? "Salvar recurso" : "Adicionar recurso"}
+          </button>
+        </span>
+      </div>
+    </form>
+  );
+}
+
+// "Marcos, Rafael (40%)": quem tem parte da alocação do mês nessa equipe.
+function alocadosNaEquipe(recursos, equipeId, mes) {
+  const nomes = [];
+  for (const r of recursos) {
+    const a = alocacaoNoMes(r, mes);
+    const pct = (a?.partes || []).filter((p) => p.equipeId === equipeId).reduce((s, p) => s + (Number(p.pct) || 0), 0);
+    if (!pct) continue;
+    const primeiro = r.nome.split(" ")[0];
+    nomes.push(pct >= 99.999 ? primeiro : `${primeiro} (${formatarNumero(pct, pct % 1 ? 2 : 0)}%)`);
+  }
+  return nomes.join(", ");
+}
+
+// Partes de alocação (de qualquer mês) que usam a equipe ou a frente.
+function usosDe(recursos, equipeId, frenteId) {
+  return recursos.filter((r) => (r.alocacoes || []).some((a) => a.partes.some((p) => p.equipeId === equipeId && (!frenteId || p.frenteId === frenteId))));
+}
+
+const novoId = () => Math.random().toString(36).slice(2, 10);
+
+function EditorEquipe({ contratoId, equipe, recursos, onFechar }) {
+  const [nome, setNome] = useState(equipe?.nome || "");
+  const [responsavel, setResponsavel] = useState(equipe?.responsavel || "");
+  const [frentes, setFrentes] = useState(() => (equipe?.frentes || []).map((f) => ({ ...f })));
+  const [nova, setNova] = useState("");
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  function adicionar() {
+    const n = nova.trim();
+    if (!n) return;
+    if (frentes.some((f) => normalizarNome(f.nome) === normalizarNome(n))) return setErro(`A frente “${n}” já está na lista.`);
+    setFrentes([...frentes, { id: novoId(), nome: n }]);
+    setNova("");
+    setErro("");
+  }
+
+  function remover(f) {
+    const usam = equipe ? usosDe(recursos, equipe.id, f.id) : [];
+    if (usam.length) return setErro(`A frente “${f.nome}” está nas alocações de ${usam.map((r) => r.nome).join(", ")}. Dá para renomear, mas não remover.`);
+    setFrentes(frentes.filter((x) => x.id !== f.id));
+  }
+
+  async function salvar(e) {
+    e.preventDefault();
+    setErro("");
+    if (!nome.trim()) return setErro("Escreva o nome da equipe.");
+    if (frentes.some((f) => !f.nome.trim())) return setErro("Uma frente ficou sem nome.");
+    const lista = nova.trim() && !frentes.some((f) => normalizarNome(f.nome) === normalizarNome(nova)) ? [...frentes, { id: novoId(), nome: nova.trim() }] : frentes;
+    setSalvando(true);
+    try {
+      await salvarEquipe(contratoId, equipe?.id, { nome, responsavel, frentes: lista });
+      onFechar();
+    } catch (err) {
+      console.error(err);
+      setErro("Não deu pra salvar. Tente de novo.");
+      setSalvando(false);
+    }
+  }
+
+  async function excluir() {
+    const usam = usosDe(recursos, equipe.id);
+    const aviso = usam.length
+      ? `A equipe ${equipe.nome} aparece nas alocações de ${usam.map((r) => r.nome).join(", ")}. Excluir mesmo assim? Essas alocações vão ficar sem equipe.`
+      : `Excluir a equipe ${equipe.nome}? As medições já salvas não mudam.`;
+    if (!window.confirm(aviso)) return;
+    await excluirEquipe(contratoId, equipe.id);
+    onFechar();
+  }
+
+  return (
+    <form onSubmit={salvar} aria-label={equipe ? `Editar equipe ${equipe.nome}` : "Nova equipe"}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <label style={{ flex: "1 1 220px", margin: 0 }}>
+          <span style={rotulo}>Nome da equipe</span>
+          <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Infra" maxLength={120} autoFocus />
+        </label>
+        <label style={{ flex: "1 1 220px", margin: 0 }}>
+          <span style={rotulo}>Responsável (opcional)</span>
+          <input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Quem lidera a equipe" maxLength={120} />
+        </label>
+      </div>
+      <span style={{ ...rotulo, marginTop: 14 }}>Frentes da equipe</span>
+      {frentes.length === 0 && <div className="texto-ajuda" style={{ marginTop: 0 }}>Nenhuma frente ainda.</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 480 }}>
+        {frentes.map((f, i) => (
+          <div key={f.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input value={f.nome} onChange={(e) => setFrentes(frentes.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))} aria-label={`Frente ${i + 1}`} maxLength={120} />
+            <button type="button" className="btn btn-ghost" style={{ padding: 0, width: 40, flex: "0 0 auto" }} aria-label={`Remover frente ${f.nome}`} onClick={() => remover(f)}>
+              ×
+            </button>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            value={nova}
+            onChange={(e) => setNova(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                adicionar();
+              }
+            }}
+            placeholder="Nova frente, ex: Integrações"
+            aria-label="Nova frente"
+            maxLength={120}
+          />
+          <button type="button" className="btn btn-ghost btn-sm" onClick={adicionar} style={{ flex: "0 0 auto" }}>
+            Adicionar
+          </button>
+        </div>
+      </div>
+      <div className="texto-ajuda">Uma frente que já está em alguma alocação não pode ser removida; dá para renomear.</div>
+      {erro && (
+        <div className="texto-alerta" role="alert" style={{ fontSize: 13, marginTop: 10 }}>
+          {erro}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", marginTop: 12, flexWrap: "wrap" }}>
+        <span>
+          {equipe && (
+            <button type="button" className="btn btn-ghost btn-sm" style={{ color: "var(--color-orange)", borderColor: "var(--color-orange-border)" }} onClick={excluir}>
+              Excluir equipe
+            </button>
+          )}
+        </span>
+        <span style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onFechar}>
+            Cancelar
+          </button>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={salvando}>
+            {salvando ? "Salvando..." : "Salvar equipe"}
           </button>
         </span>
       </div>

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import CabecalhoContrato from "../components/CabecalhoContrato";
-import { CentroTag } from "../components/AbaMedicoes";
+import { CentroTag, EquipeFrente } from "../components/AbaMedicoes";
+import EditorDivisao from "../components/EditorDivisao";
 import { IconeDocumento } from "../components/Icones";
 import { watchContrato } from "../lib/contratos";
 import { proximaMedicao } from "../lib/medicao";
@@ -16,6 +17,7 @@ import {
   mesDasLinhas,
   mesDe,
   normalizarNome,
+  partesParaAlocacao,
   periodoCurto,
   preencherLinhas,
   rotuloMes,
@@ -24,7 +26,7 @@ import {
   totaisDaMedicao,
   totaisPorCentro,
 } from "../lib/alocacoes";
-import { salvarMedicao, watchCentros, watchMedicoes, watchRecursos } from "../lib/medicoesContrato";
+import { salvarMedicao, watchCentros, watchEquipes, watchMedicoes, watchRecursos } from "../lib/medicoesContrato";
 
 const rotulo = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--color-gray)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" };
 
@@ -56,6 +58,9 @@ export default function SubirMedicaoPage() {
   const [mes, setMes] = useState(() => somarMeses(mesDe(new Date()), -1));
   const [escolhas, setEscolhas] = useState({}); // índice da linha → centroId
   const [guardar, setGuardar] = useState({}); // índice da linha → salvar como alocação
+  const [equipes, setEquipes] = useState([]);
+  const [divisoes, setDivisoes] = useState({}); // índice da linha → { partes, salvarAlocacao }
+  const [dividindo, setDividindo] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const inputRef = useRef(null);
@@ -64,6 +69,7 @@ export default function SubirMedicaoPage() {
   useEffect(() => watchCentros(contratoId, setCentros), [contratoId]);
   useEffect(() => watchRecursos(contratoId, setRecursos), [contratoId]);
   useEffect(() => watchMedicoes(contratoId, setMedicoes), [contratoId]);
+  useEffect(() => watchEquipes(contratoId, setEquipes), [contratoId]);
 
   // Sem planilha ainda: sugere o mês anterior ao ciclo de medição pendente.
   useEffect(() => {
@@ -75,11 +81,12 @@ export default function SubirMedicaoPage() {
   const centrosPorId = useMemo(() => Object.fromEntries(centros.map((c) => [c.id, c])), [centros]);
   const linhas = useMemo(() => {
     if (!lidas) return [];
-    return preencherLinhas(lidas, recursos, centros, mes).map((l, i) => {
+    return preencherLinhas(lidas, recursos, centros, mes, equipes).map((l, i) => {
+      if (divisoes[i]) return { ...l, partes: divisoes[i].partes, dividida: true };
       if (l.partes.length || !escolhas[i]) return l;
       return { ...l, partes: dividir(l, [{ centroId: escolhas[i], pct: 100 }], centrosPorId), escolhida: true };
     });
-  }, [lidas, recursos, centros, mes, escolhas, centrosPorId]);
+  }, [lidas, recursos, centros, mes, equipes, escolhas, divisoes, centrosPorId]);
 
   if (contrato === undefined) return <div className="spinner-wrap">Carregando...</div>;
   if (!contrato) return <div className="spinner-wrap">Contrato não encontrado (ou você não tem acesso).</div>;
@@ -92,6 +99,8 @@ export default function SubirMedicaoPage() {
     setLendo(true);
     setEscolhas({});
     setGuardar({});
+    setDivisoes({});
+    setDividindo(null);
     try {
       const r = await lerArquivo(arquivo);
       if (r.faltando.length) {
@@ -115,7 +124,7 @@ export default function SubirMedicaoPage() {
   }
 
   const semCentro = linhas.filter((l) => !l.partes.length).length;
-  const preenchidas = linhas.filter((l) => l.partes.length && !l.escolhida).length;
+  const preenchidas = linhas.filter((l) => l.partes.length && !l.escolhida && !l.dividida).length;
   const totais = totaisDaMedicao(linhas);
   const porCentro = totaisPorCentro(linhas);
   const jaExiste = medicoes.find((m) => m.mes === mes);
@@ -131,8 +140,9 @@ export default function SubirMedicaoPage() {
     const novos = new Map();
     const existentes = new Map();
     linhas.forEach((l, i) => {
-      if (!l.escolhida || guardar[i] === false) return;
-      const partes = [{ centroId: escolhas[i], pct: 100 }];
+      const daDivisao = l.dividida && divisoes[i]?.salvarAlocacao;
+      if (!daDivisao && (!l.escolhida || guardar[i] === false)) return;
+      const partes = daDivisao ? partesParaAlocacao(l.partes) : [{ centroId: escolhas[i], pct: 100 }];
       const chave = normalizarNome(l.recurso);
       if (l.recursoId) {
         const r = recursos.find((x) => x.id === l.recursoId);
@@ -142,8 +152,9 @@ export default function SubirMedicaoPage() {
       }
     });
     const linhasParaSalvar = linhas.map((l) => {
-      const { escolhida, ...resto } = l;
+      const { escolhida, dividida, ...resto } = l;
       void escolhida;
+      void dividida;
       return resto;
     });
     setSalvando(true);
@@ -273,11 +284,12 @@ export default function SubirMedicaoPage() {
                   <th className="num">Horas</th>
                   <th className="num">Valor total</th>
                   <th>Tipo pagamento</th>
-                  <th>CC / ODI</th>
+                  <th>CC / ODI · Equipe · Frente</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
-                {linhas.map((l, i) => (
+                {linhas.map((l, i) => [
                   <LinhaPrevia
                     key={i}
                     linha={l}
@@ -287,8 +299,29 @@ export default function SubirMedicaoPage() {
                     onEscolher={(v) => setEscolhas({ ...escolhas, [i]: v })}
                     guardar={guardar[i] !== false}
                     onGuardar={(v) => setGuardar({ ...guardar, [i]: v })}
-                  />
-                ))}
+                    onDividir={podeEditar && centros.length ? () => setDividindo(dividindo === i ? null : i) : null}
+                    dividindo={dividindo === i}
+                  />,
+                  dividindo === i && (
+                    <tr key={`d${i}`}>
+                      <td colSpan={9} className="editor">
+                        <EditorDivisao
+                          linha={l}
+                          centros={centros}
+                          equipes={equipes}
+                          partesIniciais={l.partes}
+                          mes={mes}
+                          permitirSalvarAlocacao
+                          onCancelar={() => setDividindo(null)}
+                          onAplicar={({ partes, salvarAlocacao }) => {
+                            setDivisoes({ ...divisoes, [i]: { partes, salvarAlocacao } });
+                            setDividindo(null);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ),
+                ])}
               </tbody>
             </table>
           </div>
@@ -347,9 +380,18 @@ function tipoPagamento(tipo) {
   return tipo === "CC" ? "Centro de Custo" : tipo === "ODI" ? "ODI" : "";
 }
 
-function LinhaPrevia({ linha, mes, centros, escolha, onEscolher, guardar, onGuardar }) {
+function LinhaPrevia({ linha, mes, centros, escolha, onEscolher, guardar, onGuardar, onDividir, dividindo }) {
   const l = linha;
   const primeiro = l.recurso.split(" ")[0];
+  const acao = (
+    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+      {onDividir && (
+        <button type="button" className="link-botao" style={{ fontSize: 12 }} onClick={onDividir} aria-expanded={dividindo}>
+          {l.partes.length > 1 ? "Editar divisão" : "Dividir"}
+        </button>
+      )}
+    </td>
+  );
   const colunasBase = (
     <>
       <td style={{ whiteSpace: "nowrap" }}>{periodoCurto(l.inicio, l.fim)}</td>
@@ -394,6 +436,7 @@ function LinhaPrevia({ linha, mes, centros, escolha, onEscolher, guardar, onGuar
             </label>
           )}
         </td>
+        {acao}
       </tr>
     );
   }
@@ -406,7 +449,9 @@ function LinhaPrevia({ linha, mes, centros, escolha, onEscolher, guardar, onGuar
         <td>{tipoPagamento(p.tipo)}</td>
         <td>
           <CentroTag tipo={p.tipo} codigo={p.codigo} />
+          <EquipeFrente equipe={p.equipe} frente={p.frente} />
         </td>
+        {acao}
       </tr>
     );
   }
@@ -418,6 +463,7 @@ function LinhaPrevia({ linha, mes, centros, escolha, onEscolher, guardar, onGuar
         <td colSpan={2} style={{ fontSize: 12, color: "var(--color-gray)" }}>
           dividido em {l.partes.length} ↓
         </td>
+        {acao}
       </tr>
       {l.partes.map((p, j) => (
         <tr key={j} className="sub">
@@ -430,7 +476,9 @@ function LinhaPrevia({ linha, mes, centros, escolha, onEscolher, guardar, onGuar
           <td>{tipoPagamento(p.tipo)}</td>
           <td>
             <CentroTag tipo={p.tipo} codigo={p.codigo} />
+            <EquipeFrente equipe={p.equipe} frente={p.frente} />
           </td>
+          <td />
         </tr>
       ))}
     </>

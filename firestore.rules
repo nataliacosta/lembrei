@@ -175,6 +175,17 @@ service cloud.firestore {
         allow delete: if podeEditarContrato(contratoId);
       }
 
+      match /equipes/{equipeId} {
+        allow read: if ehMembroContrato(contratoId);
+        allow create, update: if podeEditarContrato(contratoId)
+          && request.resource.data.nome is string
+          && request.resource.data.nome.size() > 0
+          && request.resource.data.nome.size() <= 120
+          && request.resource.data.frentes is list
+          && request.resource.data.frentes.size() <= 100;
+        allow delete: if podeEditarContrato(contratoId);
+      }
+
       match /recursos/{recursoId} {
         allow read: if ehMembroContrato(contratoId);
         allow create, update: if podeEditarContrato(contratoId)
