@@ -133,16 +133,16 @@ export default function MedicaoPage() {
 
   const editando = editadas !== null;
 
-  async function salvarEdicao() {
-    const t = totaisDaMedicao(editadas);
+  async function salvarEdicao(lista = editadas) {
+    const t = totaisDaMedicao(lista);
     setOcupado(true);
     try {
-      await atualizarMedicao(contratoId, mes, { linhas: editadas, total: t.total, horas: t.horas });
+      await atualizarMedicao(contratoId, mes, { linhas: lista, total: t.total, horas: t.horas });
       // Divisões marcadas para virar alocação a partir deste mês.
       const feitos = new Set();
       for (const [i, sim] of Object.entries(paraAlocar)) {
         if (!sim) continue;
-        const l = editadas[i];
+        const l = lista[i];
         const r = recursos.find((x) => x.id === l.recursoId) || recursos.find((x) => normalizarNome(x.nome) === normalizarNome(l.recurso));
         const chave = r?.id || normalizarNome(l.recurso);
         if (feitos.has(chave)) continue;
@@ -325,7 +325,7 @@ export default function MedicaoPage() {
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => (setEditadas(null), setParaAlocar({}), setDividindo(null), setEditandoAloc(null))}>
                 Cancelar
               </button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={salvarEdicao} disabled={ocupado || dividindo !== null || editandoAloc !== null}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => salvarEdicao()} disabled={ocupado || dividindo !== null || editandoAloc !== null}>
                 Salvar alterações
               </button>
             </span>
@@ -403,9 +403,10 @@ export default function MedicaoPage() {
                         mes={mes}
                         onCancelar={() => setEditandoAloc(null)}
                         onSalvo={({ partes, desde }) => {
-                          // Se a alocação nova vale para o mês desta medição, refaz a linha.
-                          if (desde <= mes) setEditadas(editadas.map((x, j) => (j === i ? { ...x, partes: dividir(x, partes, centrosPorId, equipesPorId) } : x)));
                           setEditandoAloc(null);
+                          // Se a alocação nova vale para o mês desta medição, refaz a
+                          // linha e já grava a medição (senão ela só mudaria na tela).
+                          if (desde <= mes) salvarEdicao(editadas.map((x, j) => (j === i ? { ...x, partes: dividir(x, partes, centrosPorId, equipesPorId) } : x)));
                         }}
                       />
                     </td>
