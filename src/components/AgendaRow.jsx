@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { marcarMedicaoFeita } from "../lib/contratos";
+import { marcarLancada } from "../lib/medicoesContrato";
 import { linkDoItem } from "../lib/itens";
 import { atualizarDemanda } from "../lib/filas";
 import { notificarFila } from "../lib/notificacoes";
@@ -192,7 +193,8 @@ function IconeMedicao({ size = 18 }) {
   );
 }
 
-// Medição mensal de um contrato (ver lib/medicao.js).
+// Medição mensal de um contrato (ver lib/medicao.js). Depois de subida a
+// planilha, vira "Lançar a medição no sistema" até ser marcada como lançada.
 function MedicaoRow({ entrada }) {
   const { user } = useAuth();
   const { contrato, medicao, data } = entrada;
@@ -201,15 +203,18 @@ function MedicaoRow({ entrada }) {
   const papel = contrato.membros?.[user.uid];
   const podeMarcar = papel === "proprietario" || papel === "editor";
   const m = contrato.medicao;
-  const detalhes = [contrato.titulo, m.quem, m.lightPlus ? "Light+" : null].filter(Boolean);
+  const subida = medicao.subida;
+  const detalhes = [contrato.titulo, subida ? "subida · falta lançar" : m.quem, !subida && m.lightPlus ? "Light+" : null].filter(Boolean);
+  const link = subida ? `/contratos/${contrato.id}/medicoes/${medicao.mesReferencia}` : `/contratos/${contrato.id}/medicoes`;
 
-  async function feita() {
+  async function marcar() {
     setSalvando(true);
     try {
-      await marcarMedicaoFeita(contrato.id, medicao.chave, true);
+      if (subida) await marcarLancada(contrato.id, medicao.mesReferencia, true, medicao.chave);
+      else await marcarMedicaoFeita(contrato.id, medicao.chave, true);
     } catch (e) {
       console.error("Erro ao marcar medição:", e);
-      window.alert("Não deu pra marcar a medição como feita. Tente de novo.");
+      window.alert("Não deu pra marcar a medição. Tente de novo.");
       setSalvando(false);
     }
   }
@@ -219,8 +224,8 @@ function MedicaoRow({ entrada }) {
       <span className={`icone-linha ${atrasado ? "texto-alerta" : ""}`} style={{ color: atrasado ? undefined : "var(--color-primary)" }}>
         <IconeMedicao />
       </span>
-      <Link to={`/contratos/${contrato.id}`} style={{ minWidth: 0, color: "inherit" }}>
-        <div className="titulo">Fazer a medição de {medicao.nomeMes}</div>
+      <Link to={link} style={{ minWidth: 0, color: "inherit" }}>
+        <div className="titulo">{subida ? `Lançar a medição de ${medicao.nomeMes} no sistema` : `Fazer a medição de ${medicao.nomeMes}`}</div>
         <div className="meta">
           <span className="pill pill-medicao">Medição</span>
           <span>{detalhes.join(" · ")}</span>
@@ -229,8 +234,8 @@ function MedicaoRow({ entrada }) {
       </Link>
       {podeMarcar ? (
         <div className="acoes-lembrete">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={feita} disabled={salvando}>
-            {salvando ? "Salvando..." : "Medição feita"}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={marcar} disabled={salvando}>
+            {salvando ? "Salvando..." : subida ? "Lançada no sistema" : "Medição feita"}
           </button>
         </div>
       ) : (

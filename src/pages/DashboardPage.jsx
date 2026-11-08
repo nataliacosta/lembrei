@@ -36,6 +36,7 @@ export default function DashboardPage() {
     contratos,
     mapaContratos,
     aditivosTI,
+    ehSoMedicao,
     erroContratos,
     papelNaFrente,
     origemDe,
@@ -54,7 +55,7 @@ export default function DashboardPage() {
   const medicoes = entradasDeMedicao(contratos, { uid: user.uid, soMeus: filtro === "meus" });
   const cobrancas = entradasDeCobranca(minhasDemandas, { donoId: user.uid, fila: minhaFila });
   const { grupos, semData } = agruparAgenda(itensAbertos, { uid: user.uid, soMeus: filtro === "meus", extras: [...medicoes, ...cobrancas] });
-  const contratosAtencao = contratosPedindoAtencao(contratos);
+  const contratosAtencao = contratosPedindoAtencao(contratos.filter((c) => !ehSoMedicao(c.id)));
   const podeEditar = (frenteId) => ["proprietario", "editor"].includes(papelNaFrente(frenteId));
   const totalAgenda = GRUPOS.reduce((soma, g) => soma + grupos[g.key].length, 0);
 

@@ -17,6 +17,7 @@ import {
   partesParaAlocacao,
   periodoCurto,
   rotuloMes,
+  somarMeses,
   totaisDaMedicao,
   totaisPorCentro,
   totaisPorEquipe,
@@ -123,7 +124,7 @@ export default function MedicaoPage() {
   async function alternarLancada() {
     setOcupado(true);
     try {
-      await marcarLancada(contratoId, mes, medicao.status !== "lancada");
+      await marcarLancada(contratoId, mes, medicao.status !== "lancada", contrato.medicao?.ativa ? somarMeses(mes, 1) : null);
     } catch (e) {
       console.error(e);
       window.alert("Não deu pra atualizar. Tente de novo.");
@@ -161,9 +162,17 @@ export default function MedicaoPage() {
     setOcupado(false);
   }
 
+  function excluirLinhaEditada(i) {
+    if (!window.confirm(`Tirar a linha de ${editadas[i].recurso} desta medição? Ela sai de vez quando você salvar as alterações.`)) return;
+    setEditadas(editadas.filter((_, j) => j !== i));
+    setParaAlocar(Object.fromEntries(Object.entries(paraAlocar).filter(([k]) => Number(k) !== i).map(([k, v]) => [Number(k) > i ? Number(k) - 1 : Number(k), v])));
+    setDividindo(null);
+    setEditandoAloc(null);
+  }
+
   async function excluir() {
     if (!window.confirm(`Excluir a medição de ${rotuloMes(mes)}? Essa ação não pode ser desfeita.`)) return;
-    await excluirMedicao(contratoId, mes);
+    await excluirMedicao(contratoId, mes, contrato.medicao?.ativa ? somarMeses(mes, 1) : null);
     navigate(`/contratos/${contratoId}/medicoes`, { replace: true });
   }
 
@@ -380,6 +389,9 @@ export default function MedicaoPage() {
                   </button>
                   <button type="button" className="link-botao" style={{ fontSize: 12, display: "block", marginLeft: "auto", marginTop: 6 }} onClick={() => (setDividindo(null), setEditandoAloc(editandoAloc === i ? null : i))} aria-expanded={editandoAloc === i}>
                     Editar alocação
+                  </button>
+                  <button type="button" className="link-botao" style={{ fontSize: 12, display: "block", marginLeft: "auto", marginTop: 6, color: "var(--color-orange)" }} onClick={() => excluirLinhaEditada(i)}>
+                    Excluir linha
                   </button>
                 </td>
               ) : null;

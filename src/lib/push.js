@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { arrayRemove, arrayUnion, collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { app, db } from "../firebase";
 import { VAPID_PUBLICO } from "./pushChave";
@@ -106,6 +106,19 @@ export async function enviarTeste() {
 // Funcionalidades ligadas/desligadas (ver lib/funcionalidades.js).
 export async function salvarFuncionalidades(uid, funcionalidades) {
   await setDoc(doc(db, "usuarios", uid), { funcionalidades }, { merge: true });
+}
+
+// Contratos em que a pessoa só faz as medições (vale só para ela).
+export function watchContratosSoMedicao(uid, callback) {
+  return onSnapshot(
+    doc(db, "usuarios", uid),
+    (snap) => callback(snap.data()?.contratosSoMedicao || []),
+    (e) => console.error("Erro ao ler os contratos só de medição:", e)
+  );
+}
+
+export async function definirSoMedicao(uid, contratoId, soMedicao) {
+  await setDoc(doc(db, "usuarios", uid), { contratosSoMedicao: soMedicao ? arrayUnion(contratoId) : arrayRemove(contratoId) }, { merge: true });
 }
 
 export function watchFuncionalidades(uid, callback) {

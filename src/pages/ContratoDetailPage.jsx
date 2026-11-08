@@ -9,6 +9,8 @@ import { useUsuarios } from "../hooks/useUsuarios";
 import ItensDoContrato from "../components/ItensDoContrato";
 import AbaMedicoes from "../components/AbaMedicoes";
 import { AbasContrato } from "../components/CabecalhoContrato";
+import { useDados } from "../contexts/DadosContext";
+import { definirSoMedicao } from "../lib/push";
 import { CONTRATO_STATUS, PAPEIS, TIPO_POR_KEY } from "../lib/constants";
 import { alertaVencimento, descreverVencimento, diasAte, formatarData, formatarDataRelativa, inicioDoDia } from "../lib/datas";
 import { chaveDoMes, nomeDaMedicao, proximaMedicao } from "../lib/medicao";
@@ -51,6 +53,8 @@ export default function ContratoDetailPage({ aba = "resumo" }) {
   useEffect(() => watchItensDoContrato(contratoId, setItensVinculados), [contratoId]);
 
   const membros = useUsuarios(contrato?.membrosUids || []);
+  const { ehSoMedicao } = useDados();
+  const soMedicao = ehSoMedicao(contratoId);
 
   const aditivoAtivo = aditivos.find((a) => !a.finalizado);
   const papel = contrato?.membros?.[user.uid];
@@ -94,7 +98,7 @@ export default function ContratoDetailPage({ aba = "resumo" }) {
     await finalizarCancelamento(contratoId, cancelamentoAtivo.id);
   }
 
-  const proximoPasso = calcularProximoPasso({ contrato, alerta, aditivoAtivo, cancelamentoAtivo });
+  const proximoPasso = soMedicao ? null : calcularProximoPasso({ contrato, alerta, aditivoAtivo, cancelamentoAtivo });
 
   const cabecalho = (
     <>
@@ -140,6 +144,20 @@ export default function ContratoDetailPage({ aba = "resumo" }) {
       <div className="detalhe-layout" style={{ marginTop: 16 }}>
         <div className="detalhe-principal">
           {cabecalho}
+
+          {soMedicao && (
+            <div className="lista-card" style={{ marginTop: 18, padding: "14px 18px", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", background: "#fafbfb" }}>
+              <div style={{ flex: "1 1 320px" }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Você só faz as medições deste contrato</div>
+                <div style={{ fontSize: 13, color: "var(--color-gray)", marginTop: 2 }}>
+                  Aditivos, renovação e cancelamento são de outra pessoa. Por isso ele não aparece em “Contratos pedindo atenção” no seu O que fazer; a medição continua aparecendo normalmente.
+                </div>
+              </div>
+              <Link to={`/contratos/${contratoId}/medicoes`} className="btn btn-primary">
+                Ir para Medições
+              </Link>
+            </div>
+          )}
 
           {proximoPasso && (
             <div
@@ -304,6 +322,8 @@ export default function ContratoDetailPage({ aba = "resumo" }) {
             </div>
           </div>
 
+          <CartaoMinhaParte contratoId={contratoId} soMedicao={soMedicao} />
+
           {contrato.medicao?.ativa && <CartaoMedicao contrato={contrato} />}
 
           <div className="lista-card" style={{ padding: "14px 16px" }}>
@@ -448,6 +468,41 @@ function CartaoMedicao({ contrato }) {
           Ir para Medições
         </Link>
       </div>
+    </div>
+  );
+}
+
+// Gestão e medição, ou só medição (vale só para quem está vendo).
+function CartaoMinhaParte({ contratoId, soMedicao }) {
+  const { user } = useAuth();
+  const [salvando, setSalvando] = useState(false);
+  async function escolher(valor) {
+    if (valor === soMedicao) return;
+    setSalvando(true);
+    try {
+      await definirSoMedicao(user.uid, contratoId, valor);
+    } catch (e) {
+      console.error(e);
+      window.alert("Não deu pra salvar. Tente de novo.");
+    }
+    setSalvando(false);
+  }
+  const opcao = (valor, titulo, detalhe) => (
+    <label style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 0", fontSize: 13, margin: 0, fontWeight: 400, cursor: "pointer" }}>
+      <input type="radio" name={`parte-${contratoId}`} checked={soMedicao === valor} disabled={salvando} onChange={() => escolher(valor)} style={{ width: "auto", marginTop: 3, accentColor: "var(--color-primary)" }} />
+      <span>
+        <b>{titulo}</b>
+        <span style={{ display: "block", fontSize: 12, color: "var(--color-gray)" }}>{detalhe}</span>
+      </span>
+    </label>
+  );
+  return (
+    <div className="lista-card" style={{ padding: "14px 16px" }}>
+      <SectionTitle>Sua parte neste contrato</SectionTitle>
+      {opcao(false, "Gestão e medição", "Aditivos, renovação, cancelamento e medições.")}
+      <div style={{ borderTop: "1px solid #f0f0f0" }} />
+      {opcao(true, "Só medição", "Sem lembrete de vencimento nem de aditivo. No menu, ele fica em “Só medição”.")}
+      <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 6 }}>Vale só para você: quem cuida da gestão continua vendo tudo normalmente.</div>
     </div>
   );
 }
