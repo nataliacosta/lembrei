@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import CabecalhoContrato from "../components/CabecalhoContrato";
 import { CentroTag, EquipeFrente } from "../components/AbaMedicoes";
-import EditorDivisao from "../components/EditorDivisao";
+import EditorDivisao, { SeletoresParte } from "../components/EditorDivisao";
 import { IconeDocumento } from "../components/Icones";
 import { watchContrato } from "../lib/contratos";
 import { proximaMedicao } from "../lib/medicao";
@@ -56,7 +56,7 @@ export default function SubirMedicaoPage() {
   const [erroArquivo, setErroArquivo] = useState("");
   const [lendo, setLendo] = useState(false);
   const [mes, setMes] = useState(() => somarMeses(mesDe(new Date()), -1));
-  const [escolhas, setEscolhas] = useState({}); // índice da linha → centroId
+  const [escolhas, setEscolhas] = useState({}); // índice da linha → { centroId, equipeId, frenteId }
   const [guardar, setGuardar] = useState({}); // índice da linha → salvar como alocação
   const [equipes, setEquipes] = useState([]);
   const [divisoes, setDivisoes] = useState({}); // índice da linha → { partes, salvarAlocacao }
@@ -79,14 +79,17 @@ export default function SubirMedicaoPage() {
   }, [contrato, lidas]);
 
   const centrosPorId = useMemo(() => Object.fromEntries(centros.map((c) => [c.id, c])), [centros]);
+  const equipesPorId = useMemo(() => Object.fromEntries(equipes.map((e) => [e.id, e])), [equipes]);
   const linhas = useMemo(() => {
     if (!lidas) return [];
     return preencherLinhas(lidas, recursos, centros, mes, equipes).map((l, i) => {
       if (divisoes[i]) return { ...l, partes: divisoes[i].partes, dividida: true };
-      if (l.partes.length || !escolhas[i]) return l;
-      return { ...l, partes: dividir(l, [{ centroId: escolhas[i], pct: 100 }], centrosPorId), escolhida: true };
+      const e = escolhas[i];
+      if (l.partes.length || !e) return l;
+      if (!e.centroId) return { ...l, escolhida: true };
+      return { ...l, partes: dividir(l, [{ ...e, pct: 100 }], centrosPorId, equipesPorId), escolhida: true };
     });
-  }, [lidas, recursos, centros, mes, equipes, escolhas, divisoes, centrosPorId]);
+  }, [lidas, recursos, centros, mes, equipes, escolhas, divisoes, centrosPorId, equipesPorId]);
 
   if (contrato === undefined) return <div className="spinner-wrap">Carregando...</div>;
   if (!contrato) return <div className="spinner-wrap">Contrato não encontrado (ou você não tem acesso).</div>;
@@ -142,7 +145,8 @@ export default function SubirMedicaoPage() {
     linhas.forEach((l, i) => {
       const daDivisao = l.dividida && divisoes[i]?.salvarAlocacao;
       if (!daDivisao && (!l.escolhida || guardar[i] === false)) return;
-      const partes = daDivisao ? partesParaAlocacao(l.partes) : [{ centroId: escolhas[i], pct: 100 }];
+      const partes = partesParaAlocacao(l.partes);
+      if (!partes.length) return;
       const chave = normalizarNome(l.recurso);
       if (l.recursoId) {
         const r = recursos.find((x) => x.id === l.recursoId);
@@ -295,8 +299,9 @@ export default function SubirMedicaoPage() {
                     linha={l}
                     mes={mes}
                     centros={centros}
-                    escolha={escolhas[i] || ""}
-                    onEscolher={(v) => setEscolhas({ ...escolhas, [i]: v })}
+                    equipes={equipes}
+                    escolha={escolhas[i] || {}}
+                    onEscolher={(m) => setEscolhas({ ...escolhas, [i]: { ...(escolhas[i] || {}), ...m } })}
                     guardar={guardar[i] !== false}
                     onGuardar={(v) => setGuardar({ ...guardar, [i]: v })}
                     onDividir={podeEditar && centros.length ? () => setDividindo(dividindo === i ? null : i) : null}
@@ -380,7 +385,7 @@ function tipoPagamento(tipo) {
   return tipo === "CC" ? "Centro de Custo" : tipo === "ODI" ? "ODI" : "";
 }
 
-function LinhaPrevia({ linha, mes, centros, escolha, onEscolher, guardar, onGuardar, onDividir, dividindo }) {
+function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guardar, onGuardar, onDividir, dividindo }) {
   const l = linha;
   const primeiro = l.recurso.split(" ")[0];
   const acao = (
@@ -417,19 +422,13 @@ function LinhaPrevia({ linha, mes, centros, escolha, onEscolher, guardar, onGuar
     return (
       <tr className={l.partes.length ? "" : "falta"}>
         {colunasBase}
-        <td colSpan={2} style={{ minWidth: 240 }}>
-          <select value={escolha} onChange={(e) => onEscolher(e.target.value)} aria-label={`CC ou ODI de ${l.recurso}`} style={{ padding: "6px 8px", borderColor: l.partes.length ? undefined : "var(--color-orange-border)" }}>
-            <option value="">Escolher CC/ODI…</option>
-            {centros.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.tipo} {c.codigo}
-                {c.descricao ? ` · ${c.descricao}` : ""}
-              </option>
-            ))}
-          </select>
+        <td colSpan={2} style={{ minWidth: 260 }}>
+          <div className={`escolha-rapida ${l.partes.length ? "" : "pendente"}`} aria-label={`CC/ODI, equipe e frente de ${l.recurso}`} role="group">
+            <SeletoresParte parte={escolha} centros={centros} equipes={equipes} indice={0} onMudar={onEscolher} />
+          </div>
           {centros.length === 0 && <div className="texto-ajuda">Cadastre os CCs/ODIs na aba Medições.</div>}
           {l.recursoId && <div className="texto-ajuda">Sem alocação em {rotuloMesCurto(mes)}.</div>}
-          {escolha && (
+          {escolha.centroId && (
             <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--color-gray)", marginTop: 6, fontWeight: 400 }}>
               <input type="checkbox" checked={guardar} onChange={(e) => onGuardar(e.target.checked)} style={{ width: "auto" }} />
               Salvar como alocação de {primeiro}
