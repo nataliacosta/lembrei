@@ -378,14 +378,18 @@ export function periodoCurto(inicio, fim) {
 }
 
 // Linhas para a planilha preenchida: uma linha por parte (as divididas viram várias).
-export function linhasParaExportar(linhas) {
+// Com "chaves", só entram as partes desses CC/ODIs ("sem" = linhas sem CC/ODI).
+export function linhasParaExportar(linhas, chaves = null) {
+  const entra = (chave) => !chaves || chaves.includes(chave);
   const saida = [];
   for (const l of linhas) {
     const base = { inicio: l.inicio, fim: l.fim, recurso: l.recurso, perfil: l.perfil, valorHH: l.valorHH, justificativa: l.justificativa };
-    if (!l.partes?.length) saida.push({ ...base, horas: l.horas, valor: l.valorTotal, tipoPagamento: "", centro: "", equipe: "", frente: "" });
-    else
+    if (!l.partes?.length) {
+      if (entra("sem")) saida.push({ ...base, centroId: null, horas: l.horas, valor: l.valorTotal, tipoPagamento: "", centro: "", equipe: "", frente: "" });
+    } else
       for (const p of l.partes)
-        saida.push({ ...base, horas: p.horas, valor: p.valor, tipoPagamento: p.tipo === "CC" ? "Centro de Custo" : "ODI", centro: p.codigo, equipe: p.equipe || "", frente: p.frente || "" });
+        if (entra(p.centroId))
+          saida.push({ centroId: p.centroId, ...base, horas: p.horas, valor: p.valor, tipoPagamento: p.tipo === "CC" ? "Centro de Custo" : "ODI", centro: p.codigo, equipe: p.equipe || "", frente: p.frente || "" });
   }
   return saida;
 }
