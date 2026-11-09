@@ -2675,3 +2675,37 @@ label {
     font-size: 17px;
   }
 }
+
+/* Visão condensada agrupada por projeto */
+.tabela-orc2 tr.linha-grupo td {
+  background: #eef3f2;
+}
+.botao-grupo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-dark);
+  cursor: pointer;
+  text-align: left;
+}
+.botao-grupo .seta {
+  color: var(--color-primary);
+  font-size: 12px;
+  width: 10px;
+}
+.botao-grupo .qtd {
+  font-size: 12px;
+  color: var(--color-gray);
+  white-space: nowrap;
+}
+.botao-grupo i {
+  color: var(--color-gray);
+}
+.tabela-orc2 td.recuo-grupo {
+  padding-left: 30px;
+}

@@ -211,33 +211,7 @@ function VisaoGeral({ ano, vigente }) {
                       {o.linhas.length > 1 && (
                         <div className="texto-ajuda">Linhas do orçamento com esta ODI: {o.linhas.map((l) => [l.linha, l.projeto].filter(Boolean).join(" · ")).join("; ")}.</div>
                       )}
-                      <div style={{ ...secaoTitulo, margin: "14px 0 4px" }}>
-                        Lançado nesta ODI · {o.lancamentos.length} {o.lancamentos.length === 1 ? "medição" : "medições"}
-                      </div>
-                      {o.lancamentos.length === 0 && <div style={{ fontSize: 13, color: "var(--color-gray)" }}>Nenhuma medição lançada ainda.</div>}
-                      {(verTodas ? o.lancamentos : o.lancamentos.slice(0, 5)).map((x) => (
-                        <LinhaLancamento key={`${x.contratoId}-${x.mes}`} x={x} />
-                      ))}
-                      {!verTodas && o.lancamentos.length > 5 && (
-                        <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderTop: "1px solid #eef1f0", fontSize: 13, color: "var(--color-gray)" }}>
-                          <span>+ {o.lancamentos.length - 5} medições anteriores</span>
-                          <button type="button" className="link-botao" onClick={() => setTodasDe({ ...todasDe, [o.id]: true })}>
-                            mostrar todas
-                          </button>
-                        </div>
-                      )}
-                      {o.pendentes.length > 0 && (
-                        <div style={{ marginTop: 8, padding: "10px 12px", border: "1px dashed #cdd9d7", borderRadius: 8, fontSize: 13, color: "var(--color-gray)" }}>
-                          <b style={{ color: "var(--color-dark)" }}>Ainda não conta:</b>{" "}
-                          {o.pendentes.map((x, i) => (
-                            <span key={i}>
-                              {i > 0 && "; "}
-                              <Link to={`/contratos/${x.contratoId}/medicoes/${x.mes}`}>medição de {rotuloMes(x.mes).toLowerCase()}</Link> · {x.contratoTitulo} · {formatarReais(x.valor)} (vai contar em {rotuloMes(x.mesPagamento).split("/")[0].toLowerCase()})
-                            </span>
-                          ))}
-                          {" "}— falta marcar como lançada no sistema.
-                        </div>
-                      )}
+                      <Historico item={o} nome="nesta ODI" todas={verTodas} onTodas={() => setTodasDe({ ...todasDe, [o.id]: true })} />
                     </td>
                   </tr>
                 ),
@@ -267,35 +241,99 @@ function VisaoGeral({ ano, vigente }) {
           <thead>
             <tr>
               <th>CC / ODI</th>
-              <th>Usado em</th>
+              <th className="esconde-mob">Usado em</th>
               <th className="num">Lançado em {ano}</th>
+              <th />
             </tr>
           </thead>
           <tbody>
             {r.fora.length === 0 && (
               <tr>
-                <td colSpan={3} style={{ color: "var(--color-gray)" }}>
+                <td colSpan={4} style={{ color: "var(--color-gray)" }}>
                   Nenhuma medição com CC/ODI fora do orçamento em {ano}.
                 </td>
               </tr>
             )}
-            {r.fora.map((f) => (
-              <tr key={f.id}>
-                <td>
-                  <CentroTag tipo={f.tipo} codigo={f.codigo} />
-                  {centrosPorId[f.id]?.descricao && <div className="sub">{centrosPorId[f.id].descricao}</div>}
-                </td>
-                <td>{f.contratos.join(", ") || "—"}</td>
-                <td className="num">
-                  {formatarReais(f.realizado.total)}
-                  {f.pendentes.length > 0 && <div className="sub">+ {formatarReais(f.pendentes.reduce((s, x) => s + x.valor, 0))} a lançar</div>}
-                </td>
-              </tr>
-            ))}
+            {r.fora.map((f) => {
+              const chave = `fora:${f.id}`;
+              const estaAberta = aberta === chave;
+              return [
+                <tr key={f.id} className={estaAberta ? "aberta" : ""}>
+                  <td>
+                    <CentroTag tipo={f.tipo} codigo={f.codigo} />
+                    {centrosPorId[f.id]?.descricao && <div className="sub">{centrosPorId[f.id].descricao}</div>}
+                    <div className="sub so-mob">{f.contratos.join(", ")}</div>
+                  </td>
+                  <td className="esconde-mob">{f.contratos.join(", ") || "—"}</td>
+                  <td className="num">
+                    {formatarReais(f.realizado.total)}
+                    {f.pendentes.length > 0 && <div className="sub">+ {formatarReais(f.pendentes.reduce((s, x) => s + x.valor, 0))} a lançar</div>}
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    <button type="button" className="link-botao" onClick={() => setAberta(estaAberta ? null : chave)} aria-expanded={estaAberta} aria-label={`${estaAberta ? "Fechar" : "Abrir"} ${f.tipo} ${f.codigo}`}>
+                      <span className="esconde-mob">{estaAberta ? "Fechar " : "Abrir "}</span>
+                      {estaAberta ? "▴" : "▾"}
+                    </button>
+                  </td>
+                </tr>,
+                estaAberta && (
+                  <tr key={`${f.id}-aberta`}>
+                    <td colSpan={4} className="editor">
+                      <div style={{ fontSize: 12, color: "var(--color-gray)", marginBottom: 6 }}>Lançado por mês de pagamento</div>
+                      <div className="grade-meses">
+                        {MESES.map((m, i) => (
+                          <div key={m} className="mes-cartao" style={i === idxMes ? { borderColor: "var(--color-primary)" } : undefined}>
+                            <span>{m}</span>
+                            <b style={{ color: "var(--color-primary-dark)" }}>{mil(f.realizado.meses[i])}</b>
+                          </div>
+                        ))}
+                      </div>
+                      <Historico item={f} nome={`neste ${f.tipo}`} todas={todasDe[chave]} onTodas={() => setTodasDe({ ...todasDe, [chave]: true })} />
+                    </td>
+                  </tr>
+                ),
+              ];
+            })}
           </tbody>
         </table>
       </div>
       <div className="texto-ajuda">Só para referência: esses não estão no seu orçamento, então não têm orçado nem saldo.</div>
+    </>
+  );
+}
+
+// Medições lançadas (as mais recentes, com "mostrar todas") e as que ainda não contam.
+function Historico({ item, nome, todas, onTodas }) {
+  const { lancamentos, pendentes } = item;
+  return (
+    <>
+      <div style={{ ...secaoTitulo, margin: "14px 0 4px" }}>
+        Lançado {nome} · {lancamentos.length} {lancamentos.length === 1 ? "medição" : "medições"}
+      </div>
+      {lancamentos.length === 0 && <div style={{ fontSize: 13, color: "var(--color-gray)" }}>Nenhuma medição lançada ainda.</div>}
+      {(todas ? lancamentos : lancamentos.slice(0, 5)).map((x) => (
+        <LinhaLancamento key={`${x.contratoId}-${x.mes}`} x={x} />
+      ))}
+      {!todas && lancamentos.length > 5 && (
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderTop: "1px solid #eef1f0", fontSize: 13, color: "var(--color-gray)" }}>
+          <span>+ {lancamentos.length - 5} medições anteriores</span>
+          <button type="button" className="link-botao" onClick={onTodas}>
+            mostrar todas
+          </button>
+        </div>
+      )}
+      {pendentes.length > 0 && (
+        <div style={{ marginTop: 8, padding: "10px 12px", border: "1px dashed #cdd9d7", borderRadius: 8, fontSize: 13, color: "var(--color-gray)" }}>
+          <b style={{ color: "var(--color-dark)" }}>Ainda não conta:</b>{" "}
+          {pendentes.map((x, i) => (
+            <span key={i}>
+              {i > 0 && "; "}
+              <Link to={`/contratos/${x.contratoId}/medicoes/${x.mes}`}>medição de {rotuloMes(x.mes).toLowerCase()}</Link> · {x.contratoTitulo} · {formatarReais(x.valor)} (vai contar em {rotuloMes(x.mesPagamento).split("/")[0].toLowerCase()})
+            </span>
+          ))}{" "}
+          — falta marcar como lançada no sistema.
+        </div>
+      )}
     </>
   );
 }
