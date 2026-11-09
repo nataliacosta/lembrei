@@ -754,7 +754,7 @@ function EditorLinhaCompleta({ linha, sugestoes, onSalvar, onCancelar, onExcluir
 
 // ---------- Visão condensada ----------
 
-const CORES_TIPO = { Projeto: "#e3eefc", Licenciamento: "#f1e8fb", "Serviço/sustentação": "#e0f5ef", MOP: "#fdf1d8" };
+const CORES_TIPO = { Projeto: "#e3eefc", Licenciamento: "#f1e8fb", "Serviço/sustentação": "#e0f5ef", MOP: "#fdf1d8", Nuvem: "#dff3fb" };
 
 function Etiqueta({ texto, cor }) {
   if (!texto) return <span style={{ color: "var(--color-gray)" }}>—</span>;

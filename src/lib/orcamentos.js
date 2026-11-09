@@ -15,7 +15,7 @@ import { lerNumero, normalizarNome } from "./alocacoes.js";
 export const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const MESES_LONGOS = ["janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
-export const TIPOS = ["Projeto", "Licenciamento", "MOP", "Serviço/sustentação", "N/A"];
+export const TIPOS = ["Projeto", "Licenciamento", "MOP", "Serviço/sustentação", "Nuvem", "N/A"];
 export const CLASSIFICACOES = ["Obrigatório", "Mandatório", "Desejável", "N/A"];
 export const RESPONSAVEIS = ["TI", "Cliente"];
 
