@@ -2886,3 +2886,29 @@ label {
   border-top: 1px solid #eef1f0;
   font-size: 14px;
 }
+
+/* Subir medição: preencher na mão */
+.como-preencher {
+  margin-top: 16px;
+  align-items: center;
+}
+.manual-intro {
+  margin-top: 12px;
+  padding: 12px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: #f7fbfa;
+}
+.tabela-med input.campo-manual {
+  padding: 6px 8px;
+  font-size: 13px;
+  min-height: 0;
+}
+.tabela-med input.campo-manual.num {
+  text-align: right;
+}
+.tabela-med input.campo-manual.vazio {
+  border-color: var(--color-orange-border);
+}
