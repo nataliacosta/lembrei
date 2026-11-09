@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { alocacaoNoMes, chaveCentro, definirAlocacao, dividir, dividirPorHoras, formatarNumero, formatarReais, lerNumero, partesParaAlocacao, resolverCentro, rotuloMes, somarMeses } from "../lib/alocacoes";
 import SeletorCentro from "./SeletorCentro";
+import { anoDoOrcamento, opcoesDoAno } from "../hooks/useCentrosDisponiveis";
 import { salvarRecurso } from "../lib/medicoesContrato";
 
 // Mapa por id (a chave "ODI:123" da lista única e o id antigo dos CCs/ODIs do contrato).
@@ -20,13 +21,17 @@ export function parteComCodigo(p, centros, extra = {}) {
 
 // CC/ODI, equipe e frente de uma parte. A frente só aparece depois da equipe,
 // e a lista de frentes é a da equipe escolhida. Equipe e frente são opcionais.
-export function SeletoresParte({ parte, centros, equipes, onMudar, indice }) {
+// "mes" é o mês das horas: define de que ano são as ODIs do orçamento oferecidas.
+export function SeletoresParte({ parte, centros, equipes, onMudar, indice, mes }) {
   const equipe = equipes.find((e) => e.id === parte.equipeId);
   return (
     <>
       <SeletorCentro
         valor={parte.centroId || (parte.codigo ? chaveCentro(parte.tipo, parte.codigo) : "")}
-        opcoes={centros.filter((c) => c.origem !== "contrato")}
+        opcoes={opcoesDoAno(
+          centros.filter((c) => c.origem !== "contrato"),
+          anoDoOrcamento(mes)
+        )}
         porId={porIdDe(centros)}
         rotulo={`CC ou ODI ${indice + 1}`}
         onEscolher={(c) => onMudar(c)}
@@ -149,7 +154,7 @@ export default function EditorDivisao({ linha, centros, equipes, partesIniciais,
         <CabecalhoPartes classe="com-valor" ultima={modo === "pct" ? "%" : "Horas"} extra={<span style={{ textAlign: "right" }}>Valor</span>} />
         {partes.map((p, i) => (
           <div key={i} className="linha-partes com-valor">
-            <SeletoresParte parte={p} centros={centros} equipes={equipes} indice={i} onMudar={(m) => mudar(i, m)} />
+            <SeletoresParte parte={p} centros={centros} equipes={equipes} indice={i} onMudar={(m) => mudar(i, m)} mes={mes} />
             <label style={{ display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
               <input value={p.valor} onChange={(e) => mudar(i, { valor: e.target.value })} inputMode="decimal" aria-label={`${modo === "pct" ? "Percentual" : "Horas"} ${i + 1}`} style={{ width: 72 }} />
               {modo === "pct" ? "%" : "h"}
@@ -268,7 +273,7 @@ export function EditorAlocacao({ contratoId, recurso, linha, centros, equipes, m
         <CabecalhoPartes classe="com-equipe" />
         {partes.map((p, i) => (
           <div key={i} className="linha-partes com-equipe">
-            <SeletoresParte parte={p} centros={centros} equipes={equipes} indice={i} onMudar={(m) => mudar(i, m)} />
+            <SeletoresParte parte={p} centros={centros} equipes={equipes} indice={i} onMudar={(m) => mudar(i, m)} mes={desde} />
             <label style={{ display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
               <input value={p.pct} onChange={(e) => mudar(i, { pct: e.target.value })} inputMode="decimal" aria-label={`Percentual ${i + 1}`} style={{ width: 64 }} />%
             </label>

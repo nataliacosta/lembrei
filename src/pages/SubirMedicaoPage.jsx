@@ -478,7 +478,7 @@ function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guarda
         {colunasBase}
         <td colSpan={2} style={{ minWidth: 260 }}>
           <div className={`escolha-rapida ${l.partes.length ? "" : "pendente"}`} aria-label={`CC/ODI, equipe e frente de ${l.recurso}`} role="group">
-            <SeletoresParte parte={escolha} centros={centros} equipes={equipes} indice={0} onMudar={onEscolher} />
+            <SeletoresParte parte={escolha} centros={centros} equipes={equipes} indice={0} onMudar={onEscolher} mes={mes} />
           </div>
           {l.recursoId && <div className="texto-ajuda">Sem alocação em {rotuloMesCurto(mes)}.</div>}
           {escolha.centroId && (

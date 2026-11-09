@@ -546,7 +546,7 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
             <CabecalhoPartes classe="com-equipe" />
             {partes.map((p, i) => (
               <div key={i} className="linha-partes com-equipe">
-                <SeletoresParte parte={p} centros={centros} equipes={equipes} indice={i} onMudar={(m) => mudarParte(i, m)} />
+                <SeletoresParte parte={p} centros={centros} equipes={equipes} indice={i} onMudar={(m) => mudarParte(i, m)} mes={desde} />
                 <label style={{ display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
                   <input value={p.pct} onChange={(e) => mudarParte(i, { pct: e.target.value })} inputMode="decimal" aria-label={`Percentual ${i + 1}`} style={{ width: 64 }} />%
                 </label>
