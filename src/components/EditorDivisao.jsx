@@ -32,6 +32,7 @@ export function SeletoresParte({ parte, centros, equipes, onMudar, indice, mes }
           centros.filter((c) => c.origem !== "contrato"),
           anoDoOrcamento(mes)
         )}
+        ano={anoDoOrcamento(mes)}
         porId={porIdDe(centros)}
         rotulo={`CC ou ODI ${indice + 1}`}
         onEscolher={(c) => onMudar(c)}

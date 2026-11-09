@@ -17,9 +17,20 @@ export function watchCentrosFora(uid, callback) {
   );
 }
 
+// CC vale para todos os anos; ODI fora do orçamento vale só para um ano (o
+// do orçamento a que o custo se refere, pelo mês de pagamento).
+export function anoDoCentroFora(c) {
+  if (!c || c.tipo === "CC") return null;
+  if (c.ano) return Number(c.ano);
+  const t = c.criadoEm?.toDate ? c.criadoEm.toDate() : c.criadoEm?.seconds ? new Date(c.criadoEm.seconds * 1000) : null;
+  return (t || new Date()).getFullYear();
+}
+
 function valores(dados) {
+  const ehCC = dados.tipo === "CC";
   return {
-    tipo: dados.tipo === "CC" ? "CC" : "ODI",
+    tipo: ehCC ? "CC" : "ODI",
+    ano: ehCC ? null : Number(dados.ano) || new Date().getFullYear(),
     codigo: String(dados.codigo || "").trim(),
     descricao: String(dados.descricao || "").trim(),
     responsavel: String(dados.responsavel || "").trim(),
@@ -40,6 +51,7 @@ export function excluirCentroFora(uid, id) {
 // contratos (uma vez por código; os que já existem ficam como estão).
 export async function importarCentrosDosContratos(uid, contratos, existentes) {
   const ja = new Set(existentes.map((c) => chaveCentro(c.tipo, c.codigo)));
+  // (a importação só roda uma vez por pessoa, então não precisa olhar o ano)
   const novos = [];
   for (const c of contratos) {
     try {
@@ -57,7 +69,7 @@ export async function importarCentrosDosContratos(uid, contratos, existentes) {
   }
   if (!novos.length) return 0;
   const batch = writeBatch(db);
-  for (const x of novos.slice(0, 450)) batch.set(doc(ref(uid)), { ...valores(x), importadoDeContrato: true, criadoEm: serverTimestamp() });
+  for (const x of novos.slice(0, 450)) batch.set(doc(ref(uid)), { ...valores({ ...x, ano: new Date().getFullYear() }), importadoDeContrato: true, criadoEm: serverTimestamp() });
   await batch.commit();
   return novos.length;
 }
