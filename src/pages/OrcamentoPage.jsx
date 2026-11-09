@@ -84,6 +84,16 @@ export default function OrcamentoPage() {
     return salvar({ condensada: existe ? lista.map((l) => (l.id === linha.id ? linha : l)) : [...lista, linha] });
   };
   const excluirLinhaCondensada = (id) => salvar({ condensada: (conteudo.condensada || []).filter((l) => l.id !== id) });
+  // Mesmos valores em várias linhas da condensada (ex.: todas as de um projeto), numa gravação só.
+  const aplicarEmLinhas = (linhasCond, valores) => {
+    if (ehCompleta) {
+      const extras = { ...(conteudo.extras || {}) };
+      for (const l of linhasCond) extras[l.chave] = { ...(extras[l.chave] || {}), ...valores };
+      return salvar({ extras });
+    }
+    const ids = new Set(linhasCond.map((l) => l.id));
+    return salvar({ condensada: (conteudo.condensada || []).map((l) => (ids.has(l.id) ? { ...l, ...valores } : l)) });
+  };
 
   return (
     <div className="page-shell" style={{ paddingTop: 24, paddingBottom: 80, maxWidth: 1280 }}>
@@ -204,6 +214,7 @@ export default function OrcamentoPage() {
           onSalvarExtras={salvarExtras}
           onSalvar={salvarLinhaCondensada}
           onExcluir={excluirLinhaCondensada}
+          onAplicarEmLinhas={aplicarEmLinhas}
         />
       )}
     </div>
@@ -754,7 +765,10 @@ function Etiqueta({ texto, cor }) {
   );
 }
 
-function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSalvar, onExcluir }) {
+function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSalvar, onExcluir, onAplicarEmLinhas }) {
+  const [editandoProjeto, setEditandoProjeto] = useState(null); // chave do projeto
+  // Todas as linhas de cada projeto (mesmo as escondidas pela busca), para aplicar a todas.
+  const todasPorProjeto = useMemo(() => Object.fromEntries(agruparPorProjeto(linhas).map((g) => [g.chave, g.linhas])), [linhas]);
   const [busca, setBusca] = useState("");
   const [modo, setModo] = useState("resumo");
   const [aberta, setAberta] = useState(null); // chave/id da linha aberta ou "nova"
@@ -845,6 +859,18 @@ function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSa
                   <tr key={`g-${g.chave}`} className="linha-grupo">
                     <td colSpan={5}>
                       <BotaoGrupo g={g} aberto={aberto} onAlternar={() => alternar(g.chave)} />
+                      {podeEditar && !g.semProjeto && (
+                        <button
+                          type="button"
+                          className="link-botao"
+                          style={{ marginLeft: 12, fontSize: 13 }}
+                          onClick={() => setEditandoProjeto(editandoProjeto === g.chave ? null : g.chave)}
+                          aria-expanded={editandoProjeto === g.chave}
+                          aria-label={`${editandoProjeto === g.chave ? "Fechar edição dos" : "Editar"} atributos de ${g.nome}`}
+                        >
+                          {editandoProjeto === g.chave ? "Fechar edição ▴" : "Editar atributos"}
+                        </button>
+                      )}
                     </td>
                     <td className="so-largo">
                       <MiniGrafico meses={g.meses} />
@@ -854,6 +880,21 @@ function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSa
                     </td>
                     <td />
                   </tr>,
+                  editandoProjeto === g.chave && (
+                    <tr key={`gp-${g.chave}`}>
+                      <td colSpan={COLS} className="editor">
+                        <EditorProjeto
+                          nome={g.nome}
+                          linhas={todasPorProjeto[g.chave] || g.linhas}
+                          onCancelar={() => setEditandoProjeto(null)}
+                          onAplicar={async (valores) => {
+                            await onAplicarEmLinhas(todasPorProjeto[g.chave] || g.linhas, valores);
+                            setEditandoProjeto(null);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ),
                   ...(aberto ? g.linhas : []).map((l) => {
                 const estaAberta = aberta === idDe(l);
                 return [
@@ -934,6 +975,90 @@ function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSa
           : `Agrupado por projeto; clique no projeto para recolher ou abrir. “Abrir” mostra os 12 meses e os outros campos (capex, diretoria, área) para editar. Nenhum campo é obrigatório.${daCompleta ? " Os valores vêm da visão completa, somando por Projeto + Fornecedor + Linha." : ""}`}
       </div>
     </>
+  );
+}
+
+// Atributos de todas as linhas de um projeto: só o que for mexido é aplicado;
+// campo com valores diferentes entre as linhas aparece como "vários".
+const CAMPOS_PROJETO = [
+  { chave: "odi", titulo: "ODI" },
+  { chave: "tipo", titulo: "Tipo", opcoes: TIPOS },
+  { chave: "classificacao", titulo: "Classificação", opcoes: CLASSIFICACOES },
+  { chave: "diretoria", titulo: "Diretoria" },
+  { chave: "area", titulo: "Área atendida" },
+  { chave: "responsavel", titulo: "Responsável orçamento", opcoes: RESPONSAVEIS },
+];
+
+function EditorProjeto({ nome, linhas, onAplicar, onCancelar }) {
+  const comum = (k) => {
+    const vals = new Set(linhas.map((l) => String(l[k] ?? "").trim()));
+    return vals.size === 1 ? { valor: [...vals][0], varios: false } : { valor: "", varios: true };
+  };
+  const [inicial] = useState(() => Object.fromEntries(CAMPOS_PROJETO.map((c) => [c.chave, comum(c.chave)])));
+  const [valores, setValores] = useState(() => Object.fromEntries(CAMPOS_PROJETO.map((c) => [c.chave, inicial[c.chave].valor])));
+  const [mexidos, setMexidos] = useState(() => new Set());
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  const mudar = (k, v) => {
+    setValores({ ...valores, [k]: v });
+    setMexidos(new Set([...mexidos, k]));
+  };
+  async function aplicar() {
+    const mudancas = Object.fromEntries([...mexidos].map((k) => [k, String(valores[k] ?? "").trim()]).filter(([k, v]) => inicial[k].varios || v !== inicial[k].valor));
+    if (!Object.keys(mudancas).length) return onCancelar();
+    setSalvando(true);
+    setErro("");
+    try {
+      await onAplicar(mudancas);
+    } catch {
+      setErro("Não deu pra aplicar. Tente de novo.");
+      setSalvando(false);
+    }
+  }
+  const n = linhas.length;
+  return (
+    <div role="group" aria-label={`Atributos de todas as linhas de ${nome}`}>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
+        Atributos de {n === 1 ? "a linha" : `todas as ${n} linhas`} de {nome}
+      </div>
+      <div className="grade-campos">
+        {CAMPOS_PROJETO.map((c) => {
+          const ph = inicial[c.chave].varios && !mexidos.has(c.chave) ? "vários" : "";
+          return (
+            <label key={c.chave}>
+              <span style={rotulo}>{c.titulo}</span>
+              {c.opcoes ? (
+                <select value={valores[c.chave]} onChange={(e) => mudar(c.chave, e.target.value)}>
+                  <option value="">{ph || "—"}</option>
+                  {c.opcoes.map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                  {valores[c.chave] && !c.opcoes.includes(valores[c.chave]) && <option>{valores[c.chave]}</option>}
+                </select>
+              ) : (
+                <input value={valores[c.chave]} onChange={(e) => mudar(c.chave, e.target.value)} placeholder={ph} />
+              )}
+            </label>
+          );
+        })}
+      </div>
+      <div className="texto-ajuda">
+        Só os campos que você mudar são aplicados às linhas do projeto; os que mostram “vários” têm valores diferentes entre as linhas e ficam como estão se você não mexer. Capex fica de fora, porque é de cada linha.
+      </div>
+      {erro && (
+        <div className="texto-alerta" role="alert" style={{ fontSize: 13, marginTop: 8 }}>
+          {erro}
+        </div>
+      )}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12, maxWidth: 1000 }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onCancelar}>
+          Cancelar
+        </button>
+        <button type="button" className="btn btn-primary btn-sm" onClick={aplicar} disabled={salvando}>
+          {salvando ? "Aplicando..." : `Aplicar ${n === 1 ? "à linha" : `às ${n} linhas`}`}
+        </button>
+      </div>
+    </div>
   );
 }
 
