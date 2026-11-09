@@ -13,6 +13,9 @@ import {
   TIPOS,
   totaisPorMes,
   agruparPorProjeto,
+  agruparPor,
+  atributosDaVersao,
+  linhasParaAgrupar,
   versaoVigente,
 } from "../lib/orcamentos";
 import { baixarOrcamento } from "../lib/orcamentosExcel";
@@ -46,7 +49,7 @@ export default function OrcamentoPage() {
 
   const podeEditar = ["proprietario", "editor"].includes(planejamento.membros?.[user.uid]);
   const ehCompleta = versao.visao === "completa";
-  const aba = !ehCompleta || params.get("visao") === "condensada" ? "condensada" : "completa";
+  const aba = params.get("visao") === "agrupamentos" ? "agrupamentos" : !ehCompleta || params.get("visao") === "condensada" ? "condensada" : "completa";
   const vigente = versaoVigente(versoes);
   const substituida = versao.situacao === "efetivada" && vigente && vigente.id !== versao.id;
 
@@ -184,9 +187,14 @@ export default function OrcamentoPage() {
         <Link to="?visao=condensada" replace aria-current={aba === "condensada" ? "page" : undefined} onClick={(e) => (e.preventDefault(), setParams({ visao: "condensada" }, { replace: true }))}>
           Visão condensada · {condensadas.length}
         </Link>
+        <Link to="?visao=agrupamentos" replace aria-current={aba === "agrupamentos" ? "page" : undefined} onClick={(e) => (e.preventDefault(), setParams({ visao: "agrupamentos" }, { replace: true }))}>
+          Agrupamentos
+        </Link>
       </nav>
 
-      {aba === "completa" ? (
+      {aba === "agrupamentos" ? (
+        <AbaAgrupamentos versao={versao} conteudo={conteudo} />
+      ) : aba === "completa" ? (
         <TabelaCompleta linhas={conteudo.completa || []} podeEditar={podeEditar} onSalvar={salvarLinhaCompleta} onExcluir={excluirLinhaCompleta} />
       ) : (
         <TabelaCondensada
@@ -1058,5 +1066,250 @@ function EditorCondensada({ linha, daCompleta, somenteLeitura, onSalvar, onCance
         </div>
       )}
     </div>
+  );
+}
+
+// ---------- Agrupamentos ----------
+
+const NOMES_GRUPO = {
+  agrupamento: ["agrupamento", "agrupamentos"],
+  tipoItem: ["tipo", "tipos"],
+  item: ["item", "itens"],
+  pessoa: ["pessoa", "pessoas"],
+  tiPaga: ["resposta", "respostas"],
+  quemPaga: ["pagador", "pagadores"],
+  quemSeBeneficia: ["beneficiado", "beneficiados"],
+  projeto: ["projeto", "projetos"],
+  fornecedor: ["fornecedor", "fornecedores"],
+  linha: ["linha", "linhas"],
+  odi: ["ODI", "ODIs"],
+  tipoLinha: ["tipo", "tipos"],
+  classificacao: ["classificação", "classificações"],
+  diretoria: ["diretoria", "diretorias"],
+  area: ["área", "áreas"],
+  responsavel: ["responsável", "responsáveis"],
+};
+const CHAVE_AGRUPAR = "lembrei:agrupamentos";
+
+function lerEscolhidos() {
+  try {
+    const v = JSON.parse(localStorage.getItem(CHAVE_AGRUPAR) || "null");
+    return Array.isArray(v) ? v : ["projeto"];
+  } catch {
+    return ["projeto"];
+  }
+}
+
+function AbaAgrupamentos({ versao, conteudo }) {
+  const atributos = atributosDaVersao(versao);
+  const [escolhidosTodos, setEscolhidos] = useState(lerEscolhidos);
+  const [modo, setModo] = useState("resumo");
+  const [recolhidos, setRecolhidos] = useState(() => new Set());
+  const escolhidos = escolhidosTodos.filter((k) => atributos.some((a) => a.chave === k));
+  const linhas = useMemo(() => linhasParaAgrupar(versao, conteudo), [versao, conteudo]);
+  const arvore = useMemo(() => agruparPor(linhas, escolhidos), [linhas, escolhidos.join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tot = totaisPorMes(linhas);
+  const titulo = (k) => atributos.find((a) => a.chave === k)?.titulo || k;
+
+  function mudar(lista) {
+    setEscolhidos(lista);
+    setRecolhidos(new Set());
+    try {
+      localStorage.setItem(CHAVE_AGRUPAR, JSON.stringify(lista));
+    } catch {
+      /* sem armazenamento: só não lembra da escolha */
+    }
+  }
+  const alternarAtributo = (k) => mudar(escolhidos.includes(k) ? escolhidos.filter((x) => x !== k) : [...escolhidos, k]);
+  const alternarGrupo = (id) =>
+    setRecolhidos((r) => {
+      const n = new Set(r);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  // Achata a árvore respeitando os grupos recolhidos.
+  const visiveis = [];
+  const comFilhos = [];
+  (function andar(nos, nivel, pai) {
+    for (const no of nos) {
+      const id = `${pai}/${no.id}`;
+      const temFilhos = no.filhos.length > 0;
+      if (temFilhos) comFilhos.push(id);
+      visiveis.push({ no, nivel, id, temFilhos, aberto: !recolhidos.has(id) });
+      if (temFilhos && !recolhidos.has(id)) andar(no.filhos, nivel + 1, id);
+    }
+  })(arvore, 0, "");
+  const todosRecolhidos = comFilhos.length > 0 && comFilhos.every((id) => recolhidos.has(id));
+  const pct = (v) => (tot.anual ? (v / tot.anual) * 100 : 0);
+  const fmtPct = (v) => `${formatarNumero(pct(v), 1)}%`;
+  const grupoDe = [["completa", "Da visão completa"], ["condensada", "Da visão condensada"]].filter(([o]) => atributos.some((a) => a.origem === o));
+
+  function Nome({ v }) {
+    const { no, nivel, id, temFilhos, aberto } = v;
+    const prox = escolhidos[nivel + 1];
+    const estilo = { paddingLeft: 12 + nivel * 26 };
+    const nome = no.vazio ? <i style={{ color: "var(--color-gray)" }}>{no.nome}</i> : no.nome;
+    if (!temFilhos) return <td style={estilo}>{nome}</td>;
+    const [um, varios] = NOMES_GRUPO[prox] || ["grupo", "grupos"];
+    return (
+      <td style={estilo}>
+        <button type="button" className="botao-grupo" onClick={() => alternarGrupo(id)} aria-expanded={aberto}>
+          <span className="seta">{aberto ? "▾" : "▸"}</span>
+          {no.vazio ? nome : <b>{nome}</b>}
+          <span className="qtd">
+            {no.filhos.length} {no.filhos.length === 1 ? um : varios}
+          </span>
+        </button>
+      </td>
+    );
+  }
+  const classeLinha = (v) => (v.temFilhos ? (v.nivel === 0 ? "linha-grupo" : "linha-grupo-2") : undefined);
+  const cabecalho = escolhidos.map(titulo).join(" › ");
+
+  return (
+    <>
+      <div className="lista-card" style={{ padding: "14px 16px", marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ ...rotulo, margin: 0 }}>Agrupar por</span>
+            {escolhidos.length === 0 && <span style={{ fontSize: 13, color: "var(--color-gray)" }}>escolha um ou mais atributos abaixo</span>}
+            {escolhidos.map((k, i) => (
+              <span key={k} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                {i > 0 && <span style={{ color: "var(--color-gray)" }}>›</span>}
+                <button type="button" className="pill pill-botao-agrupar" onClick={() => alternarAtributo(k)} aria-label={`Tirar ${titulo(k)}`}>
+                  {i + 1} · {titulo(k)} ×
+                </button>
+              </span>
+            ))}
+          </div>
+          {escolhidos.length > 0 && (
+            <button type="button" className="link-botao" onClick={() => mudar([])}>
+              Limpar
+            </button>
+          )}
+        </div>
+        {grupoDe.map(([origem, rot]) => (
+          <div key={origem} style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12, color: "var(--color-gray)", marginBottom: 6 }}>{rot}</div>
+            <div className="chips-row" role="group" aria-label={rot}>
+              {atributos
+                .filter((a) => a.origem === origem)
+                .map((a) => {
+                  const pos = escolhidos.indexOf(a.chave);
+                  return (
+                    <button key={a.chave} type="button" className="chip" aria-pressed={pos >= 0} onClick={() => alternarAtributo(a.chave)}>
+                      {pos >= 0 && <span className="chip-ordem">{pos + 1}</span>}
+                      {a.titulo}
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        ))}
+        <div className="texto-ajuda">
+          Clique nos atributos na ordem em que quer agrupar: o primeiro divide o total, o segundo divide cada grupo do primeiro, e assim por diante. Clique de novo para tirar.
+        </div>
+      </div>
+
+      {escolhidos.length > 0 && (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", margin: "16px 0 8px", flexWrap: "wrap" }}>
+            <div className="chips-row" style={{ alignItems: "center" }}>
+              <SeletorVisualizacao modo={modo} onModo={setModo} />
+            </div>
+            {comFilhos.length > 0 && (
+              <button type="button" className="link-botao" onClick={() => setRecolhidos(todosRecolhidos ? new Set() : new Set(comFilhos))}>
+                {todosRecolhidos ? "Abrir todos" : "Recolher todos"}
+              </button>
+            )}
+          </div>
+          <div className="lista-card">
+            <table className="tabela-med tabela-orc2">
+              <thead>
+                <tr>
+                  <th>{cabecalho}</th>
+                  {modo === "mes" ? (
+                    MESES.map((m) => (
+                      <th key={m} className="num mes">
+                        {m}
+                      </th>
+                    ))
+                  ) : (
+                    <>
+                      <th className="num">Itens</th>
+                      <th className="so-largo">Jan → Dez</th>
+                    </>
+                  )}
+                  <th className="num">Anual</th>
+                  {modo !== "mes" && <th className="num">% do total</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {visiveis.length === 0 && (
+                  <tr>
+                    <td colSpan={modo === "mes" ? 14 : 5} style={{ color: "var(--color-gray)" }}>
+                      Este orçamento ainda não tem linhas.
+                    </td>
+                  </tr>
+                )}
+                {visiveis.map((v) => (
+                  <tr key={v.id} className={classeLinha(v)}>
+                    <Nome v={v} />
+                    {modo === "mes" ? (
+                      v.no.meses.map((x, j) => (
+                        <td key={j} className="num mes">
+                          {v.temFilhos ? <b>{mil(x)}</b> : mil(x)}
+                        </td>
+                      ))
+                    ) : (
+                      <>
+                        <td className="num">{v.no.itens}</td>
+                        <td className="so-largo">
+                          <MiniGrafico meses={v.no.meses} />
+                        </td>
+                      </>
+                    )}
+                    <td className="num">{v.temFilhos || v.nivel === 0 ? <b>{formatarReais(v.no.anual)}</b> : formatarReais(v.no.anual)}</td>
+                    {modo !== "mes" && (
+                      <td className="num" style={{ minWidth: 110 }}>
+                        {v.temFilhos ? <b>{fmtPct(v.no.anual)}</b> : fmtPct(v.no.anual)}
+                        <div className="barra-uso" style={{ width: 100, marginLeft: "auto" }}>
+                          <span style={{ width: `${Math.min(pct(v.no.anual), 100)}%` }} />
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {visiveis.length > 0 && (
+                  <tr className="total">
+                    <td>Total</td>
+                    {modo === "mes" ? (
+                      tot.meses.map((x, j) => (
+                        <td key={j} className="num mes">
+                          {mil(x)}
+                        </td>
+                      ))
+                    ) : (
+                      <>
+                        <td className="num">{linhas.length}</td>
+                        <td className="so-largo" />
+                      </>
+                    )}
+                    <td className="num">{formatarReais(tot.anual)}</td>
+                    {modo !== "mes" && <td className="num">100%</td>}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="texto-ajuda">
+            Do maior valor para o menor em cada nível; o que não tem o atributo preenchido aparece entre parênteses, no fim. “Itens” conta as linhas da visão {versao.visao === "condensada" ? "condensada" : "completa"}.
+            {modo === "mes" && " Os meses estão em milhares (k); o anual vem completo."}
+          </div>
+        </>
+      )}
+    </>
   );
 }

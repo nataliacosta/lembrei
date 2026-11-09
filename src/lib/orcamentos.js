@@ -278,3 +278,83 @@ export function agruparPorProjeto(linhas) {
   const grupos = [...mapa.values()].map((g) => ({ ...g, ...totaisPorMes(g.linhas) }));
   return grupos.sort((a, b) => (a.semProjeto !== b.semProjeto ? (a.semProjeto ? 1 : -1) : a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })));
 }
+
+// ---------- Agrupamentos (aba que soma o orçamento por atributos escolhidos) ----------
+
+const texto = (v) => String(v ?? "").trim();
+export const ATRIBUTOS_AGRUPAMENTO = [
+  { chave: "agrupamento", titulo: "Agrupamento", origem: "completa", vazio: "sem agrupamento" },
+  { chave: "tipoItem", titulo: "Tipo do item", origem: "completa", vazio: "sem tipo" },
+  { chave: "item", titulo: "Item", origem: "completa", vazio: "sem item" },
+  { chave: "pessoa", titulo: "Pessoa", origem: "completa", vazio: "sem pessoa" },
+  { chave: "tiPaga", titulo: "TI paga?", origem: "completa", vazio: "sem resposta" },
+  { chave: "quemPaga", titulo: "Quem paga", origem: "completa", vazio: "sem quem paga" },
+  { chave: "quemSeBeneficia", titulo: "Quem se beneficia", origem: "completa", vazio: "sem quem se beneficia" },
+  { chave: "projeto", titulo: "Projeto", origem: "completa", vazio: "sem projeto" },
+  { chave: "fornecedor", titulo: "Fornecedor", origem: "completa", vazio: "sem fornecedor" },
+  { chave: "linha", titulo: "Linha", origem: "completa", vazio: "sem linha" },
+  { chave: "odi", titulo: "ODI", origem: "condensada", vazio: "sem ODI" },
+  { chave: "tipoLinha", titulo: "Tipo da linha", origem: "condensada", vazio: "sem tipo" },
+  { chave: "classificacao", titulo: "Classificação", origem: "condensada", vazio: "sem classificação" },
+  { chave: "diretoria", titulo: "Diretoria", origem: "condensada", vazio: "sem diretoria" },
+  { chave: "area", titulo: "Área atendida", origem: "condensada", vazio: "sem área" },
+  { chave: "responsavel", titulo: "Responsável orçamento", origem: "condensada", vazio: "sem responsável" },
+];
+
+// Atributos que fazem sentido para a versão (só os da condensada quando foi
+// cadastrada direto na condensada).
+export function atributosDaVersao(versao) {
+  return versao?.visao === "condensada" ? ATRIBUTOS_AGRUPAMENTO.filter((a) => a.origem === "condensada" || ["projeto", "fornecedor", "linha"].includes(a.chave)) : ATRIBUTOS_AGRUPAMENTO;
+}
+
+// Linhas com todos os atributos: na completa, cada recurso com os campos da
+// condensada do seu grupo (Projeto + Fornecedor + Linha); senão, a condensada.
+export function linhasParaAgrupar(versao, conteudo) {
+  if (!conteudo) return [];
+  if (versao?.visao === "condensada") {
+    return (conteudo.condensada || []).map((l) => ({ ...l, tipoLinha: l.tipo, tipo: undefined }));
+  }
+  const extras = conteudo.extras || {};
+  return (conteudo.completa || []).map((l) => {
+    const x = extras[chaveGrupo(l)] || {};
+    return {
+      ...l,
+      tipoItem: l.tipo,
+      tiPaga: l.tiPaga === true || l.tiPaga === false ? (l.tiPaga ? "Sim" : "Não") : texto(l.tiPaga),
+      odi: x.odi,
+      tipoLinha: x.tipo,
+      classificacao: x.classificacao,
+      diretoria: x.diretoria,
+      area: x.area,
+      responsavel: x.responsavel,
+    };
+  });
+}
+
+// Árvore: o 1º atributo divide o total, o 2º divide cada grupo do 1º...
+// Em cada nível, do maior valor para o menor; os sem valor ficam no fim.
+export function agruparPor(linhas, chaves) {
+  if (!chaves?.length) return [];
+  const [chave, ...resto] = chaves;
+  const attr = ATRIBUTOS_AGRUPAMENTO.find((a) => a.chave === chave);
+  const mapa = new Map();
+  for (const l of linhas) {
+    const nome = texto(l[chave]);
+    const k = nome ? normalizarNome(nome) : "";
+    let g = mapa.get(k);
+    if (!g) {
+      g = { id: k, nome: nome || `(${attr?.vazio || "sem valor"})`, vazio: !nome, linhas: [] };
+      mapa.set(k, g);
+    }
+    g.linhas.push(l);
+  }
+  const grupos = [...mapa.values()].map((g) => ({
+    id: g.id,
+    nome: g.nome,
+    vazio: g.vazio,
+    itens: g.linhas.length,
+    ...totaisPorMes(g.linhas),
+    filhos: agruparPor(g.linhas, resto),
+  }));
+  return grupos.sort((a, b) => (a.vazio !== b.vazio ? (a.vazio ? 1 : -1) : b.anual - a.anual || a.nome.localeCompare(b.nome, "pt-BR")));
+}
