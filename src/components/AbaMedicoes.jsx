@@ -12,6 +12,8 @@ import {
   formatarNumero,
   formatarReais,
   historicoDeAlocacoes,
+  foraNoMes,
+  tirarDosMeses,
   lerNumero,
   mesDe,
   normalizarNome,
@@ -120,6 +122,9 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
   const mesAtual = mesDe(new Date());
   const [mesVer, setMesVer] = useState(mesAtual);
   const [editandoRecurso, setEditandoRecurso] = useState(null); // id, "novo" ou null
+  // Recursos tirados do contrato no mês não aparecem (a não ser o que está sendo editado).
+  const recursosDoMes = recursos.filter((r) => !foraNoMes(r, mesVer) || editandoRecurso === r.id);
+  const foraDoMes = recursos.filter((r) => foraNoMes(r, mesVer) && editandoRecurso !== r.id);
   const [equipes, setEquipes] = useState([]);
   const [editandoEquipe, setEditandoEquipe] = useState(null);
 
@@ -197,7 +202,7 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
       )}
 
       <Secao
-        titulo={`Recursos e alocações · ${recursos.length}`}
+        titulo={`Recursos e alocações · ${recursosDoMes.length}`}
         acao={
           podeEditar && (
             <button type="button" className="link-botao" onClick={() => setEditandoRecurso("novo")}>
@@ -241,7 +246,7 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
                 </td>
               </tr>
             )}
-            {recursos.map((r) =>
+            {recursosDoMes.map((r) =>
               editandoRecurso === r.id ? (
                 <tr key={r.id}>
                   <td colSpan={4} className="editor">
@@ -251,6 +256,26 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
               ) : (
                 <LinhaRecurso key={r.id} recurso={r} mes={mesVer} centrosPorId={centrosPorId} equipesPorId={equipesPorId} podeEditar={podeEditar} onEditar={() => setEditandoRecurso(r.id)} />
               )
+            )}
+            {foraDoMes.length > 0 && (
+              <tr>
+                <td colSpan={4} style={{ fontSize: 12, color: "var(--color-gray)" }}>
+                  Fora do contrato em {rotuloMesCurto(mesVer)}:{" "}
+                  {foraDoMes.map((r, i) => (
+                    <span key={r.id}>
+                      {i > 0 && ", "}
+                      {podeEditar ? (
+                        <button type="button" className="link-botao" style={{ fontSize: 12 }} onClick={() => setEditandoRecurso(r.id)}>
+                          {r.nome}
+                        </button>
+                      ) : (
+                        r.nome
+                      )}
+                    </span>
+                  ))}
+                  {podeEditar && ". Para trazer de volta, abra e defina a alocação a partir deste mês."}
+                </td>
+              </tr>
             )}
             {editandoRecurso === "novo" && (
               <tr>
@@ -498,7 +523,7 @@ function LinhaRecurso({ recurso, mes, centrosPorId, equipesPorId, podeEditar, on
         {atual ? <Partes partes={atual.partes} centrosPorId={centrosPorId} equipesPorId={equipesPorId} /> : <span className="texto-alerta" style={{ fontSize: 12 }}>Sem alocação em {rotuloMesCurto(mes)}</span>}
         {proxima && (
           <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 4 }}>
-            A partir de {rotuloMesCurto(proxima.desde)}: <Partes partes={proxima.partes} centrosPorId={centrosPorId} equipesPorId={equipesPorId} empilhar={false} />
+            A partir de {rotuloMesCurto(proxima.desde)}: {proxima.fora ? <span style={{ color: "var(--color-orange)" }}>fora do contrato</span> : <Partes partes={proxima.partes} centrosPorId={centrosPorId} equipesPorId={equipesPorId} empilhar={false} />}
           </div>
         )}
       </td>
@@ -561,11 +586,30 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
     await salvarRecurso(contratoId, recurso.id, { ...recurso, alocacoes: recurso.alocacoes.filter((a) => a.desde !== desdeRemover) });
   }
 
+  // Tirar dos meses (a partir do mês que está sendo visto) ou apagar o recurso.
+  const [excluindo, setExcluindo] = useState(false);
+  const [modoExcluir, setModoExcluir] = useState("daqui");
   async function excluir() {
-    if (!window.confirm(`Excluir o recurso “${recurso.nome}”? As medições já salvas não mudam.`)) return;
-    await excluirRecurso(contratoId, recurso.id);
-    onFechar();
+    setErro("");
+    try {
+      if (modoExcluir === "todos") await excluirRecurso(contratoId, recurso.id);
+      else await salvarRecurso(contratoId, recurso.id, { ...recurso, alocacoes: tirarDosMeses(recurso, mesInicial, modoExcluir) });
+      onFechar();
+    } catch (e) {
+      console.error(e);
+      setErro("Não deu pra tirar o recurso. Tente de novo.");
+    }
   }
+  const mesLongo = rotuloMes(mesInicial).toLowerCase();
+  const mesSeguinte = rotuloMes(somarMeses(mesInicial, 1)).split("/")[0].toLowerCase();
+  const mesAnterior = rotuloMes(somarMeses(mesInicial, -1)).split("/")[0].toLowerCase();
+  const nomeCurto = String(recurso?.nome || "").replace(/^ALOCA[CÇ][AÃ]O\s*-\s*/i, "");
+  const OPCOES_EXCLUIR = [
+    ["so", `Só em ${mesLongo}`, `Em ${mesSeguinte} volta com a alocação de antes.`],
+    ["daqui", `De ${mesLongo} em diante`, `${mesAnterior[0]?.toUpperCase() + mesAnterior.slice(1)} e os meses anteriores continuam como estão.`],
+    ["ate", `Até ${mesLongo} (este mês e os anteriores)`, `Passa a valer só de ${mesSeguinte} em diante.`],
+    ["todos", "Em todos os meses", "Apaga o recurso e todo o histórico de alocação. As medições já salvas não mudam."],
+  ];
 
   return (
     <form onSubmit={salvar} aria-label={recurso ? `Editar recurso ${recurso.nome}` : "Novo recurso"}>
@@ -644,10 +688,10 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
               return (
                 <div key={h.desde} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", color: vigente ? undefined : "var(--color-gray)" }}>
                   <span style={{ minWidth: 170, fontWeight: vigente ? 700 : 400 }}>
-                    {h.ate ? `${rotuloMesCurto(h.desde)} a ${rotuloMesCurto(h.ate)}` : `Desde ${rotuloMesCurto(h.desde)}`}
+                    {h.desde < "2001" ? `Até ${rotuloMesCurto(h.ate)}` : h.ate ? `${rotuloMesCurto(h.desde)} a ${rotuloMesCurto(h.ate)}` : `Desde ${rotuloMesCurto(h.desde)}`}
                     {vigente ? " (atual)" : h.desde > mesDe(new Date()) ? " (agendada)" : ""}
                   </span>
-                  <Partes partes={h.partes} centrosPorId={centrosPorId} equipesPorId={equipesPorId} empilhar={false} />
+                  {h.fora ? <span style={{ color: "var(--color-orange)", fontWeight: 600 }}>Fora do contrato</span> : <Partes partes={h.partes} centrosPorId={centrosPorId} equipesPorId={equipesPorId} empilhar={false} />}
                   {historico.length > 1 && (
                     <button type="button" className="link-botao" style={{ fontSize: 12, color: "var(--color-orange)" }} onClick={() => removerPeriodo(h.desde)}>
                       remover
@@ -665,10 +709,34 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
           {erro}
         </div>
       )}
+      {excluindo && recurso && (
+        <div className="painel-excluir" role="group" aria-label={`Tirar ${nomeCurto} de quais meses`}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Tirar {nomeCurto} de quais meses?</div>
+          <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+            {OPCOES_EXCLUIR.map(([k, t, d]) => (
+              <label key={k} className={`opcao-excluir ${modoExcluir === k ? "ativa" : ""}`}>
+                <input type="radio" name="modo-excluir" checked={modoExcluir === k} onChange={() => setModoExcluir(k)} />
+                <span>
+                  <b>{t}</b>
+                  <span>{d}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setExcluindo(false)}>
+              Cancelar
+            </button>
+            <button type="button" className="btn btn-sm botao-laranja" onClick={excluir}>
+              {modoExcluir === "todos" ? "Apagar o recurso" : modoExcluir === "so" ? `Tirar só de ${mesLongo.split("/")[0]}` : modoExcluir === "ate" ? `Tirar até ${mesLongo.split("/")[0]}` : `Tirar a partir de ${mesLongo.split("/")[0]}`}
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 8, justifyContent: "space-between", marginTop: 14, flexWrap: "wrap" }}>
         <span>
           {recurso && (
-            <button type="button" className="btn btn-ghost btn-sm" style={{ color: "var(--color-orange)", borderColor: "var(--color-orange-border)" }} onClick={excluir}>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ color: "var(--color-orange)", borderColor: "var(--color-orange-border)" }} onClick={() => setExcluindo(!excluindo)} aria-expanded={excluindo}>
               Excluir recurso
             </button>
           )}

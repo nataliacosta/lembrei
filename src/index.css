@@ -2912,3 +2912,49 @@ label {
 .tabela-med input.campo-manual.vazio {
   border-color: var(--color-orange-border);
 }
+
+/* Excluir recurso: escolher os meses */
+.painel-excluir {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--color-orange-border);
+  border-radius: 12px;
+  background: var(--color-orange-soft);
+}
+.opcao-excluir {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-white);
+  cursor: pointer;
+  font-weight: 400;
+}
+.opcao-excluir.ativa {
+  border-color: var(--color-primary);
+  background: #f0faf8;
+}
+.opcao-excluir input {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin-top: 3px;
+  flex: 0 0 auto;
+}
+.opcao-excluir b {
+  display: block;
+  font-size: 14px;
+}
+.opcao-excluir span span {
+  display: block;
+  font-size: 12px;
+  color: var(--color-gray);
+}
+.botao-laranja {
+  background: var(--color-orange);
+  color: var(--color-white);
+  border: none;
+}
