@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Avatar from "../components/Avatar";
 import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
-import { FUNCIONALIDADES } from "../lib/funcionalidades";
+import { FUNCIONALIDADES, moverNaOrdem, SERVICOS } from "../lib/funcionalidades";
 import { TIPOS_DE_AVISO, mesclarPrefs } from "../lib/prefsNotificacoes";
 import {
   ativarPush,
@@ -13,6 +13,7 @@ import {
   inscricaoAtual,
   removerDispositivo,
   salvarFuncionalidades,
+  salvarOrdemMenu,
   salvarPrefs,
   suportaPush,
   watchDispositivos,
@@ -34,7 +35,7 @@ function Chave({ ligada, onChange, rotulo }) {
 
 export default function ConfiguracoesPage() {
   const { user, signOut } = useAuth();
-  const { funcionalidades } = useDados();
+  const { funcionalidades, ordemMenu } = useDados();
   const [prefs, setPrefs] = useState(() => mesclarPrefs(null));
   const [dispositivos, setDispositivos] = useState([]);
   const [atualId, setAtualId] = useState(null);
@@ -114,29 +115,56 @@ export default function ConfiguracoesPage() {
         </button>
       </div>
 
-      <h2 className="cfg-secao">Funcionalidades</h2>
+      <h2 className="cfg-secao">Serviços e ordem do menu</h2>
       <div className="lista-card">
-        {FUNCIONALIDADES.map((f) => (
-          <div key={f.chave} className="cfg-linha">
-            <span>
-              <span className="cfg-titulo">{f.titulo}</span>
-              <span className="cfg-detalhe">{f.detalhe}</span>
-            </span>
-            <Chave
-              ligada={Boolean(funcionalidades[f.chave])}
-              rotulo={f.titulo}
-              onChange={(v) =>
-                salvarFuncionalidades(user.uid, { ...funcionalidades, [f.chave]: v }).catch((e) => {
-                  console.error("Erro ao salvar funcionalidades:", e);
-                  setMensagem("Não deu pra salvar. Tente de novo.");
-                })
-              }
-            />
-          </div>
-        ))}
+        {ordemMenu.map((k, i) => {
+          const f = FUNCIONALIDADES.find((x) => x.chave === k);
+          const s = SERVICOS.find((x) => x.chave === k);
+          const titulo = k === "hoje" ? "O que fazer" : f?.titulo || s.titulo;
+          const mover = (delta) =>
+            salvarOrdemMenu(user.uid, moverNaOrdem(ordemMenu, k, delta)).catch((e) => {
+              console.error("Erro ao salvar a ordem do menu:", e);
+              setMensagem("Não deu pra salvar. Tente de novo.");
+            });
+          return (
+            <div key={k} className="cfg-linha">
+              <span style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
+                <span className="ordem-num">{i + 1}</span>
+                <span>
+                  <span className="cfg-titulo">{titulo}</span>
+                  <span className="cfg-detalhe">{k === "hoje" ? "Sempre ligado" : f?.detalhe}</span>
+                </span>
+              </span>
+              <span style={{ display: "flex", gap: 10, alignItems: "center", flex: "0 0 auto" }}>
+                <span style={{ display: "flex", gap: 6 }}>
+                  <button type="button" className="botao-ordem" onClick={() => mover(-1)} disabled={i === 0} aria-label={`Subir ${titulo}`}>
+                    ↑
+                  </button>
+                  <button type="button" className="botao-ordem" onClick={() => mover(1)} disabled={i === ordemMenu.length - 1} aria-label={`Descer ${titulo}`}>
+                    ↓
+                  </button>
+                </span>
+                {k === "hoje" ? (
+                  <span style={{ width: 44 }} />
+                ) : (
+                  <Chave
+                    ligada={Boolean(funcionalidades[k])}
+                    rotulo={titulo}
+                    onChange={(v) =>
+                      salvarFuncionalidades(user.uid, { ...funcionalidades, [k]: v }).catch((e) => {
+                        console.error("Erro ao salvar funcionalidades:", e);
+                        setMensagem("Não deu pra salvar. Tente de novo.");
+                      })
+                    }
+                  />
+                )}
+              </span>
+            </div>
+          );
+        })}
       </div>
       <div className="cfg-detalhe" style={{ marginTop: 8 }}>
-        Desligar só esconde do seu menu, do seu “O que fazer” e da busca. Nada é apagado e vale só para você: dá para ligar de novo quando quiser.
+        Use as setas para mudar a ordem: ela vale para o menu do celular e o do computador. No celular, com 5 ou mais serviços ligados, os 3 primeiros ficam na barra e os outros vão para “Mais”. Desligar só esconde do seu menu, do seu “O que fazer” e da busca: nada é apagado e vale só para você.
       </div>
 
       <h2 className="cfg-secao">Notificações neste aparelho</h2>

@@ -2750,3 +2750,116 @@ label {
     align-items: start;
   }
 }
+
+/* Celular: "Mais serviços" */
+.mais-fundo,
+.mais-painel {
+  display: none;
+}
+@media (max-width: 760px) {
+  .tab-bar .tab-mais {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 48px;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-gray);
+  }
+  .tab-bar.seis-abas .tab-mais {
+    font-size: 10.5px;
+  }
+  .tab-bar .tab-mais.ativo {
+    color: var(--color-primary);
+  }
+  .mais-fundo {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 38;
+    background: rgba(0, 51, 45, 0.35);
+  }
+  .mais-painel {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    z-index: 39;
+    background: var(--color-white);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 24px rgba(0, 51, 45, 0.18);
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .mais-alca {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: #d5dcdb;
+    margin: 8px auto 4px;
+  }
+  .mais-topo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 18px 8px;
+    font-size: 17px;
+  }
+  .mais-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-top: 1px solid #f0f0f0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-dark);
+  }
+  .mais-item.ativo {
+    color: var(--color-primary);
+  }
+  .mais-detalhe {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--color-gray);
+    margin-top: 2px;
+  }
+  .mais-rodape {
+    padding: 12px 18px 16px;
+    border-top: 1px solid #f0f0f0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+}
+
+/* Configurações: ordem dos serviços */
+.ordem-num {
+  width: 20px;
+  flex: 0 0 auto;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-gray);
+}
+.botao-ordem {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-white);
+  color: var(--color-dark);
+  font-size: 15px;
+  cursor: pointer;
+}
+.botao-ordem:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

@@ -6,8 +6,8 @@ import { itemAtrasado } from "../lib/agenda";
 import { contratoDaBase, ehBaseContrato } from "../lib/itens";
 import { watchDemandas, watchFila, watchFilasCompartilhadas } from "../lib/filas";
 import { limparNotificacoesAntigas, watchNotificacoes } from "../lib/notificacoes";
-import { itemVisivel, mesclarFuncionalidades, notificacaoVisivel } from "../lib/funcionalidades";
-import { watchContratosSoMedicao, watchFuncionalidades } from "../lib/push";
+import { itemVisivel, mesclarFuncionalidades, notificacaoVisivel, ordemCompleta, servicosAtivos } from "../lib/funcionalidades";
+import { watchContratosSoMedicao, watchFuncionalidades, watchOrdemMenu } from "../lib/push";
 import { watchPlanejamentos } from "../lib/orcamentosDb";
 
 // Dados que várias partes da tela usam ao mesmo tempo (painel, menu lateral,
@@ -36,6 +36,12 @@ export function DadosProvider({ children }) {
   useEffect(() => {
     if (!user) return;
     return watchFuncionalidades(user.uid, (f) => setFuncionalidades(mesclarFuncionalidades(f)));
+  }, [user]);
+  // Ordem dos serviços no menu (Configurações).
+  const [ordemMenu, setOrdemMenu] = useState(null);
+  useEffect(() => {
+    if (!user) return;
+    return watchOrdemMenu(user.uid, setOrdemMenu);
   }, [user]);
 
   useEffect(() => {
@@ -124,6 +130,8 @@ export function DadosProvider({ children }) {
     }
     return {
       funcionalidades: f,
+      ordemMenu: ordemCompleta(ordemMenu),
+      servicos: servicosAtivos(f, ordemMenu),
       frentes: frentesV,
       contratos: contratosV,
       itensAbertos: itensV,
@@ -151,7 +159,7 @@ export function DadosProvider({ children }) {
       notificacoes: notificacoesV,
       naoLidas: notificacoesV.filter((n) => !n.lida).length,
     };
-  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas, notificacoes, funcionalidades, planejamentos, contratosSoMedicao]);
+  }, [frentes, contratos, itensAbertos, carregandoItens, erroItens, erroContratos, aditivosTI, user, minhaFila, minhasDemandas, filasCompartilhadas, notificacoes, funcionalidades, planejamentos, contratosSoMedicao, ordemMenu]);
 
   return <DadosContext.Provider value={valor}>{children}</DadosContext.Provider>;
 }

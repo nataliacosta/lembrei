@@ -32,3 +32,39 @@ export function notificacaoVisivel(n, f, contratosSoMedicao = []) {
   if (link.startsWith("/orcamentos")) return f.orcamentos;
   return true;
 }
+
+// Serviços do menu (O que fazer + as funcionalidades), na ordem que a pessoa
+// escolhe em Configurações (usuarios/{uid}.ordemMenu). Vale no celular e no computador.
+export const SERVICOS = [
+  { chave: "hoje", titulo: "O que fazer", curto: "Hoje", detalhe: "Seus lembretes e prazos do dia" },
+  { chave: "demandas", titulo: "Demandas", curto: "Demandas", detalhe: "Fila de demandas com previsão de entrega" },
+  { chave: "frentes", titulo: "Frentes", curto: "Frentes", detalhe: "Itens organizados por assunto" },
+  { chave: "contratos", titulo: "Contratos", curto: "Contratos", detalhe: "Contratos, aditivos, medição e itens de contrato" },
+  { chave: "orcamentos", titulo: "Controle orçamentário", curto: "Orçamento", detalhe: "Orçado × realizado e orçamentos" },
+];
+export const ORDEM_PADRAO = SERVICOS.map((s) => s.chave);
+
+// Ordem completa: a escolhida (só chaves conhecidas, sem repetir) e, no fim, as que faltarem.
+export function ordemCompleta(ordem) {
+  const validas = (Array.isArray(ordem) ? ordem : []).filter((k) => ORDEM_PADRAO.includes(k));
+  return [...new Set([...validas, ...ORDEM_PADRAO])];
+}
+
+// Serviços ligados, na ordem escolhida ("O que fazer" está sempre ligado).
+export function servicosAtivos(f, ordem) {
+  return ordemCompleta(ordem).filter((k) => k === "hoje" || f?.[k]);
+}
+
+export function moverNaOrdem(ordem, chave, delta) {
+  const lista = ordemCompleta(ordem);
+  const i = lista.indexOf(chave);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= lista.length) return lista;
+  [lista[i], lista[j]] = [lista[j], lista[i]];
+  return lista;
+}
+
+// No celular, com 5 ou mais serviços, os 3 primeiros ficam na barra e o resto vai para "Mais".
+export function dividirBarra(ativos) {
+  return ativos.length >= 5 ? { barra: ativos.slice(0, 3), mais: ativos.slice(3) } : { barra: ativos, mais: [] };
+}
