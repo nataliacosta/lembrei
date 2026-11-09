@@ -5,6 +5,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
 import { CONTRATO_STATUS } from "../lib/constants";
 import { situacaoDoContrato } from "../lib/agenda";
+import { proximaMedicao } from "../lib/medicao";
+import { inicioDoDia } from "../lib/datas";
 import { IconeFila, IconeGrafico, IconeLista } from "./Icones";
 
 function lerPreferencia(chave, padrao) {
@@ -64,6 +66,12 @@ export default function Sidebar() {
 
   const totalAtrasados = Object.values(contagemPorFrente).reduce((soma, c) => soma + c.atrasados, 0);
   const classeLink = ({ isActive }) => (isActive ? "sidebar-link-ativo" : "");
+  // Medições que já estão no período de lembrete e ainda não foram feitas.
+  const hojeMed = inicioDoDia();
+  const medicoesPendentes = contratos.filter((c) => {
+    const p = proximaMedicao(c, hojeMed);
+    return p && p.lembrarEm <= hojeMed;
+  }).length;
 
   // Na ordem escolhida em Configurações: os links do topo e as seções de baixo.
   const topo = {
@@ -241,6 +249,16 @@ export default function Sidebar() {
             <NavLink to="/contratos" end className={classeLink} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13, fontWeight: 600 }}>
               Ver todos os contratos
             </NavLink>
+            {contratos.some((c) => c.medicao?.ativa) && (
+              <NavLink to="/contratos/medicoes" className={classeLink} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px", color: "#fff", fontSize: 13, fontWeight: 600 }}>
+                Medições do mês
+                {medicoesPendentes > 0 && (
+                  <span className="sidebar-badge alerta" title={`${medicoesPendentes} medições pendentes`}>
+                    {medicoesPendentes}
+                  </span>
+                )}
+              </NavLink>
+            )}
             <Link to="/contratos/novo" className="sidebar-acao">
               + Novo contrato
             </Link>

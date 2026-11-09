@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import CabecalhoContrato from "../components/CabecalhoContrato";
 import { CentroTag, EquipeFrente } from "../components/AbaMedicoes";
@@ -78,7 +78,9 @@ export default function SubirMedicaoPage() {
   const [manuais, setManuais] = useState([]);
   const [erroArquivo, setErroArquivo] = useState("");
   const [lendo, setLendo] = useState(false);
-  const [mes, setMesBase] = useState(() => somarMeses(mesDe(new Date()), -1));
+  const [params] = useSearchParams();
+  const mesDaUrl = /^\d{4}-\d{2}$/.test(params.get("mes") || "") ? params.get("mes") : null;
+  const [mes, setMesBase] = useState(() => mesDaUrl || somarMeses(mesDe(new Date()), -1));
   const [qual, setQual] = useState(null); // nome da medição prevista, EXTRA, ou null (a primeira que falta)
   const [nomeExtra, setNomeExtra] = useState("");
   // Trocar de mês volta para a primeira medição que falta (ler a planilha
@@ -105,7 +107,7 @@ export default function SubirMedicaoPage() {
 
   // Sem planilha ainda: sugere o mês anterior ao ciclo de medição pendente.
   useEffect(() => {
-    if (!contrato || lidas) return;
+    if (!contrato || lidas || mesDaUrl) return;
     const proxima = proximaMedicao(contrato);
     if (proxima) setMes(somarMeses(proxima.chave, -1));
   }, [contrato, lidas]);

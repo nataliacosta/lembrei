@@ -20,6 +20,7 @@ import NovoOrcamentoPage from "./pages/NovoOrcamentoPage";
 import OrcamentoPage from "./pages/OrcamentoPage";
 import OrcamentoSharingPage from "./pages/OrcamentoSharingPage";
 import ContratoSharingPage from "./pages/ContratoSharingPage";
+import PainelMedicoesPage from "./pages/PainelMedicoesPage";
 import AditivoFormPage from "./pages/AditivoFormPage";
 import AditivoDetailPage from "./pages/AditivoDetailPage";
 import CancelamentoFormPage from "./pages/CancelamentoFormPage";
@@ -73,6 +74,7 @@ export default function App() {
         <Route path="/orcamentos/:planejamentoId/:versaoId" element={<OrcamentoPage />} />
         <Route path="/contratos" element={<ContratosListPage />} />
         <Route path="/contratos/novo" element={<ContratoFormPage />} />
+        <Route path="/contratos/medicoes" element={<PainelMedicoesPage />} />
         <Route path="/contratos/:contratoId" element={<ContratoDetailPage />} />
         <Route path="/contratos/:contratoId/medicoes" element={<ContratoDetailPage aba="medicoes" />} />
         <Route path="/contratos/:contratoId/medicoes/nova" element={<SubirMedicaoPage />} />
