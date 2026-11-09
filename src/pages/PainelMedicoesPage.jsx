@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
 import { useMedicoesDosContratos } from "../hooks/useMedicoesDosContratos";
 import { formatarReais, mesDe, normalizarNome, rotuloMes, somarMeses } from "../lib/alocacoes";
 import { prazoDoMes } from "../lib/medicao";
-import { nomesDoContrato, situacaoDoMes } from "../lib/medicoesDoMes";
+import { correcaoDoCiclo, nomesDoContrato, situacaoDoMes } from "../lib/medicoesDoMes";
+import { marcarMedicaoFeita } from "../lib/contratos";
 import { formatarDataRelativa, inicioDoDia } from "../lib/datas";
 
 const ORDEM = { atrasada: 0, parcial: 1, nao: 2, alancar: 3, lancada: 4 };
@@ -72,7 +73,21 @@ export default function PainelMedicoesPage() {
         const sit = situacaoDoMes(nomes, doMes);
         const prazo = prazoDoMes(anoC, mesC - 1, Number(c.medicao.diaPrazo) || 10);
         const feita = Boolean(c.medicao.feitas?.[ciclo]);
-        const st = feita || sit.todasLancadas ? "lancada" : sit.todasSubidas ? "alancar" : prazo < hoje ? "atrasada" : sit.subidas || sit.extras.length ? "parcial" : "nao";
+        // Com medição salva, a situação vem dela; o "feito" do contrato só vale sem medição (feita sem planilha).
+        const temMedicao = sit.subidas > 0 || sit.extras.length > 0;
+        const st = temMedicao
+          ? sit.todasLancadas
+            ? "lancada"
+            : sit.todasSubidas
+              ? "alancar"
+              : prazo < hoje
+                ? "atrasada"
+                : "parcial"
+          : feita
+            ? "lancada"
+            : prazo < hoje
+              ? "atrasada"
+              : "nao";
         const valor = doMes.reduce((s, m) => s + (Number(m.total) || 0), 0);
         const todas = [...sit.previstas.map((p) => p.medicao), ...sit.extras].filter(Boolean);
         const resumo =
@@ -84,10 +99,20 @@ export default function PainelMedicoesPage() {
                 ? "feita sem planilha"
                 : "—";
         const abrir = !nomes.length && todas.length === 1 ? `/contratos/${c.id}/medicoes/${todas[0].id}` : `/contratos/${c.id}/medicoes`;
-        return { c, sit, st, prazo, valor, resumo, abrir, subir: st === "atrasada" || st === "parcial" || st === "nao" };
+        return { c, sit, st, prazo, valor, resumo, abrir, subir: st === "atrasada" || st === "parcial" || st === "nao", corrigir: correcaoDoCiclo(feita, sit) };
       })
       .sort((a, b) => ORDEM[a.st] - ORDEM[b.st] || a.prazo - b.prazo || String(a.c.titulo).localeCompare(String(b.c.titulo)));
   }, [comMedicao, medicoes, ref, ciclo, anoC, mesC, hoje.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Acerta o "feito" do ciclo nos contratos em que ele não bate com as medições
+  // (ex.: medição subida de novo depois de lançada), para o lembrete voltar.
+  const aCorrigir = linhas.filter((l) => l.corrigir !== null && ["proprietario", "editor"].includes(l.c.membros?.[user.uid]));
+  const chaveCorrecao = aCorrigir.map((l) => `${l.c.id}:${l.corrigir}`).join(",");
+  useEffect(() => {
+    if (carregando) return;
+    for (const l of aCorrigir) marcarMedicaoFeita(l.c.id, ciclo, l.corrigir).catch((e) => console.error("Não deu pra acertar o ciclo da medição:", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveCorrecao, carregando]);
 
   const minhas = linhas.filter((l) => quem === "todas" || l.c.medicao?.responsavelId === user.uid);
   const conta = (g) => minhas.filter((l) => grupo(l.st) === g).length;
