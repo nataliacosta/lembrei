@@ -36,41 +36,54 @@ export default function TabBar() {
 
   if (emFormulario) return null;
 
-  return (
-    <nav className={`tab-bar ${qtdAbas >= 6 ? "seis-abas" : ""}`} aria-label="Navegação principal">
-      <NavLink to="/dashboard" className={classe}>
-        <IconeLista size={22} />
-        Hoje
-      </NavLink>
-      {funcionalidades.demandas && (
-      <NavLink to="/demandas" className={classe}>
+  const abas = [
+    <NavLink key="hoje" to="/dashboard" className={classe}>
+      <IconeLista size={22} />
+      Hoje
+    </NavLink>,
+    funcionalidades.demandas && (
+      <NavLink key="demandas" to="/demandas" className={classe}>
         <IconeFila size={22} />
         Demandas
       </NavLink>
-      )}
-      {linkNovo && (
-      <NavLink to={linkNovo} className="tab-novo" aria-label={linkNovo === "/demandas/nova" ? "Nova demanda" : "Novo item"}>
-        <IconeMais size={24} />
-      </NavLink>
-      )}
-      {funcionalidades.frentes && (
-      <NavLink to="/frentes" className={classe}>
+    ),
+    funcionalidades.frentes && (
+      <NavLink key="frentes" to="/frentes" className={classe}>
         <IconePasta size={22} />
         Frentes
       </NavLink>
-      )}
-      {funcionalidades.contratos && (
-      <NavLink to="/contratos" className={classe}>
+    ),
+    funcionalidades.contratos && (
+      <NavLink key="contratos" to="/contratos" className={classe}>
         <IconeDocumento size={22} />
         Contratos
       </NavLink>
-      )}
-      {funcionalidades.orcamentos && (
-      <NavLink to="/controle-orcamentario" className={() => (emOrcamento ? "ativo" : "")}>
+    ),
+    funcionalidades.orcamentos && (
+      <NavLink key="orcamento" to="/controle-orcamentario" className={() => (emOrcamento ? "ativo" : "")}>
         <IconeGrafico size={22} />
         Orçamento
       </NavLink>
-      )}
+    ),
+  ].filter(Boolean);
+
+  // O "+" fica sempre no centro: metade das abas de cada lado (com número
+  // ímpar, a esquerda fica com uma a mais e as abas dela, um pouco mais estreitas).
+  if (!linkNovo) {
+    return (
+      <nav className="tab-bar" aria-label="Navegação principal">
+        {abas}
+      </nav>
+    );
+  }
+  const meio = Math.ceil(abas.length / 2);
+  return (
+    <nav className={`tab-bar com-mais ${qtdAbas >= 6 ? "seis-abas" : ""}`} aria-label="Navegação principal">
+      <div className="tab-lado">{abas.slice(0, meio)}</div>
+      <NavLink to={linkNovo} className="tab-novo" aria-label={linkNovo === "/demandas/nova" ? "Nova demanda" : "Novo item"}>
+        <IconeMais size={24} />
+      </NavLink>
+      <div className="tab-lado">{abas.slice(meio)}</div>
     </nav>
   );
 }
