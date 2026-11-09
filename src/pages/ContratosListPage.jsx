@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useDados } from "../contexts/DadosContext";
 import { CONTRATO_STATUS, PENDENTE_EM_OPCOES } from "../lib/constants";
 import { alertaVencimento, descreverVencimento, formatarData, paraDate } from "../lib/datas";
+import { AbasContratos } from "./PainelMedicoesPage";
 import { situacaoDoContrato } from "../lib/agenda";
 
 const GRUPOS_CONTRATO = [
@@ -29,7 +30,7 @@ export default function ContratosListPage() {
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
         <div>
           <h1 style={{ margin: "0 0 4px 0", fontSize: 26, fontWeight: 700 }}>Contratos</h1>
-          <p style={{ margin: 0, color: "var(--color-gray)", fontSize: 14 }}>Fornecedores, vencimentos, aditivos e cancelamentos.</p>
+          <p style={{ margin: 0, color: "var(--color-gray)", fontSize: 14 }}>Fornecedores, vencimentos, aditivos, cancelamentos e medições.</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "var(--color-gray)", fontWeight: 600 }}>Pendente em:</span>
@@ -48,6 +49,7 @@ export default function ContratosListPage() {
           </Link>
         </div>
       </div>
+      <AbasContratos ativa="contratos" />
 
       {erro ? (
         <div className="empty-state" style={{ color: "var(--color-orange)" }}>Não deu pra carregar: {erro}</div>
