@@ -365,13 +365,17 @@ function AbaOdis() {
   const { user } = useAuth();
   const { opcoes, carregando } = useCentrosDisponiveis();
   const [editando, setEditando] = useState(null); // docId ou "novo"
-  const doOrcamento = opcoes.filter((o) => o.origem === "orcamento");
+  // Uma linha por ODI e ano (a mesma ODI pode estar no orçamento de mais de um ano).
+  const doOrcamento = opcoes
+    .filter((o) => o.origem === "orcamento")
+    .flatMap((o) => o.anos.map((ano) => ({ ...o, ...o.porAno[ano], ano, chave: `${o.id}-${ano}` })))
+    .sort((a, b) => b.ano - a.ano || String(a.codigo).localeCompare(String(b.codigo)));
   const fora = opcoes.filter((o) => o.origem === "fora");
 
   return (
     <>
       <div className="texto-ajuda" style={{ marginTop: 12 }}>
-        É a lista única que aparece nas alocações de todos os contratos. As do orçamento entram sozinhas; as outras você cadastra aqui (ou direto na hora de escolher).
+        É a lista única que aparece nas alocações de todos os contratos. As do orçamento entram sozinhas e só são oferecidas para custos do ano daquele orçamento (pelo mês de pagamento: as horas de dezembro já contam no ano seguinte); as outras você cadastra aqui (ou direto na hora de escolher).
       </div>
       <h2 style={secaoTitulo}>Do orçamento · {doOrcamento.length}</h2>
       <div className="lista-card">
@@ -393,7 +397,7 @@ function AbaOdis() {
               </tr>
             )}
             {doOrcamento.map((o) => (
-              <tr key={o.id}>
+              <tr key={o.chave}>
                 <td>
                   <CentroTag tipo="ODI" codigo={o.codigo} />
                 </td>

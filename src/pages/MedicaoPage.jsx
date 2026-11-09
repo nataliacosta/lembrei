@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import CabecalhoContrato from "../components/CabecalhoContrato";
 import { CentroTag, EquipeFrente, StatusMedicao } from "../components/AbaMedicoes";
 import EditorDivisao, { EditorAlocacao, porIdDe } from "../components/EditorDivisao";
-import { useCentrosDisponiveis } from "../hooks/useCentrosDisponiveis";
+import { anoDoOrcamento, useCentrosDisponiveis } from "../hooks/useCentrosDisponiveis";
 import { watchContrato } from "../lib/contratos";
 import { formatarData } from "../lib/datas";
 import {
@@ -279,7 +279,7 @@ export default function MedicaoPage() {
                   <td className="num">
                     <b>{formatarReais(t.valor)}</b>
                     {t.centroId && (
-                      <div style={{ fontSize: 12, color: "var(--color-gray)" }}>{c?.origem === "orcamento" ? `no orçamento ${c.ano}` : "fora do orçamento"}</div>
+                      <div style={{ fontSize: 12, color: "var(--color-gray)" }}>{c?.origem === "orcamento" && c.anos?.includes(anoDoOrcamento(mes)) ? `no orçamento ${anoDoOrcamento(mes)}` : "fora do orçamento"}</div>
                     )}
                   </td>
                   <td style={{ textAlign: "right" }}>
