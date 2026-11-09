@@ -28,6 +28,7 @@ import {
   totaisPorCentro,
 } from "../lib/alocacoes";
 import { salvarMedicao, watchCentros, watchEquipes, watchMedicoes, watchRecursos } from "../lib/medicoesContrato";
+import { idDaMedicao, nomesDoContrato, situacaoDoMes } from "../lib/medicoesDoMes";
 
 const rotulo = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--color-gray)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" };
 
@@ -44,6 +45,8 @@ async function lerArquivo(arquivo) {
   return melhor || { linhas: [], faltando: ["Nome do Recurso", "Quantidade de Horas", "Valor Total"] };
 }
 
+const EXTRA = "__extra__";
+
 export default function SubirMedicaoPage() {
   const { contratoId } = useParams();
   const { user } = useAuth();
@@ -58,7 +61,15 @@ export default function SubirMedicaoPage() {
   const [lidas, setLidas] = useState(null);
   const [erroArquivo, setErroArquivo] = useState("");
   const [lendo, setLendo] = useState(false);
-  const [mes, setMes] = useState(() => somarMeses(mesDe(new Date()), -1));
+  const [mes, setMesBase] = useState(() => somarMeses(mesDe(new Date()), -1));
+  const [qual, setQual] = useState(null); // nome da medição prevista, EXTRA, ou null (a primeira que falta)
+  const [nomeExtra, setNomeExtra] = useState("");
+  // Trocar de mês volta para a primeira medição que falta (ler a planilha
+  // pode definir o mesmo mês de novo: aí a escolha fica).
+  const setMes = (m) => {
+    if (m !== mes) setQual(null);
+    setMesBase(m);
+  };
   const [escolhas, setEscolhas] = useState({}); // índice da linha → { centroId, equipeId, frenteId }
   const [guardar, setGuardar] = useState({}); // índice da linha → salvar como alocação
   const [equipes, setEquipes] = useState([]);
@@ -134,7 +145,17 @@ export default function SubirMedicaoPage() {
   const preenchidas = linhas.filter((l) => l.partes.length && !l.escolhida && !l.dividida).length;
   const totais = totaisDaMedicao(linhas);
   const porCentro = totaisPorCentro(linhas);
-  const jaExiste = medicoes.find((m) => m.mes === mes);
+  // Qual medição do mês (contratos com várias) ou uma extra, com nome.
+  const nomesPrevistos = nomesDoContrato(contrato);
+  const doMes = medicoes.filter((m) => m.mes === mes);
+  const situacao = situacaoDoMes(nomesPrevistos, doMes);
+  const qualEfetiva = qual ?? (situacao.previstas.find((p) => !p.medicao) || situacao.previstas[0]).nome;
+  const ehExtra = qualEfetiva === EXTRA;
+  const prevista = ehExtra ? null : situacao.previstas.find((p) => p.nome === qualEfetiva) || situacao.previstas[0];
+  const nomeEscolhido = ehExtra ? nomeExtra.trim() : prevista.nome;
+  const idEscolhido = ehExtra ? idDaMedicao(mes, nomeExtra) : prevista.medicao?.id || idDaMedicao(mes, prevista.nome);
+  const jaExiste = ehExtra ? medicoes.find((m) => m.id === idEscolhido) : prevista.medicao;
+  const rotuloEscolhida = [rotuloMes(mes), nomeEscolhido].filter(Boolean).join(" · ");
   const opcoesMes = [];
   for (let i = -12; i <= 1; i++) opcoesMes.push(somarMeses(mesDe(new Date()), i));
   if (!opcoesMes.includes(mes)) opcoesMes.push(mes);
@@ -154,7 +175,8 @@ export default function SubirMedicaoPage() {
 
   async function salvar() {
     setErro("");
-    if (jaExiste && !window.confirm(`Já existe a medição de ${rotuloMes(mes)}. Salvar vai substituir a anterior. Continuar?`)) return;
+    if (ehExtra && !nomeExtra.trim()) return setErro("Dê um nome para a medição extra (ex.: Complementar de agosto).");
+    if (jaExiste && !window.confirm(`Já existe a medição ${rotuloEscolhida}. Salvar vai substituir a anterior. Continuar?`)) return;
     // Linhas sem alocação em que você escolheu um CC/ODI e marcou "salvar como alocação".
     const novos = new Map();
     const existentes = new Map();
@@ -179,7 +201,12 @@ export default function SubirMedicaoPage() {
     });
     setSalvando(true);
     try {
+      const depois = situacaoDoMes(nomesPrevistos, [...doMes.filter((m) => m.id !== idEscolhido), { id: idEscolhido, nome: nomeEscolhido, extra: ehExtra, status: "a_lancar" }]);
       await salvarMedicao(contratoId, {
+        id: idEscolhido,
+        nome: nomeEscolhido,
+        extra: ehExtra,
+        cicloSubido: depois.todasSubidas,
         mes,
         arquivoNome,
         linhas: linhasParaSalvar,
@@ -191,7 +218,7 @@ export default function SubirMedicaoPage() {
         // A medição das horas de outubro é feita em novembro: marca o ciclo seguinte.
         ciclo: contrato.medicao?.ativa ? somarMeses(mes, 1) : null,
       });
-      navigate(`/contratos/${contratoId}/medicoes/${mes}`, { replace: true });
+      navigate(`/contratos/${contratoId}/medicoes/${idEscolhido}`, { replace: true });
     } catch (e) {
       console.error(e);
       setErro("Não deu pra salvar a medição. Tente de novo.");
@@ -224,6 +251,29 @@ export default function SubirMedicaoPage() {
       </div>
 
       {!podeEditar && <div className="texto-alerta" style={{ marginTop: 12, fontSize: 13 }}>Você só pode visualizar este contrato.</div>}
+
+      <div className="lista-card qual-medicao">
+        <span style={rotulo}>Qual medição</span>
+        <div className="chips-row" role="group" aria-label="Qual medição">
+          {situacao.previstas.map((p) => (
+            <button key={p.nome || "unica"} type="button" className="chip" aria-pressed={qualEfetiva === p.nome} onClick={() => setQual(p.nome)}>
+              {p.nome || "Medição do mês"}
+              {p.medicao ? " · já subida" : ""}
+            </button>
+          ))}
+          <button type="button" className="chip" aria-pressed={ehExtra} onClick={() => setQual(EXTRA)}>
+            + Medição extra
+          </button>
+        </div>
+        {ehExtra && (
+          <input value={nomeExtra} onChange={(e) => setNomeExtra(e.target.value)} placeholder="Nome da medição extra (ex.: Complementar de agosto)" aria-label="Nome da medição extra" maxLength={60} style={{ marginTop: 10, maxWidth: 420 }} />
+        )}
+        <div className="texto-ajuda">
+          {nomesPrevistos.length
+            ? "As medições do mês vêm do cadastro do contrato. “Medição extra” é para um caso fora do comum e não muda o cadastro."
+            : "Este contrato tem uma medição por mês. Para um caso fora do comum, use “Medição extra”; para ter várias todo mês, cadastre os nomes em Editar contrato."}
+        </div>
+      </div>
 
       <div className="area-arquivo">
         <span style={{ color: "var(--color-primary)" }}>
@@ -289,7 +339,7 @@ export default function SubirMedicaoPage() {
           </div>
           {jaExiste && (
             <div className="texto-ajuda texto-alerta" style={{ marginTop: 8 }}>
-              Já existe a medição de {rotuloMes(mes)}; salvar vai substituir a anterior.
+              Já existe a medição {rotuloEscolhida}; salvar vai substituir a anterior.
             </div>
           )}
 

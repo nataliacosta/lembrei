@@ -313,7 +313,7 @@ function Historico({ item, nome, todas, onTodas }) {
       </div>
       {lancamentos.length === 0 && <div style={{ fontSize: 13, color: "var(--color-gray)" }}>Nenhuma medição lançada ainda.</div>}
       {(todas ? lancamentos : lancamentos.slice(0, 5)).map((x) => (
-        <LinhaLancamento key={`${x.contratoId}-${x.mes}`} x={x} />
+        <LinhaLancamento key={`${x.contratoId}-${x.medicaoId || x.mes}`} x={x} />
       ))}
       {!todas && lancamentos.length > 5 && (
         <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderTop: "1px solid #eef1f0", fontSize: 13, color: "var(--color-gray)" }}>
@@ -329,7 +329,7 @@ function Historico({ item, nome, todas, onTodas }) {
           {pendentes.map((x, i) => (
             <span key={i}>
               {i > 0 && "; "}
-              <Link to={`/contratos/${x.contratoId}/medicoes/${x.mes}`}>medição de {rotuloMes(x.mes).toLowerCase()}</Link> · {x.contratoTitulo} · {formatarReais(x.valor)} (vai contar em {rotuloMes(x.mesPagamento).split("/")[0].toLowerCase()})
+              <Link to={`/contratos/${x.contratoId}/medicoes/${x.medicaoId || x.mes}`}>medição de {rotuloMes(x.mes).toLowerCase()}{x.nome ? ` · ${x.nome}` : ""}</Link> · {x.contratoTitulo} · {formatarReais(x.valor)} (vai contar em {rotuloMes(x.mesPagamento).split("/")[0].toLowerCase()})
             </span>
           ))}{" "}
           — falta marcar como lançada no sistema.
@@ -344,7 +344,11 @@ function LinhaLancamento({ x }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "9px 0", borderTop: "1px solid #eef1f0", fontSize: 13, flexWrap: "wrap" }}>
       <span style={{ flex: "1 1 220px", minWidth: 0 }}>
-        <b>Medição de {rotuloMes(x.mes).toLowerCase()}</b> · {x.contratoTitulo}{" "}
+        <b>
+          Medição de {rotuloMes(x.mes).toLowerCase()}
+          {x.nome ? ` · ${x.nome}` : ""}
+        </b>{" "}
+        · {x.contratoTitulo}{" "}
         <span style={{ color: "var(--color-gray)", fontSize: 12 }}>
           · paga em {rotuloMes(x.mesPagamento).split("/")[0].toLowerCase()}
           {lancada ? ` · lançada em ${lancada}` : ""}
@@ -352,7 +356,7 @@ function LinhaLancamento({ x }) {
       </span>
       <span style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <b>{formatarReais(x.valor)}</b>
-        <Link to={`/contratos/${x.contratoId}/medicoes/${x.mes}`} style={{ fontWeight: 600 }}>
+        <Link to={`/contratos/${x.contratoId}/medicoes/${x.medicaoId || x.mes}`} style={{ fontWeight: 600 }}>
           ver medição
         </Link>
       </span>

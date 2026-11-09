@@ -102,9 +102,9 @@ export function watchMedicoes(contratoId, callback, onError) {
   return ouvir(query(ref(contratoId, "medicoes"), orderBy("mes", "desc")), callback, onError);
 }
 
-export function watchMedicao(contratoId, mes, callback) {
+export function watchMedicao(contratoId, id, callback) {
   return onSnapshot(
-    doc(db, "contratos", contratoId, "medicoes", mes),
+    doc(db, "contratos", contratoId, "medicoes", id),
     (snap) => callback(snap.exists() ? { id: snap.id, ...snap.data() } : null),
     (e) => {
       console.error(e);
@@ -113,14 +113,17 @@ export function watchMedicao(contratoId, mes, callback) {
   );
 }
 
-// Salva a medição do mês (uma por mês; subir de novo substitui) e cria os
-// recursos novos marcados em "Salvar como alocação". Se o contrato tem
-// lembrete de medição, marca o ciclo (o mês do prazo) como "subida": o
-// lembrete só sai do "O que fazer" quando a medição for marcada como lançada.
-export async function salvarMedicao(contratoId, { mes, arquivoNome, linhas, total, horas, user, novosRecursos = [], alocacoesExistentes = [], ciclo }) {
+// Salva uma medição do mês (id = "AAAA-MM" na única, "AAAA-MM--nome" quando
+// o contrato tem várias; subir de novo a mesma substitui) e cria os recursos
+// novos marcados em "Salvar como alocação". Se o contrato tem lembrete de
+// medição, marca o ciclo (o mês do prazo) como "subido" quando todas as
+// medições previstas do mês estiverem subidas (quem chama calcula).
+export async function salvarMedicao(contratoId, { id, mes, nome = "", extra = false, arquivoNome, linhas, total, horas, user, novosRecursos = [], alocacoesExistentes = [], ciclo, cicloSubido = true }) {
   const batch = writeBatch(db);
-  batch.set(doc(db, "contratos", contratoId, "medicoes", mes), {
+  batch.set(doc(db, "contratos", contratoId, "medicoes", id || mes), {
     mes,
+    nome: String(nome || "").trim(),
+    extra: Boolean(extra),
     arquivoNome: arquivoNome || "",
     linhas,
     total,
@@ -145,30 +148,43 @@ export async function salvarMedicao(contratoId, { mes, arquivoNome, linhas, tota
     batch.update(doc(db, "contratos", contratoId, "recursos", r.id), { alocacoes: r.alocacoes, atualizadoEm: serverTimestamp() });
   }
   if (ciclo) {
-    batch.update(doc(db, "contratos", contratoId), { [`medicao.subidas.${ciclo}`]: true, atualizadoEm: serverTimestamp() });
+    // Uma medição nova (ainda a lançar) sempre tira o "feito" do ciclo.
+    batch.update(doc(db, "contratos", contratoId), {
+      [`medicao.subidas.${ciclo}`]: cicloSubido ? true : deleteField(),
+      [`medicao.feitas.${ciclo}`]: deleteField(),
+      atualizadoEm: serverTimestamp(),
+    });
   }
   await batch.commit();
 }
 
-export function atualizarMedicao(contratoId, mes, dados) {
-  return updateDoc(doc(db, "contratos", contratoId, "medicoes", mes), { ...dados, atualizadoEm: serverTimestamp() });
+export function atualizarMedicao(contratoId, id, dados) {
+  return updateDoc(doc(db, "contratos", contratoId, "medicoes", id), { ...dados, atualizadoEm: serverTimestamp() });
 }
 
-// Lançada no sistema: é aqui que o lembrete do ciclo sai do "O que fazer".
-export async function marcarLancada(contratoId, mes, lancada, ciclo) {
+// Lançada no sistema: o lembrete do ciclo sai do "O que fazer" quando todas
+// as medições do mês estiverem lançadas (quem chama calcula "cicloFeito").
+export async function marcarLancada(contratoId, id, lancada, ciclo, cicloFeito = lancada) {
   const batch = writeBatch(db);
-  batch.update(doc(db, "contratos", contratoId, "medicoes", mes), {
+  batch.update(doc(db, "contratos", contratoId, "medicoes", id), {
     status: lancada ? "lancada" : "a_lancar",
     lancadaEm: lancada ? serverTimestamp() : deleteField(),
     atualizadoEm: serverTimestamp(),
   });
-  if (ciclo) batch.update(doc(db, "contratos", contratoId), { [`medicao.feitas.${ciclo}`]: lancada ? true : deleteField(), atualizadoEm: serverTimestamp() });
+  if (ciclo) batch.update(doc(db, "contratos", contratoId), { [`medicao.feitas.${ciclo}`]: cicloFeito ? true : deleteField(), atualizadoEm: serverTimestamp() });
   await batch.commit();
 }
 
-export async function excluirMedicao(contratoId, mes, ciclo) {
+// Excluir uma medição: o ciclo volta a "não subido" e "não feito", a não ser
+// que as outras medições do mês ainda cubram tudo (quem chama calcula).
+export async function excluirMedicao(contratoId, id, ciclo, { subido = false, feito = false } = {}) {
   const batch = writeBatch(db);
-  batch.delete(doc(db, "contratos", contratoId, "medicoes", mes));
-  if (ciclo) batch.update(doc(db, "contratos", contratoId), { [`medicao.subidas.${ciclo}`]: deleteField(), [`medicao.feitas.${ciclo}`]: deleteField(), atualizadoEm: serverTimestamp() });
+  batch.delete(doc(db, "contratos", contratoId, "medicoes", id));
+  if (ciclo)
+    batch.update(doc(db, "contratos", contratoId), {
+      [`medicao.subidas.${ciclo}`]: subido ? true : deleteField(),
+      [`medicao.feitas.${ciclo}`]: feito ? true : deleteField(),
+      atualizadoEm: serverTimestamp(),
+    });
   await batch.commit();
 }
