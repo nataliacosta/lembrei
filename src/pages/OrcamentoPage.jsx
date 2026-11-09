@@ -12,6 +12,7 @@ import {
   RESPONSAVEIS,
   TIPOS,
   totaisPorMes,
+  agruparPorProjeto,
   versaoVigente,
 } from "../lib/orcamentos";
 import { baixarOrcamento } from "../lib/orcamentosExcel";
@@ -301,7 +302,39 @@ function SeletorVisualizacao({ modo, onModo }) {
 }
 
 // Lista só com os valores: meses em milhares (para caber) e o anual completo.
-function TabelaPorMes({ linhas, titulo, sub, rotuloPrimeira }) {
+function LinhaPorMes({ l, titulo, sub, recuo }) {
+  return (
+    <tr>
+      <td className={recuo ? "recuo-grupo" : undefined}>
+        <div style={{ fontWeight: 700 }}>{titulo(l) || "—"}</div>
+        <div className="sub">{sub(l)}</div>
+      </td>
+      {(l.meses || []).map((v, j) => (
+        <td key={j} className="num mes">
+          {mil(v)}
+        </td>
+      ))}
+      <td className="num">
+        <b>{formatarReais(anualDe(l))}</b>
+      </td>
+    </tr>
+  );
+}
+
+// Linha de título do projeto: clica para recolher/abrir.
+function BotaoGrupo({ g, aberto, onAlternar }) {
+  return (
+    <button type="button" className="botao-grupo" onClick={onAlternar} aria-expanded={aberto}>
+      <span className="seta">{aberto ? "▾" : "▸"}</span>
+      {g.semProjeto ? <i>Sem projeto</i> : <b>{g.nome}</b>}
+      <span className="qtd">
+        {g.linhas.length} {g.linhas.length === 1 ? "linha" : "linhas"}
+      </span>
+    </button>
+  );
+}
+
+function TabelaPorMes({ linhas, titulo, sub, rotuloPrimeira, grupos, recolhidos, onAlternar }) {
   const tot = totaisPorMes(linhas);
   return (
     <div className="lista-card">
@@ -318,22 +351,27 @@ function TabelaPorMes({ linhas, titulo, sub, rotuloPrimeira }) {
           </tr>
         </thead>
         <tbody>
-          {linhas.map((l, i) => (
-            <tr key={l.id || l.chave || i}>
-              <td>
-                <div style={{ fontWeight: 700 }}>{titulo(l) || "—"}</div>
-                <div className="sub">{sub(l)}</div>
-              </td>
-              {(l.meses || []).map((v, j) => (
-                <td key={j} className="num mes">
-                  {mil(v)}
-                </td>
-              ))}
-              <td className="num">
-                <b>{formatarReais(anualDe(l))}</b>
-              </td>
-            </tr>
-          ))}
+          {grupos
+            ? grupos.map((g) => {
+                const aberto = !recolhidos.has(g.chave);
+                return [
+                  <tr key={`g-${g.chave}`} className="linha-grupo">
+                    <td>
+                      <BotaoGrupo g={g} aberto={aberto} onAlternar={() => onAlternar(g.chave)} />
+                    </td>
+                    {g.meses.map((v, j) => (
+                      <td key={j} className="num mes">
+                        <b>{mil(v)}</b>
+                      </td>
+                    ))}
+                    <td className="num">
+                      <b>{formatarReais(g.anual)}</b>
+                    </td>
+                  </tr>,
+                  ...(aberto ? g.linhas.map((l, i) => <LinhaPorMes key={l.id || l.chave || `${g.chave}-${i}`} l={l} titulo={titulo} sub={sub} recuo />) : []),
+                ];
+              })
+            : linhas.map((l, i) => <LinhaPorMes key={l.id || l.chave || i} l={l} titulo={titulo} sub={sub} />)}
           {linhas.length > 0 && (
             <tr className="total">
               <td>Total</td>
@@ -717,6 +755,20 @@ function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSa
   const tot = totaisPorMes(visiveis);
   const idDe = (l) => l.id || l.chave;
   const COLS = 8;
+  const grupos = useMemo(() => agruparPorProjeto(visiveis), [visiveis]);
+  const [recolhidos, setRecolhidos] = useState(() => new Set());
+  // Na busca, mostra tudo o que achou, mesmo nos projetos recolhidos.
+  const estaRecolhido = (chave) => !termo && recolhidos.has(chave);
+  const alternar = (chave) =>
+    setRecolhidos((r) => {
+      const n = new Set(r);
+      if (n.has(chave)) n.delete(chave);
+      else n.add(chave);
+      return n;
+    });
+  const todosRecolhidos = grupos.length > 0 && grupos.every((g) => recolhidos.has(g.chave));
+  const subDaLinha = (l) =>
+    [l.fornecedor, daCompleta && l.qtdRecursos ? `${l.qtdRecursos} ${l.qtdRecursos === 1 ? "recurso" : "recursos"}` : null].filter(Boolean).join(" · ");
 
   return (
     <>
@@ -725,21 +777,36 @@ function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSa
           <SeletorVisualizacao modo={modo} onModo={setModo} />
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar linha, projeto, ODI…" aria-label="Buscar" style={{ width: 240, padding: "7px 12px" }} />
         </div>
-        {!daCompleta && podeEditar && modo === "resumo" && (
-          <button type="button" className="link-botao" onClick={() => setAberta("nova")}>
-            + Nova linha
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          {grupos.length > 1 && !termo && (
+            <button type="button" className="link-botao" onClick={() => setRecolhidos(todosRecolhidos ? new Set() : new Set(grupos.map((g) => g.chave)))}>
+              {todosRecolhidos ? "Abrir todos" : "Recolher todos"}
+            </button>
+          )}
+          {!daCompleta && podeEditar && modo === "resumo" && (
+            <button type="button" className="link-botao" onClick={() => setAberta("nova")}>
+              + Nova linha
+            </button>
+          )}
+        </div>
       </div>
 
       {modo === "mes" ? (
-        <TabelaPorMes linhas={visiveis} rotuloPrimeira="Linha · Projeto · Fornecedor" titulo={(l) => l.linha} sub={(l) => [l.projeto, l.fornecedor].filter(Boolean).join(" · ")} />
+        <TabelaPorMes
+          linhas={visiveis}
+          rotuloPrimeira="Projeto › Linha · Fornecedor"
+          titulo={(l) => l.linha}
+          sub={subDaLinha}
+          grupos={grupos}
+          recolhidos={termo ? new Set() : recolhidos}
+          onAlternar={alternar}
+        />
       ) : (
         <div className="lista-card">
           <table className="tabela-med tabela-orc2">
             <thead>
               <tr>
-                <th>Linha · Projeto · Fornecedor</th>
+                <th>Projeto › Linha · Fornecedor</th>
                 <th>ODI</th>
                 <th>Tipo</th>
                 <th>Classificação</th>
@@ -764,16 +831,28 @@ function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSa
                   </td>
                 </tr>
               )}
-              {visiveis.map((l) => {
+              {grupos.map((g) => {
+                const aberto = !estaRecolhido(g.chave);
+                return [
+                  <tr key={`g-${g.chave}`} className="linha-grupo">
+                    <td colSpan={5}>
+                      <BotaoGrupo g={g} aberto={aberto} onAlternar={() => alternar(g.chave)} />
+                    </td>
+                    <td className="so-largo">
+                      <MiniGrafico meses={g.meses} />
+                    </td>
+                    <td className="num">
+                      <b style={{ fontSize: 14 }}>{formatarReais(g.anual)}</b>
+                    </td>
+                    <td />
+                  </tr>,
+                  ...(aberto ? g.linhas : []).map((l) => {
                 const estaAberta = aberta === idDe(l);
                 return [
                   <tr key={idDe(l)} className={estaAberta ? "aberta" : ""}>
-                    <td>
+                    <td className="recuo-grupo">
                       <div style={{ fontWeight: 700, fontSize: 14 }}>{l.linha || "—"}</div>
-                      <div className="sub">
-                        {[l.projeto, l.fornecedor].filter(Boolean).join(" · ")}
-                        {daCompleta && l.qtdRecursos ? ` · ${l.qtdRecursos} ${l.qtdRecursos === 1 ? "recurso" : "recursos"}` : ""}
-                      </div>
+                      <div className="sub">{subDaLinha(l)}</div>
                     </td>
                     <td>{l.odi || <span style={{ color: "var(--color-gray)" }}>—</span>}</td>
                     <td>
@@ -822,10 +901,15 @@ function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSa
                     </tr>
                   ),
                 ];
+                  }),
+                ];
               })}
               {visiveis.length > 0 && (
                 <tr className="total">
-                  <td colSpan={6}>Total{visiveis.length !== linhas.length ? " (filtrado)" : ""}</td>
+                  <td colSpan={6}>
+                    Total · {visiveis.length} {visiveis.length === 1 ? "linha" : "linhas"}
+                    {visiveis.length !== linhas.length ? " (filtrado)" : ""}
+                  </td>
                   <td className="num">
                     <b style={{ fontSize: 14 }}>{formatarReais(tot.anual)}</b>
                   </td>
@@ -838,8 +922,8 @@ function TabelaCondensada({ linhas, daCompleta, podeEditar, onSalvarExtras, onSa
       )}
       <div className="texto-ajuda">
         {modo === "mes"
-          ? "Os meses estão em milhares (k) para caber; o anual vem completo."
-          : `“Abrir” mostra os 12 meses e os outros campos (capex, diretoria, área) para editar. Nenhum campo é obrigatório.${daCompleta ? " Os valores vêm da visão completa, somando por Projeto + Fornecedor + Linha." : ""}`}
+          ? "Agrupado por projeto, com o subtotal de cada mês na linha do projeto. Os meses estão em milhares (k) para caber; o anual vem completo."
+          : `Agrupado por projeto; clique no projeto para recolher ou abrir. “Abrir” mostra os 12 meses e os outros campos (capex, diretoria, área) para editar. Nenhum campo é obrigatório.${daCompleta ? " Os valores vêm da visão completa, somando por Projeto + Fornecedor + Linha." : ""}`}
       </div>
     </>
   );

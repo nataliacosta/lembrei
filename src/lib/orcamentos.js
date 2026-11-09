@@ -260,3 +260,21 @@ export function abaDaPlanilha(colunas, linhas) {
 export function larguras(colunas) {
   return colunas.map((c) => ({ width: c.mes !== undefined ? 12 : c.chave === "item" || c.chave === "projeto" ? 28 : c.chave === "anual" ? 14 : 18 }));
 }
+
+// Agrupa as linhas da condensada por projeto (nome normalizado), em ordem
+// alfabética, com as linhas sem projeto num grupo "Sem projeto" no fim.
+export function agruparPorProjeto(linhas) {
+  const mapa = new Map();
+  for (const l of linhas || []) {
+    const nome = String(l.projeto || "").trim();
+    const chave = nome ? normalizarNome(nome) : "";
+    let g = mapa.get(chave);
+    if (!g) {
+      g = { chave, nome, semProjeto: !nome, linhas: [] };
+      mapa.set(chave, g);
+    }
+    g.linhas.push(l);
+  }
+  const grupos = [...mapa.values()].map((g) => ({ ...g, ...totaisPorMes(g.linhas) }));
+  return grupos.sort((a, b) => (a.semProjeto !== b.semProjeto ? (a.semProjeto ? 1 : -1) : a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })));
+}
