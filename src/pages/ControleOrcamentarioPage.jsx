@@ -88,6 +88,7 @@ function dataDe(ts) {
 function VisaoGeral({ ano, vigente }) {
   const { contratos } = useDados();
   const { medicoes, carregando } = useMedicoesDosContratos(contratos);
+  const { porId: centrosPorId } = useCentrosDisponiveis();
   const [aberta, setAberta] = useState(null);
   const [busca, setBusca] = useState("");
   const [todasDe, setTodasDe] = useState({});
@@ -282,6 +283,7 @@ function VisaoGeral({ ano, vigente }) {
               <tr key={f.id}>
                 <td>
                   <CentroTag tipo={f.tipo} codigo={f.codigo} />
+                  {centrosPorId[f.id]?.descricao && <div className="sub">{centrosPorId[f.id].descricao}</div>}
                 </td>
                 <td>{f.contratos.join(", ") || "—"}</td>
                 <td className="num">
