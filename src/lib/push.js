@@ -121,6 +121,19 @@ export async function definirSoMedicao(uid, contratoId, soMedicao) {
   await setDoc(doc(db, "usuarios", uid), { contratosSoMedicao: soMedicao ? arrayUnion(contratoId) : arrayRemove(contratoId) }, { merge: true });
 }
 
+// Ordem dos serviços no menu (ver lib/funcionalidades.js).
+export async function salvarOrdemMenu(uid, ordemMenu) {
+  await setDoc(doc(db, "usuarios", uid), { ordemMenu }, { merge: true });
+}
+
+export function watchOrdemMenu(uid, callback) {
+  return onSnapshot(
+    doc(db, "usuarios", uid),
+    (snap) => callback(snap.data()?.ordemMenu || null),
+    (e) => console.error("Erro ao ler a ordem do menu:", e)
+  );
+}
+
 export function watchFuncionalidades(uid, callback) {
   return onSnapshot(
     doc(db, "usuarios", uid),

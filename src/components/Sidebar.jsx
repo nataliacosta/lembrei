@@ -26,7 +26,7 @@ function salvarPreferencia(chave, valor) {
 
 export default function Sidebar() {
   const { user } = useAuth();
-  const { frentes, contratos, contagemPorFrente, minhaFila, minhasDemandas, funcionalidades, planejamentos, ehSoMedicao } = useDados();
+  const { frentes, contratos, contagemPorFrente, minhaFila, minhasDemandas, planejamentos, ehSoMedicao, servicos } = useDados();
   const contratosMeus = contratos.filter((c) => !ehSoMedicao(c.id));
   const contratosSoMedicao = contratos.filter((c) => ehSoMedicao(c.id));
   const naFila = minhaFila ? minhasDemandas.filter((d) => !d.concluida && (minhaFila.ordem || []).includes(d.id)).length : 0;
@@ -65,9 +65,11 @@ export default function Sidebar() {
   const totalAtrasados = Object.values(contagemPorFrente).reduce((soma, c) => soma + c.atrasados, 0);
   const classeLink = ({ isActive }) => (isActive ? "sidebar-link-ativo" : "");
 
-  return (
-    <div className="dashboard-sidebar" style={{ background: "var(--color-dark)", padding: "24px 0" }}>
+  // Na ordem escolhida em Configurações: os links do topo e as seções de baixo.
+  const topo = {
+    hoje: (
       <NavLink
+        key="hoje"
         to="/dashboard"
         className={classeLink}
         style={{
@@ -88,8 +90,11 @@ export default function Sidebar() {
           </span>
         )}
       </NavLink>
-      {funcionalidades.demandas && (
+    ),
+    demandas: (
+
       <NavLink
+        key="demandas"
         to="/demandas"
         className={classeLink}
         style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 24px", color: "#fff", fontSize: 14, fontWeight: 700 }}
@@ -106,9 +111,11 @@ export default function Sidebar() {
           </span>
         ) : null}
       </NavLink>
-      )}
-      {funcionalidades.orcamentos && (
+    ),
+    orcamentos: (
+
       <NavLink
+        key="orcamentos"
         to="/controle-orcamentario"
         className={classeLink}
         style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 24px", color: "#fff", fontSize: 14, fontWeight: 700 }}
@@ -116,10 +123,14 @@ export default function Sidebar() {
         <IconeGrafico size={16} />
         Controle orçamentário
       </NavLink>
-      )}
+    ),
+  };
+  const secoes = servicos.filter((k) => ["frentes", "contratos", "orcamentos"].includes(k));
+  const primeira = (k) => secoes[0] === k;
+  const blocos = {
+    frentes: (
 
-      {funcionalidades.frentes && (
-      <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+      <div key="frentes" style={{ marginTop: primeira("frentes") ? 16 : 28, paddingTop: primeira("frentes") ? 16 : 20, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
         <SectionHeader aberto={frentesAbertas} onToggle={alternarFrentes}>
           Minhas frentes
         </SectionHeader>
@@ -162,10 +173,10 @@ export default function Sidebar() {
           </>
         )}
       </div>
-      )}
+    ),
+    contratos: (
 
-      {funcionalidades.contratos && (
-      <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+      <div key="contratos" style={{ marginTop: primeira("contratos") ? 16 : 28, paddingTop: primeira("contratos") ? 16 : 20, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
         <SectionHeader aberto={contratosAbertos} onToggle={alternarContratos}>
           Contratos
         </SectionHeader>
@@ -236,10 +247,10 @@ export default function Sidebar() {
           </>
         )}
       </div>
-      )}
+    ),
+    orcamentos: (
 
-      {funcionalidades.orcamentos && (
-        <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+        <div key="orcamentos" style={{ marginTop: primeira("orcamentos") ? 16 : 28, paddingTop: primeira("orcamentos") ? 16 : 20, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
           <SectionHeader aberto={orcamentosAbertos} onToggle={alternarOrcamentos}>
             Orçamentos
           </SectionHeader>
@@ -265,9 +276,16 @@ export default function Sidebar() {
             </>
           )}
         </div>
-      )}
+    ),
+  };
 
-      {mostrarNovaFrente && <NovaFrenteModal onClose={() => setMostrarNovaFrente(false)} />}
+  return (
+    <div className="dashboard-sidebar" style={{ background: "var(--color-dark)", padding: "24px 0" }}>
+      {servicos.map((k) => topo[k]).filter(Boolean)}
+
+      {secoes.map((k) => blocos[k])}
+
+            {mostrarNovaFrente && <NovaFrenteModal onClose={() => setMostrarNovaFrente(false)} />}
     </div>
   );
 }
