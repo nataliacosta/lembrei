@@ -9,11 +9,13 @@ import { IconeDocumento } from "../components/Icones";
 import { watchContrato } from "../lib/contratos";
 import { proximaMedicao } from "../lib/medicao";
 import {
+  alocacaoNoMes,
   definirAlocacao,
   dividir,
   formatarHoras,
   formatarNumero,
   formatarReais,
+  lerNumero,
   lerPlanilha,
   mesDasLinhas,
   mesDe,
@@ -45,6 +47,18 @@ async function lerArquivo(arquivo) {
   return melhor || { linhas: [], faltando: ["Nome do Recurso", "Quantidade de Horas", "Valor Total"] };
 }
 
+// Linha digitada → linha de medição (o período é o mês todo; valor total =
+// horas × valor HH, a não ser que a pessoa tenha digitado outro).
+function linhaManual(r, mes) {
+  const [a, m] = mes.split("-").map(Number);
+  const ultimo = new Date(a, m, 0).getDate();
+  const horas = lerNumero(r.horas) || 0;
+  const valorHH = lerNumero(r.valorHH);
+  const digitado = lerNumero(r.valorTotal);
+  const calculado = valorHH != null ? Math.round(horas * valorHH * 100) / 100 : 0;
+  return { inicio: `${mes}-01`, fim: `${mes}-${String(ultimo).padStart(2, "0")}`, recurso: String(r.recurso || "").trim(), perfil: String(r.perfil || "").trim(), valorHH: valorHH ?? null, horas, valorTotal: digitado != null && String(r.valorTotal).trim() ? digitado : calculado, justificativa: "" };
+}
+
 const EXTRA = "__extra__";
 
 export default function SubirMedicaoPage() {
@@ -59,6 +73,9 @@ export default function SubirMedicaoPage() {
   const [medicoes, setMedicoes] = useState([]);
   const [arquivoNome, setArquivoNome] = useState("");
   const [lidas, setLidas] = useState(null);
+  // Preencher na mão: linhas digitadas (texto como a pessoa escreveu).
+  const [modo, setModo] = useState("planilha");
+  const [manuais, setManuais] = useState([]);
   const [erroArquivo, setErroArquivo] = useState("");
   const [lendo, setLendo] = useState(false);
   const [mes, setMesBase] = useState(() => somarMeses(mesDe(new Date()), -1));
@@ -95,16 +112,17 @@ export default function SubirMedicaoPage() {
 
   const centrosPorId = useMemo(() => porIdDe(centros), [centros]);
   const equipesPorId = useMemo(() => Object.fromEntries(equipes.map((e) => [e.id, e])), [equipes]);
+  const lidasAtuais = useMemo(() => (modo === "manual" ? manuais.map((r) => linhaManual(r, mes)) : lidas), [modo, manuais, lidas, mes]);
   const linhas = useMemo(() => {
-    if (!lidas) return [];
-    return preencherLinhas(lidas, recursos, centros, mes, equipes).map((l, i) => {
+    if (!lidasAtuais) return [];
+    return preencherLinhas(lidasAtuais, recursos, centros, mes, equipes).map((l, i) => {
       if (divisoes[i]) return { ...l, partes: divisoes[i].partes, dividida: true };
       const e = escolhas[i];
       if (l.partes.length || !e) return l;
       if (!e.centroId) return { ...l, escolhida: true };
       return { ...l, partes: dividir(l, [{ ...e, pct: 100 }], centrosPorId, equipesPorId), escolhida: true };
     });
-  }, [lidas, recursos, centros, mes, equipes, escolhas, divisoes, centrosPorId, equipesPorId]);
+  }, [lidasAtuais, recursos, centros, mes, equipes, escolhas, divisoes, centrosPorId, equipesPorId]);
 
   if (contrato === undefined) return <div className="spinner-wrap">Carregando...</div>;
   if (!contrato) return <div className="spinner-wrap">Contrato não encontrado (ou você não tem acesso).</div>;
@@ -161,11 +179,32 @@ export default function SubirMedicaoPage() {
   if (!opcoesMes.includes(mes)) opcoesMes.push(mes);
   opcoesMes.sort().reverse();
 
+  function trocarModo(novo) {
+    if (novo === modo) return;
+    setModo(novo);
+    setEscolhas({});
+    setGuardar({});
+    setDivisoes({});
+    setDividindo(null);
+    setEditandoAloc(null);
+  }
+  // Uma linha por recurso alocado no mês (sem repetir quem já está na lista).
+  function trazerAlocados() {
+    const ja = new Set(manuais.map((r) => normalizarNome(r.recurso)));
+    const novos = recursos
+      .filter((r) => alocacaoNoMes(r, mes) && !ja.has(normalizarNome(r.nome)))
+      .map((r) => ({ recurso: r.nome, perfil: r.perfil || "", valorHH: r.valorHH != null && r.valorHH !== "" ? formatarNumero(r.valorHH) : "", horas: "", valorTotal: "", cadastrado: true }));
+    setManuais([...manuais, ...novos]);
+  }
+  const alocadosNoMes = recursos.filter((r) => alocacaoNoMes(r, mes)).length;
+  const mudarManual = (i, campos) => setManuais(manuais.map((r, j) => (j === i ? { ...r, ...campos } : r)));
+
   // Tira a linha da medição (antes de salvar) e reorganiza o que estava por índice.
   function excluirLinha(i) {
-    if (!window.confirm(`Tirar a linha de ${lidas[i].recurso} desta medição?`)) return;
+    if (!window.confirm(`Tirar a linha de ${lidasAtuais[i].recurso || "recurso sem nome"} desta medição?`)) return;
     const reindexar = (mapa) => Object.fromEntries(Object.entries(mapa).filter(([k]) => Number(k) !== i).map(([k, v]) => [Number(k) > i ? Number(k) - 1 : Number(k), v]));
-    setLidas(lidas.filter((_, j) => j !== i));
+    if (modo === "manual") setManuais(manuais.filter((_, j) => j !== i));
+    else setLidas(lidas.filter((_, j) => j !== i));
     setEscolhas(reindexar(escolhas));
     setGuardar(reindexar(guardar));
     setDivisoes(reindexar(divisoes));
@@ -176,11 +215,15 @@ export default function SubirMedicaoPage() {
   async function salvar() {
     setErro("");
     if (ehExtra && !nomeExtra.trim()) return setErro("Dê um nome para a medição extra (ex.: Complementar de agosto).");
+    // Na mão: linhas sem horas (e sem valor) ficam de fora.
+    const entra = (l) => modo !== "manual" || ((l.horas || l.valorTotal) && String(l.recurso || "").trim());
+    if (!linhas.some(entra)) return setErro("Preencha as horas de pelo menos um recurso.");
     if (jaExiste && !window.confirm(`Já existe a medição ${rotuloEscolhida}. Salvar vai substituir a anterior. Continuar?`)) return;
     // Linhas sem alocação em que você escolheu um CC/ODI e marcou "salvar como alocação".
     const novos = new Map();
     const existentes = new Map();
     linhas.forEach((l, i) => {
+      if (!entra(l)) return;
       const daDivisao = l.dividida && divisoes[i]?.salvarAlocacao;
       if (!daDivisao && (!l.escolhida || guardar[i] === false)) return;
       const partes = partesParaAlocacao(l.partes);
@@ -193,7 +236,7 @@ export default function SubirMedicaoPage() {
         novos.set(chave, { nome: l.recurso, perfil: l.perfil, valorHH: l.valorHH, alocacoes: [{ desde: mes, partes }] });
       }
     });
-    const linhasParaSalvar = linhas.map((l) => {
+    const linhasParaSalvar = linhas.filter(entra).map((l) => {
       const { escolhida, dividida, ...resto } = l;
       void escolhida;
       void dividida;
@@ -208,7 +251,7 @@ export default function SubirMedicaoPage() {
         extra: ehExtra,
         cicloSubido: depois.todasSubidas,
         mes,
-        arquivoNome,
+        arquivoNome: modo === "manual" ? "" : arquivoNome,
         linhas: linhasParaSalvar,
         total: totais.total,
         horas: totais.horas,
@@ -275,6 +318,33 @@ export default function SubirMedicaoPage() {
         </div>
       </div>
 
+      <div className="chips-row como-preencher" role="group" aria-label="Como preencher">
+        <span style={{ ...rotulo, margin: 0 }}>Como preencher</span>
+        <button type="button" className="chip" aria-pressed={modo === "planilha"} onClick={() => trocarModo("planilha")}>
+          Planilha do fornecedor
+        </button>
+        <button type="button" className="chip" aria-pressed={modo === "manual"} onClick={() => trocarModo("manual")}>
+          Preencher na mão
+        </button>
+      </div>
+
+      {modo === "manual" && (
+        <div className="lista-card manual-intro">
+          <div style={{ flex: "1 1 320px", fontSize: 13 }}>
+            Comece pelos recursos alocados em <b>{rotuloMes(mes).toLowerCase()}</b> (nome, perfil, valor HH e CC/ODI já vêm preenchidos) e digite só as horas. O valor total é horas × valor HH, e dá para ajustar. Linhas sem horas ficam de fora.
+          </div>
+          <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={trazerAlocados} disabled={!podeEditar || alocadosNoMes === 0}>
+              {alocadosNoMes ? `Trazer ${alocadosNoMes === 1 ? "o recurso alocado" : `os ${alocadosNoMes} recursos alocados`}` : "Nenhum recurso alocado neste mês"}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setManuais([...manuais, { recurso: "", perfil: "", valorHH: "", horas: "", valorTotal: "", novo: true }])} disabled={!podeEditar}>
+              + Adicionar linha
+            </button>
+          </span>
+        </div>
+      )}
+
+      {modo === "planilha" && (
       <div className="area-arquivo">
         <span style={{ color: "var(--color-primary)" }}>
           <IconeDocumento size={28} />
@@ -308,13 +378,14 @@ export default function SubirMedicaoPage() {
           {lidas ? "Trocar arquivo" : "Escolher arquivo"}
         </button>
       </div>
+      )}
       {erroArquivo && (
         <div className="texto-alerta" role="alert" style={{ marginTop: 10, fontSize: 13 }}>
           {erroArquivo}
         </div>
       )}
 
-      {lidas && (
+      {lidasAtuais?.length > 0 && (
         <>
           <div
             style={{
@@ -375,6 +446,8 @@ export default function SubirMedicaoPage() {
                     onEditarAlocacao={podeEditar ? () => (setDividindo(null), setEditandoAloc(editandoAloc === i ? null : i)) : null}
                     editandoAlocacao={editandoAloc === i}
                     onExcluir={podeEditar ? () => excluirLinha(i) : null}
+                    manual={modo === "manual" ? manuais[i] : null}
+                    onMudarManual={(campos) => mudarManual(i, campos)}
                   />,
                   editandoAloc === i && (
                     <tr key={`a${i}`}>
@@ -479,9 +552,9 @@ function tipoPagamento(tipo) {
   return tipo === "CC" ? "Centro de Custo" : tipo === "ODI" ? "ODI" : "";
 }
 
-function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guardar, onGuardar, onDividir, dividindo, onEditarAlocacao, editandoAlocacao, onExcluir }) {
+function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guardar, onGuardar, onDividir, dividindo, onEditarAlocacao, editandoAlocacao, onExcluir, manual, onMudarManual }) {
   const l = linha;
-  const primeiro = l.recurso.split(" ")[0];
+  const primeiro = (l.recurso || "recurso").split(" ")[0];
   const acao = (
     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
       {onDividir && (
@@ -505,20 +578,48 @@ function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guarda
     <>
       <td style={{ whiteSpace: "nowrap" }}>{periodoCurto(l.inicio, l.fim)}</td>
       <td>
-        <b>{l.recurso}</b>
+        {manual?.novo ? (
+          <input value={manual.recurso} onChange={(e) => onMudarManual({ recurso: e.target.value })} placeholder="Nome do recurso" aria-label="Nome do recurso" className="campo-manual" style={{ minWidth: 150 }} />
+        ) : (
+          <b>{l.recurso}</b>
+        )}
         {l.justificativa && <div style={{ fontSize: 12, color: "var(--color-gray)" }}>{l.justificativa}</div>}
       </td>
-      <td>{l.perfil || "—"}</td>
+      <td>
+        {manual?.novo ? (
+          <input value={manual.perfil} onChange={(e) => onMudarManual({ perfil: e.target.value })} placeholder="Perfil (opcional)" aria-label={`Perfil de ${l.recurso || "recurso"}`} className="campo-manual" style={{ minWidth: 130 }} />
+        ) : (
+          l.perfil || "—"
+        )}
+      </td>
       <td className="num">
-        {l.valorHH != null ? formatarNumero(l.valorHH) : "—"}
+        {manual ? (
+          <input value={manual.valorHH} onChange={(e) => onMudarManual({ valorHH: e.target.value })} inputMode="decimal" placeholder="0,00" aria-label={`Valor HH de ${l.recurso || "recurso"}`} className="campo-manual num" style={{ width: 84 }} />
+        ) : l.valorHH != null ? (
+          formatarNumero(l.valorHH)
+        ) : (
+          "—"
+        )}
         {l.valorCadastrado != null && (
           <div className="texto-alerta" style={{ fontSize: 12 }} title="Valor HH diferente do cadastrado no recurso">
             cadastrado {formatarNumero(l.valorCadastrado)}
           </div>
         )}
       </td>
-      <td className="num">{formatarNumero(l.horas, l.horas % 1 ? 2 : 0)}</td>
-      <td className="num">{formatarNumero(l.valorTotal)}</td>
+      <td className="num">
+        {manual ? (
+          <input value={manual.horas} onChange={(e) => onMudarManual({ horas: e.target.value })} inputMode="decimal" placeholder="0" aria-label={`Horas de ${l.recurso || "recurso"}`} className={`campo-manual num ${l.horas ? "" : "vazio"}`} style={{ width: 70 }} />
+        ) : (
+          formatarNumero(l.horas, l.horas % 1 ? 2 : 0)
+        )}
+      </td>
+      <td className="num">
+        {manual ? (
+          <input value={manual.valorTotal} onChange={(e) => onMudarManual({ valorTotal: e.target.value })} inputMode="decimal" placeholder={l.valorTotal ? formatarNumero(l.valorTotal) : "—"} aria-label={`Valor total de ${l.recurso || "recurso"}`} className="campo-manual num" style={{ width: 100 }} />
+        ) : (
+          formatarNumero(l.valorTotal)
+        )}
+      </td>
     </>
   );
 
