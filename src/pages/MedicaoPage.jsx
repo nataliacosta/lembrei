@@ -24,7 +24,8 @@ import {
   totaisPorEquipe,
   totaisPorFrente,
 } from "../lib/alocacoes";
-import { atualizarMedicao, excluirMedicao, marcarLancada, salvarRecurso, watchCentros, watchEquipes, watchMedicao, watchRecursos } from "../lib/medicoesContrato";
+import { atualizarMedicao, excluirMedicao, marcarLancada, salvarRecurso, watchCentros, watchEquipes, watchMedicao, watchMedicoes, watchRecursos } from "../lib/medicoesContrato";
+import { nomesDoContrato, situacaoDoMes } from "../lib/medicoesDoMes";
 
 function tipoPagamento(tipo) {
   return tipo === "CC" ? "Centro de Custo" : tipo === "ODI" ? "ODI" : "";
@@ -54,7 +55,7 @@ async function baixarPlanilha(medicao, contrato, { chaves = null, codigos = [] }
   ];
   const limpar = (t) => String(t).replace(/[^\p{L}\p{N}-]+/gu, "_");
   const sufixo = codigos.length ? `_${codigos.map(limpar).join("_")}`.slice(0, 80) : "";
-  const nome = `medicao_${limpar(contrato.titulo || "contrato").slice(0, 40)}_${medicao.mes}${sufixo}.xlsx`;
+  const nome = `medicao_${limpar(contrato.titulo || "contrato").slice(0, 40)}_${medicao.mes}${medicao.nome ? `_${limpar(medicao.nome).slice(0, 30)}` : ""}${sufixo}.xlsx`;
   const blob = await writeXlsxFile(linhas, { columns: [12, 12, 28, 30, 14, 12, 14, 28, 16, 20, 16, 22].map((width) => ({ width })) }).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -67,7 +68,8 @@ async function baixarPlanilha(medicao, contrato, { chaves = null, codigos = [] }
 }
 
 export default function MedicaoPage() {
-  const { contratoId, mes } = useParams();
+  // O parâmetro é o id da medição: "AAAA-MM" ou "AAAA-MM--nome" (várias no mês).
+  const { contratoId, mes: medicaoId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [contrato, setContrato] = useState(undefined);
@@ -86,7 +88,10 @@ export default function MedicaoPage() {
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => watchContrato(contratoId, setContrato), [contratoId]);
-  useEffect(() => watchMedicao(contratoId, mes, setMedicao), [contratoId, mes]);
+  useEffect(() => watchMedicao(contratoId, medicaoId, setMedicao), [contratoId, medicaoId]);
+  const [todasMedicoes, setTodasMedicoes] = useState([]);
+  useEffect(() => watchMedicoes(contratoId, setTodasMedicoes), [contratoId]);
+  const mes = medicao?.mes || String(medicaoId).slice(0, 7);
   useEffect(() => watchCentros(contratoId, setCentros), [contratoId]);
   useEffect(() => watchEquipes(contratoId, setEquipes), [contratoId]);
   useEffect(() => watchRecursos(contratoId, setRecursos), [contratoId]);
@@ -123,7 +128,11 @@ export default function MedicaoPage() {
   async function alternarLancada() {
     setOcupado(true);
     try {
-      await marcarLancada(contratoId, mes, medicao.status !== "lancada", contrato.medicao?.ativa ? somarMeses(mes, 1) : null);
+      const lancar = medicao.status !== "lancada";
+      // O ciclo só conta como feito quando todas as medições do mês estiverem lançadas.
+      const doMes = todasMedicoes.filter((m) => m.mes === mes).map((m) => (m.id === medicao.id ? { ...m, status: lancar ? "lancada" : "a_lancar" } : m));
+      const feito = situacaoDoMes(nomesDoContrato(contrato), doMes).todasLancadas;
+      await marcarLancada(contratoId, medicao.id, lancar, contrato.medicao?.ativa ? somarMeses(mes, 1) : null, feito);
     } catch (e) {
       console.error(e);
       window.alert("Não deu pra atualizar. Tente de novo.");
@@ -137,7 +146,7 @@ export default function MedicaoPage() {
     const t = totaisDaMedicao(lista);
     setOcupado(true);
     try {
-      await atualizarMedicao(contratoId, mes, { linhas: lista, total: t.total, horas: t.horas });
+      await atualizarMedicao(contratoId, medicao.id, { linhas: lista, total: t.total, horas: t.horas });
       // Divisões marcadas para virar alocação a partir deste mês.
       const feitos = new Set();
       for (const [i, sim] of Object.entries(paraAlocar)) {
@@ -169,9 +178,16 @@ export default function MedicaoPage() {
     setEditandoAloc(null);
   }
 
+  const titulo = `de ${rotuloMes(mes).toLowerCase()}${medicao.nome ? ` · ${medicao.nome}` : ""}`;
+  const sitMes = situacaoDoMes(nomesDoContrato(contrato), todasMedicoes.filter((m) => m.mes === mes));
+  const ordemNoMes = [...sitMes.previstas.map((p) => p.medicao), ...sitMes.extras].filter(Boolean).findIndex((m) => m.id === medicao.id);
+  const qtdNoMes = sitMes.subidas + sitMes.extras.length;
+  const posicao = qtdNoMes > 1 && ordemNoMes >= 0 ? `${ordemNoMes + 1}ª de ${qtdNoMes} medições do mês` : medicao.extra ? "medição extra" : "";
+
   async function excluir() {
-    if (!window.confirm(`Excluir a medição de ${rotuloMes(mes)}? Essa ação não pode ser desfeita.`)) return;
-    await excluirMedicao(contratoId, mes, contrato.medicao?.ativa ? somarMeses(mes, 1) : null);
+    if (!window.confirm(`Excluir a medição ${titulo}? Essa ação não pode ser desfeita.`)) return;
+    const restantes = situacaoDoMes(nomesDoContrato(contrato), todasMedicoes.filter((m) => m.mes === mes && m.id !== medicao.id));
+    await excluirMedicao(contratoId, medicao.id, contrato.medicao?.ativa ? somarMeses(mes, 1) : null, { subido: restantes.todasSubidas, feito: restantes.todasLancadas });
     navigate(`/contratos/${contratoId}/medicoes`, { replace: true });
   }
 
@@ -190,9 +206,12 @@ export default function MedicaoPage() {
           <div style={{ marginBottom: 10 }}>
             <StatusMedicao status={medicao.status} />
           </div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>Medição de {rotuloMes(mes).toLowerCase()}</h1>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>
+            Medição de {rotuloMes(mes).toLowerCase()}
+            {medicao.nome ? ` · ${medicao.nome}` : ""}
+          </h1>
           <div style={{ fontSize: 14, color: "var(--color-gray)", marginTop: 4 }}>
-            {[medicao.subidaPorNome && `Subida por ${medicao.subidaPorNome}`, criadoEm && `em ${formatarData(criadoEm)}`, medicao.arquivoNome].filter(Boolean).join(" · ")}
+            {[medicao.subidaPorNome && `Subida por ${medicao.subidaPorNome}`, criadoEm && `em ${formatarData(criadoEm)}`, medicao.arquivoNome, posicao].filter(Boolean).join(" · ")}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

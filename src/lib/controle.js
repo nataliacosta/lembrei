@@ -58,7 +58,7 @@ export function realizadoPorCentro(medicoes, ano) {
     }
     for (const [id, { p, valorC }] of porCentro) {
       const g = pegar(id, p);
-      const item = { contratoId: m.contratoId, contratoTitulo: m.contratoTitulo, mes: m.mes, mesPagamento: pag, valor: deCentavos(valorC), lancadaEm: m.lancadaEm || null };
+      const item = { contratoId: m.contratoId, contratoTitulo: m.contratoTitulo, medicaoId: m.id || m.mes, nome: m.nome || "", mes: m.mes, mesPagamento: pag, valor: deCentavos(valorC), lancadaEm: m.lancadaEm || null };
       if (m.status === "lancada") {
         g.mesesC[idx] += valorC;
         g.lancamentos.push(item);

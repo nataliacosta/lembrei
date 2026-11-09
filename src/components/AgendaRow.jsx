@@ -13,6 +13,7 @@ import { diasAte, formatarDataRelativa } from "../lib/datas";
 import { marcarConcluido, marcarPreparo } from "../lib/firestore";
 import { frequenciaCurta } from "../lib/reunioes";
 import { IconeCalendario, IconeSino } from "./Icones";
+import { nomesDoContrato } from "../lib/medicoesDoMes";
 import LembreteAcoes from "./LembreteAcoes";
 
 // Uma linha da lista de coisas a fazer. `entrada` vem de lib/agenda.js:
@@ -205,7 +206,8 @@ function MedicaoRow({ entrada }) {
   const m = contrato.medicao;
   const subida = medicao.subida;
   const detalhes = [contrato.titulo, subida ? "subida · falta lançar" : m.quem, !subida && m.lightPlus ? "Light+" : null].filter(Boolean);
-  const link = subida ? `/contratos/${contrato.id}/medicoes/${medicao.mesReferencia}` : `/contratos/${contrato.id}/medicoes`;
+  // Com várias medições no mês, abre a aba Medições (lá aparece cada uma).
+  const link = subida && !nomesDoContrato(contrato).length ? `/contratos/${contrato.id}/medicoes/${medicao.mesReferencia}` : `/contratos/${contrato.id}/medicoes`;
 
   async function marcar() {
     setSalvando(true);

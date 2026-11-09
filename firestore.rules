@@ -197,13 +197,15 @@ service cloud.firestore {
         allow delete: if podeEditarContrato(contratoId);
       }
 
+      // id = "AAAA-MM" (medição única do mês) ou "AAAA-MM--nome" (várias no mês).
       match /medicoes/{mes} {
         allow read: if ehMembroContrato(contratoId);
         allow create, update: if podeEditarContrato(contratoId)
-          && mes.matches('^[0-9]{4}-[0-9]{2}$')
-          && request.resource.data.mes == mes
+          && mes.matches('^[0-9]{4}-[0-9]{2}(--[a-z0-9-]{1,60})?$')
+          && request.resource.data.mes == mes.split('--')[0]
           && request.resource.data.status in ['a_lancar', 'lancada']
-          && request.resource.data.linhas is list;
+          && request.resource.data.linhas is list
+          && (!('nome' in request.resource.data) || (request.resource.data.nome is string && request.resource.data.nome.size() <= 80));
         allow delete: if podeEditarContrato(contratoId);
       }
 

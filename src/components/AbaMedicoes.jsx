@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { IconeCheck } from "./Icones";
 import { marcarMedicaoFeita } from "../lib/contratos";
 import { chaveDoMes, nomeDaMedicao, proximaMedicao } from "../lib/medicao";
+import { nomesDoContrato, situacaoDoMes } from "../lib/medicoesDoMes";
 import { formatarDataRelativa, inicioDoDia } from "../lib/datas";
 import {
   alocacaoNoMes,
@@ -153,7 +154,7 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
         </div>
       )}
 
-      <CartaoDoMes contrato={contrato} podeEditar={podeEditar} />
+      <CartaoDoMes contrato={contrato} podeEditar={podeEditar} medicoes={medicoes} />
 
       <Secao titulo={`Medições salvas · ${medicoes.length}`} />
       {medicoes.length === 0 ? (
@@ -162,15 +163,25 @@ export default function AbaMedicoes({ contrato, podeEditar }) {
         </div>
       ) : (
         <div className="lista-card">
-          {medicoes.map((m) => (
+          {[...medicoes]
+            .sort((a, b) => b.mes.localeCompare(a.mes) || Number(Boolean(a.extra)) - Number(Boolean(b.extra)) || String(a.nome || "").localeCompare(String(b.nome || "")))
+            .map((m) => (
             <Link
               key={m.id}
-              to={`/contratos/${contratoId}/medicoes/${m.mes}`}
+              to={`/contratos/${contratoId}/medicoes/${m.id}`}
               className="secao-lateral"
               style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", color: "inherit", flexWrap: "wrap" }}
             >
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{rotuloMes(m.mes)}</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>
+                  {rotuloMes(m.mes)}
+                  {m.nome ? ` · ${m.nome}` : ""}
+                  {m.extra && (
+                    <span className="pill" style={{ background: "#f1e8fb", color: "#6a3c99", marginLeft: 8 }}>
+                      extra
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 2 }}>
                   {(m.linhas || []).length} {(m.linhas || []).length === 1 ? "linha" : "linhas"} · {formatarHoras(m.horas)}
                   {(m.linhas || []).some((l) => !l.partes?.length) && <span className="texto-alerta"> · linha sem CC/ODI</span>}
@@ -340,7 +351,7 @@ export function StatusMedicao({ status }) {
 }
 
 // Medição do mês (se o contrato tem o lembrete de medição) ou só o botão de subir.
-function CartaoDoMes({ contrato, podeEditar }) {
+function CartaoDoMes({ contrato, podeEditar, medicoes = [] }) {
   const m = contrato.medicao;
   const [salvando, setSalvando] = useState(false);
   const linkNova = `/contratos/${contrato.id}/medicoes/nova`;
@@ -360,6 +371,12 @@ function CartaoDoMes({ contrato, podeEditar }) {
   const mesAtual = chaveDoMes(hoje.getFullYear(), hoje.getMonth());
   const feitaEsteMes = Boolean(m.feitas?.[mesAtual]);
   const atrasada = proxima && proxima.prazo < hoje;
+  // Medições do mês de referência (as horas do mês anterior ao prazo).
+  const mesRef = feitaEsteMes ? chaveDoMes(hoje.getMonth() === 0 ? hoje.getFullYear() - 1 : hoje.getFullYear(), (hoje.getMonth() + 11) % 12) : proxima?.mesReferencia;
+  const nomes = nomesDoContrato(contrato);
+  const sit = situacaoDoMes(nomes, medicoes.filter((x) => x.mes === mesRef));
+  const varias = sit.total > 1 || sit.extras.length > 0;
+  const unica = !varias ? sit.previstas[0].medicao : null;
 
   async function marcar(chave, feita) {
     setSalvando(true);
@@ -390,33 +407,77 @@ function CartaoDoMes({ contrato, podeEditar }) {
         ) : (
           proxima && (
             <div style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}>
-              {proxima.subida && "Subida · falta marcar como lançada no sistema · "}
+              {!varias && proxima.subida && "Subida · falta marcar como lançada no sistema · "}
               {atrasada ? "Atrasada · era " : "Prazo até "}
               {formatarDataRelativa(proxima.prazo).toLowerCase()}
               {[m.quem, m.responsavelNome].filter(Boolean).length > 0 && ` · ${[m.quem, m.responsavelNome].filter(Boolean).join(" · ")}`}
             </div>
           )
         )}
+        {varias && (
+          <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>
+            {sit.subidas} de {sit.total} {sit.total === 1 ? "subida" : "subidas"}
+            {sit.extras.length > 0 && ` + ${sit.extras.length} ${sit.extras.length === 1 ? "extra" : "extras"}`} · {sit.lancadas} {sit.lancadas === 1 ? "lançada" : "lançadas"}
+          </div>
+        )}
         <div className="texto-ajuda" style={{ marginTop: 2 }}>
-          O lembrete sai do “O que fazer” quando você marcar a medição como lançada no sistema.
+          {varias
+            ? "O lembrete só sai do “O que fazer” quando todas as medições do mês estiverem lançadas no sistema."
+            : "O lembrete sai do “O que fazer” quando você marcar a medição como lançada no sistema."}
         </div>
       </div>
       {podeEditar && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {!feitaEsteMes && proxima && !proxima.subida && (
+          {!feitaEsteMes && proxima && !proxima.subida && sit.subidas === 0 && sit.extras.length === 0 && (
             <button type="button" className="btn btn-ghost" disabled={salvando} onClick={() => marcar(proxima.chave, true)}>
               Marcar como feita sem planilha
             </button>
           )}
-          {!feitaEsteMes && proxima?.subida ? (
-            <Link to={`/contratos/${contrato.id}/medicoes/${proxima.mesReferencia}`} className="btn btn-primary">
+          {!feitaEsteMes && !varias && proxima?.subida ? (
+            <Link to={`/contratos/${contrato.id}/medicoes/${unica?.id || proxima.mesReferencia}`} className="btn btn-primary">
               Abrir medição de {proxima.nomeMes}
             </Link>
-          ) : (
+          ) : varias && sit.todasSubidas && !feitaEsteMes ? null : (
             <Link to={linkNova} className={feitaEsteMes ? "btn btn-ghost" : "btn btn-primary"}>
               Subir medição{!feitaEsteMes && proxima ? ` de ${proxima.nomeMes}` : ""}
             </Link>
           )}
+        </div>
+      )}
+      {varias && (
+        <div style={{ flex: "1 1 100%" }}>
+          {[...sit.previstas.map((p) => ({ nome: p.nome, medicao: p.medicao })), ...sit.extras.map((x) => ({ nome: x.nome, medicao: x, extra: true }))].map((p) => (
+            <div key={p.medicao?.id || p.nome} className="linha-medicao-mes">
+              <span>
+                <b>{p.nome || "Medição do mês"}</b>
+                {p.extra && (
+                  <span className="pill" style={{ background: "#f1e8fb", color: "#6a3c99", marginLeft: 8 }}>
+                    extra
+                  </span>
+                )}
+                {p.medicao && (
+                  <span style={{ fontSize: 12, color: "var(--color-gray)" }}>
+                    {" "}
+                    · {(p.medicao.linhas || []).length} {(p.medicao.linhas || []).length === 1 ? "linha" : "linhas"} · {formatarReais(p.medicao.total)}
+                  </span>
+                )}
+              </span>
+              <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                {p.medicao ? (
+                  <>
+                    <StatusMedicao status={p.medicao.status} />
+                    <Link to={`/contratos/${contrato.id}/medicoes/${p.medicao.id}`} style={{ fontSize: 13, fontWeight: 600 }}>
+                      Abrir
+                    </Link>
+                  </>
+                ) : (
+                  <span className="pill" style={{ background: "#eceeee", color: "var(--color-gray)" }}>
+                    Ainda não subida
+                  </span>
+                )}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </div>

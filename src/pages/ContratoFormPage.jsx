@@ -8,6 +8,7 @@ import { definirSoMedicao } from "../lib/push";
 import { deInputDate, paraInputDate } from "../lib/datas";
 import { useUsuarios } from "../hooks/useUsuarios";
 import { MEDICAO_PADRAO } from "../lib/medicao";
+import { nomesDoContrato } from "../lib/medicoesDoMes";
 
 export default function ContratoFormPage() {
   const { contratoId } = useParams();
@@ -75,8 +76,10 @@ export default function ContratoFormPage() {
             lightPlus: Boolean(medicao.lightPlus),
             diaPrazo: Math.min(31, Math.max(1, parseInt(medicao.diaPrazo, 10) || 10)),
             diasAntes: Math.min(27, Math.max(0, parseInt(medicao.diasAntes, 10) || 0)),
-            // Mantém o histórico de meses já medidos.
+            nomes: nomesDoContrato({ medicao }),
+            // Mantém o histórico de meses já subidos e medidos.
             feitas: contratoOriginal?.medicao?.feitas || {},
+            subidas: contratoOriginal?.medicao?.subidas || {},
           }
         : contratoOriginal?.medicao
           ? { ...contratoOriginal.medicao, ativa: false }
@@ -219,6 +222,7 @@ export default function ContratoFormPage() {
                   <input type="checkbox" checked={Boolean(medicao.lightPlus)} onChange={(e) => mudarMedicao({ lightPlus: e.target.checked })} style={{ width: 18, height: 18 }} />
                   Está no processo do Light+
                 </label>
+                <NomesDasMedicoes nomes={medicao.nomes || []} onMudar={(nomes) => mudarMedicao({ nomes })} />
                 <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 10 }}>
                   {medicaoResp === user.uid
                     ? `Como a medição está com você, ela aparece no seu “O que fazer” todo mês, ${medicao.diasAntes || 0} dias antes do dia ${medicao.diaPrazo || 10}.`
@@ -241,6 +245,50 @@ export default function ContratoFormPage() {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// Nomes das medições do mês (contratos com mais de uma planilha por mês).
+function NomesDasMedicoes({ nomes, onMudar }) {
+  const [novo, setNovo] = useState("");
+  function adicionar() {
+    const n = novo.trim();
+    if (!n) return;
+    onMudar(nomesDoContrato({ medicao: { nomes: [...nomes, n] } }));
+    setNovo("");
+  }
+  return (
+    <div className="nomes-medicoes">
+      <span style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Medições do mês</span>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {nomes.map((n) => (
+          <span key={n} className="pill" style={{ background: "#e0f5ef", color: "var(--color-dark)", fontSize: 13, padding: "5px 10px" }}>
+            {n}
+            <button type="button" onClick={() => onMudar(nomes.filter((x) => x !== n))} aria-label={`Remover ${n}`} style={{ border: "none", background: "none", padding: "0 0 0 6px", color: "var(--color-gray)", cursor: "pointer" }}>
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          value={novo}
+          onChange={(e) => setNovo(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              adicionar();
+            }
+          }}
+          onBlur={adicionar}
+          placeholder="+ Adicionar (ex.: Sustentação)"
+          aria-label="Adicionar medição do mês"
+          maxLength={60}
+          style={{ width: 230, padding: "6px 10px", fontSize: 13 }}
+        />
+      </div>
+      <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 6 }}>
+        Para contratos com mais de uma medição por mês, cada uma com a sua planilha. Todas têm o mesmo prazo. Deixe vazio se for uma só. Uma medição fora do comum pode ser criada na hora de subir.
+      </div>
     </div>
   );
 }
