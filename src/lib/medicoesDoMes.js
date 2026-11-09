@@ -58,3 +58,12 @@ export function situacaoDoMes(nomes, medicoesDoMes) {
 export function nomeDaMedicaoSalva(m, rotuloMes) {
   return [rotuloMes(m.mes), String(m.nome || "").trim()].filter(Boolean).join(" · ");
 }
+
+// O "feito" do ciclo no contrato deve bater com as medições salvas do mês:
+// com medição, feito = todas lançadas (sem medição vale o "feita sem planilha").
+// Devolve true/false quando precisa corrigir, ou null quando está certo.
+export function correcaoDoCiclo(feitoNoContrato, sit) {
+  const temMedicao = sit.subidas > 0 || sit.extras.length > 0;
+  if (!temMedicao) return null;
+  return Boolean(feitoNoContrato) === sit.todasLancadas ? null : sit.todasLancadas;
+}
