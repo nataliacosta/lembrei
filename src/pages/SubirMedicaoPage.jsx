@@ -192,11 +192,11 @@ export default function SubirMedicaoPage() {
   function trazerAlocados() {
     const ja = new Set(manuais.map((r) => normalizarNome(r.recurso)));
     const novos = recursos
-      .filter((r) => alocacaoNoMes(r, mes) && !ja.has(normalizarNome(r.nome)))
+      .filter((r) => alocacaoNoMes(r, mes)?.partes?.length && !ja.has(normalizarNome(r.nome)))
       .map((r) => ({ recurso: r.nome, perfil: r.perfil || "", valorHH: r.valorHH != null && r.valorHH !== "" ? formatarNumero(r.valorHH) : "", horas: "", valorTotal: "", cadastrado: true }));
     setManuais([...manuais, ...novos]);
   }
-  const alocadosNoMes = recursos.filter((r) => alocacaoNoMes(r, mes)).length;
+  const alocadosNoMes = recursos.filter((r) => alocacaoNoMes(r, mes)?.partes?.length).length;
   const mudarManual = (i, campos) => setManuais(manuais.map((r, j) => (j === i ? { ...r, ...campos } : r)));
 
   // Tira a linha da medição (antes de salvar) e reorganiza o que estava por índice.

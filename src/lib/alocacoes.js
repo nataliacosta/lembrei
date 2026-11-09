@@ -306,7 +306,8 @@ export function preencherLinhas(linhas, recursos, centros, mes, equipes = []) {
   return linhas.map((linha) => {
     const recurso = porNome[normalizarNome(linha.recurso)] || null;
     const alocacao = recurso ? alocacaoNoMes(recurso, mes) : null;
-    const partes = alocacao ? dividir(linha, alocacao.partes, centrosPorId, equipesPorId) : [];
+    // Recurso tirado do contrato neste mês: a linha fica sem CC/ODI (precisa de você).
+    const partes = alocacao && !alocacao.fora ? dividir(linha, alocacao.partes, centrosPorId, equipesPorId) : [];
     const valorCadastrado = recurso?.valorHH != null && recurso.valorHH !== "" ? Number(recurso.valorHH) : null;
     const valorDiferente = valorCadastrado != null && linha.valorHH != null && Math.abs(valorCadastrado - linha.valorHH) > 0.005;
     return { ...linha, recursoId: recurso?.id || null, partes, valorCadastrado: valorDiferente ? valorCadastrado : null };
@@ -401,4 +402,35 @@ export function linhasParaExportar(linhas, chaves = null) {
           saida.push({ centroId: chaveParte(p), ...base, horas: p.horas, valor: p.valor, tipoPagamento: p.tipo === "CC" ? "Centro de Custo" : "ODI", centro: p.codigo, equipe: p.equipe || "", frente: p.frente || "" });
   }
   return saida;
+}
+
+// ---------- Tirar um recurso de alguns meses ----------
+// Um período { desde, partes: [], fora: true } quer dizer "fora do contrato"
+// a partir daquele mês: não aparece na lista nem preenche a medição.
+
+export function foraNoMes(recurso, mes) {
+  return Boolean(alocacaoNoMes(recurso, mes)?.fora);
+}
+
+const INICIO = "2000-01";
+
+// modo: "so" (só no mês), "daqui" (do mês em diante), "ate" (o mês e os anteriores).
+export function tirarDosMeses(recurso, mes, modo) {
+  const lista = alocacoesOrdenadas(recurso);
+  const prox = somarMeses(mes, 1);
+  const noProx = alocacaoNoMes(recurso, prox);
+  const voltar = (desde) => (noProx ? { desde, partes: noProx.partes || [], ...(noProx.fora ? { fora: true } : {}) } : { desde, partes: [] });
+  let nova;
+  if (modo === "daqui") {
+    nova = [...lista.filter((a) => a.desde < mes), { desde: mes, partes: [], fora: true }];
+  } else if (modo === "so") {
+    nova = [...lista.filter((a) => a.desde !== mes), { desde: mes, partes: [], fora: true }];
+    if (!lista.some((a) => a.desde === prox)) nova.push(voltar(prox));
+  } else if (modo === "ate") {
+    nova = [{ desde: INICIO, partes: [], fora: true }, ...lista.filter((a) => a.desde > mes)];
+    if (!lista.some((a) => a.desde === prox)) nova.push(voltar(prox));
+  } else {
+    throw new Error(`modo desconhecido: ${modo}`);
+  }
+  return nova.sort((a, b) => a.desde.localeCompare(b.desde));
 }
