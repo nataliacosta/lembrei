@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useDados } from "../contexts/DadosContext";
 import { chaveCentro } from "../lib/alocacoes";
-import { importarCentrosDosContratos, watchCentrosFora } from "../lib/centros";
+import { anoDoCentroFora, importarCentrosDosContratos, watchCentrosFora } from "../lib/centros";
 import { useOrcamentosVigentes } from "./useOrcamentosVigentes";
 
 // Lista única de CCs/ODIs para as alocações: as ODIs da última versão
@@ -72,7 +72,7 @@ export function useCentrosDisponiveis() {
     // Os de fora ficam todos (mesmo os que são ODI do orçamento de outro ano).
     const deFora = (fora || [])
       .filter((c) => c.codigo)
-      .map((c) => ({ ...c, id: chaveCentro(c.tipo, c.codigo), docId: c.id, origem: "fora" }))
+      .map((c) => ({ ...c, id: chaveCentro(c.tipo, c.codigo), docId: c.id, origem: "fora", anoFora: anoDoCentroFora(c) }))
       .sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)));
     const opcoes = [...doOrcamento, ...deFora];
     const porId = {};
@@ -89,13 +89,14 @@ export function anoDoOrcamento(mesDasHoras) {
   return m === 12 ? a + 1 : a;
 }
 
-// Opções do seletor para um ano: as ODIs do orçamento daquele ano e os de fora
-// (menos os que já estão no orçamento do ano).
+// Opções do seletor para um ano: as ODIs do orçamento daquele ano, os CCs e as
+// ODIs de fora cadastradas para aquele ano (menos as que já estão no orçamento).
 export function opcoesDoAno(opcoes, ano) {
   if (ano == null) return opcoes;
   const doAno = opcoes
     .filter((o) => o.origem === "orcamento" && o.anos?.includes(ano))
     .map((o) => ({ ...o, ...o.porAno[ano], ano }));
   const ids = new Set(doAno.map((o) => o.id));
-  return [...doAno, ...opcoes.filter((o) => o.origem !== "orcamento" && !ids.has(o.id))];
+  // CC vale sempre; ODI de fora do orçamento, só no ano dela.
+  return [...doAno, ...opcoes.filter((o) => o.origem !== "orcamento" && !ids.has(o.id) && (o.anoFora == null || o.anoFora === ano))];
 }

@@ -9,7 +9,7 @@ function textoDaOpcao(o) {
 
 // Campo com busca para escolher o CC/ODI (lista única: do orçamento e fora dele).
 // Dá para cadastrar um novo ali mesmo, sem sair da tela.
-export default function SeletorCentro({ valor, opcoes, porId = {}, onEscolher, rotulo = "CC ou ODI", desabilitado }) {
+export default function SeletorCentro({ valor, opcoes, porId = {}, onEscolher, rotulo = "CC ou ODI", desabilitado, ano }) {
   const { user } = useAuth();
   const [aberto, setAberto] = useState(false);
   const [termo, setTermo] = useState("");
@@ -57,7 +57,7 @@ export default function SeletorCentro({ valor, opcoes, porId = {}, onEscolher, r
     const id = chaveCentro(cadastrando.tipo, codigo);
     if (porId[id]) return escolher(porId[id]);
     try {
-      await salvarCentroFora(user.uid, null, { ...cadastrando, codigo });
+      await salvarCentroFora(user.uid, null, { ...cadastrando, codigo, ano: ano || new Date().getFullYear() });
       escolher({ id, tipo: cadastrando.tipo, codigo });
     } catch (e) {
       console.error(e);
@@ -112,12 +112,16 @@ export default function SeletorCentro({ valor, opcoes, porId = {}, onEscolher, r
           setAberto(true);
         }}
         onKeyDown={teclas}
+        onClick={() => !aberto && (setAberto(true), setTermo(""), setAtivo(0))}
       />
       {aberto && (
         <div className="seletor-centro-lista" id={idLista} role="listbox" aria-label={`Opções de ${rotulo}`}>
           {cadastrando ? (
             <div style={{ padding: 12 }}>
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Novo CC ou ODI (fora do orçamento)</div>
+              <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: -4, marginBottom: 8 }}>
+                {cadastrando.tipo === "CC" ? "CC vale para todos os anos." : `ODI fora do orçamento vale só para ${ano || new Date().getFullYear()}.`}
+              </div>
               <div className="chips-row" role="group" aria-label="Tipo" style={{ marginBottom: 8 }}>
                 {[
                   ["CC", "Centro de custo"],

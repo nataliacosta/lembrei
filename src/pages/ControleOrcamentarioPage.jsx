@@ -22,7 +22,10 @@ export default function ControleOrcamentarioPage() {
   const anos = Object.keys(porAno).map(Number).sort((a, b) => b - a);
   const anoAtual = new Date().getFullYear();
   const [anoEscolhido, setAno] = useState(null);
-  const ano = anoEscolhido ?? (anos.includes(anoAtual) ? anoAtual : anos[0]);
+  const ano = anoEscolhido ?? (anos.includes(anoAtual) || !anos.length ? anoAtual : anos[0]);
+  // No seletor: os anos com orçamento efetivado e o ano atual (para cadastrar
+  // ODIs de fora antes de existir orçamento).
+  const anosDoSeletor = [...new Set([...anos, anoAtual, ano])].sort((a, b) => b - a);
 
   return (
     <div className="page-shell" style={{ paddingTop: 24, paddingBottom: 80, maxWidth: 1280 }}>
@@ -36,18 +39,16 @@ export default function ControleOrcamentarioPage() {
           </div>
           <div style={{ fontSize: 14, color: "var(--color-gray)", marginTop: 4 }}>Orçado na última versão efetivada × realizado nas medições lançadas no sistema</div>
         </div>
-        {aba !== "odis" && anos.length > 0 && (
-          <label style={{ width: 280, maxWidth: "100%", margin: 0 }}>
-            <span style={rotulo}>Ano</span>
-            <select value={ano} onChange={(e) => setAno(Number(e.target.value))}>
-              {anos.map((a) => (
-                <option key={a} value={a}>
-                  {a} · Orçamento {porAno[a].versao.versao} (efetivada)
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        <label style={{ width: 280, maxWidth: "100%", margin: 0 }}>
+          <span style={rotulo}>Ano</span>
+          <select value={ano} onChange={(e) => setAno(Number(e.target.value))}>
+            {anosDoSeletor.map((a) => (
+              <option key={a} value={a}>
+                {a} · {porAno[a] ? `Orçamento ${porAno[a].versao.versao} (efetivada)` : "sem orçamento efetivado"}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       <nav className="abas-contrato" aria-label="Seções do controle orçamentário">
         <NavLink to="/controle-orcamentario" end aria-current={aba !== "odis" ? "page" : undefined}>
@@ -58,12 +59,12 @@ export default function ControleOrcamentarioPage() {
         </NavLink>
       </nav>
       {aba === "odis" ? (
-        <AbaOdis />
+        <AbaOdis ano={ano} />
       ) : carregando && !anos.length ? (
         <div className="spinner-wrap">Carregando...</div>
-      ) : !anos.length ? (
+      ) : !porAno[ano] ? (
         <div className="empty-state" style={{ marginTop: 20 }}>
-          Ainda não há orçamento efetivado. Marque uma versão como <b>Efetivada</b> em <Link to="/orcamentos">Orçamentos</Link> para começar o controle.
+          Ainda não há orçamento efetivado para {ano}. Marque uma versão como <b>Efetivada</b> em <Link to="/orcamentos">Orçamentos</Link> para começar o controle.
         </div>
       ) : (
         <VisaoGeral ano={ano} vigente={porAno[ano]} />
@@ -361,23 +362,28 @@ function LinhaLancamento({ x }) {
 
 // ---------- ODIs e CCs ----------
 
-function AbaOdis() {
+function AbaOdis({ ano }) {
   const { user } = useAuth();
   const { opcoes, carregando } = useCentrosDisponiveis();
   const [editando, setEditando] = useState(null); // docId ou "novo"
-  // Uma linha por ODI e ano (a mesma ODI pode estar no orçamento de mais de um ano).
-  const doOrcamento = opcoes
-    .filter((o) => o.origem === "orcamento")
-    .flatMap((o) => o.anos.map((ano) => ({ ...o, ...o.porAno[ano], ano, chave: `${o.id}-${ano}` })))
-    .sort((a, b) => b.ano - a.ano || String(a.codigo).localeCompare(String(b.codigo)));
-  const fora = opcoes.filter((o) => o.origem === "fora");
+  const [trazendo, setTrazendo] = useState(false);
+  const doOrcamento = opcoes.filter((o) => o.origem === "orcamento" && o.anos.includes(ano)).map((o) => ({ ...o, ...o.porAno[ano], ano }));
+  // CCs valem sempre; ODIs de fora, só no ano delas.
+  const fora = opcoes
+    .filter((o) => o.origem === "fora" && (o.anoFora == null || o.anoFora === ano))
+    .sort((a, b) => (a.tipo === b.tipo ? String(a.codigo).localeCompare(String(b.codigo)) : a.tipo === "CC" ? -1 : 1));
+  const codigosNoAno = new Set(fora.filter((o) => o.tipo === "ODI").map((o) => o.id));
+  const doAnoAnterior = opcoes.filter((o) => o.origem === "fora" && o.anoFora === ano - 1 && !codigosNoAno.has(o.id));
+  const COLS = 5;
 
   return (
     <>
       <div className="texto-ajuda" style={{ marginTop: 12 }}>
-        É a lista única que aparece nas alocações de todos os contratos. As do orçamento entram sozinhas e só são oferecidas para custos do ano daquele orçamento (pelo mês de pagamento: as horas de dezembro já contam no ano seguinte); as outras você cadastra aqui (ou direto na hora de escolher).
+        É a lista que aparece nas alocações dos contratos para custos de {ano} (pelo mês de pagamento: as horas de dezembro já contam no ano seguinte). As do orçamento entram sozinhas; as outras você cadastra aqui (ou direto na hora de escolher).
       </div>
-      <h2 style={secaoTitulo}>Do orçamento · {doOrcamento.length}</h2>
+      <h2 style={secaoTitulo}>
+        Do orçamento {ano} · {doOrcamento.length}
+      </h2>
       <div className="lista-card">
         <table className="tabela-med tabela-orc2 tabela-controle">
           <thead>
@@ -392,12 +398,12 @@ function AbaOdis() {
             {doOrcamento.length === 0 && (
               <tr>
                 <td colSpan={4} style={{ color: "var(--color-gray)" }}>
-                  {carregando ? "Carregando…" : "Nenhuma ODI ainda: elas vêm das linhas da última versão efetivada de cada ano."}
+                  {carregando ? "Carregando…" : `Nenhuma ODI em ${ano}: elas vêm das linhas da última versão efetivada do orçamento do ano.`}
                 </td>
               </tr>
             )}
             {doOrcamento.map((o) => (
-              <tr key={o.chave}>
+              <tr key={o.id}>
                 <td>
                   <CentroTag tipo="ODI" codigo={o.codigo} />
                 </td>
@@ -420,6 +426,10 @@ function AbaOdis() {
           + Novo CC ou ODI
         </button>
       </div>
+      <div className="texto-ajuda" style={{ margin: "-2px 0 8px" }}>
+        CCs valem para todos os anos. ODIs fora do orçamento valem só para o ano em que foram cadastradas: na virada do ano a lista de ODIs começa vazia.
+        {doAnoAnterior.length > 0 && ` Use “Trazer de ${ano - 1}” para repetir as que continuam.`}
+      </div>
       <div className="lista-card">
         <table className="tabela-med tabela-orc2 tabela-controle">
           <thead>
@@ -427,38 +437,50 @@ function AbaOdis() {
               <th>Código</th>
               <th>Descrição</th>
               <th className="esconde-mob">Responsável</th>
+              <th>Vale para</th>
               <th />
             </tr>
           </thead>
           <tbody>
             {editando === "novo" && (
               <tr>
-                <td colSpan={4} className="editor">
-                  <EditorCentroFora uid={user.uid} centro={null} onFechar={() => setEditando(null)} />
+                <td colSpan={COLS} className="editor">
+                  <EditorCentroFora uid={user.uid} centro={null} ano={ano} onFechar={() => setEditando(null)} />
                 </td>
               </tr>
             )}
             {fora.length === 0 && editando !== "novo" && (
               <tr>
-                <td colSpan={4} style={{ color: "var(--color-gray)" }}>
-                  Nenhum CC ou ODI fora do orçamento.
+                <td colSpan={COLS} style={{ color: "var(--color-gray)" }}>
+                  Nenhum CC ou ODI fora do orçamento em {ano}.
                 </td>
               </tr>
             )}
             {fora.map((c) =>
               editando === c.docId ? (
-                <tr key={c.id}>
-                  <td colSpan={4} className="editor">
-                    <EditorCentroFora uid={user.uid} centro={c} onFechar={() => setEditando(null)} />
+                <tr key={c.docId}>
+                  <td colSpan={COLS} className="editor">
+                    <EditorCentroFora uid={user.uid} centro={c} ano={ano} onFechar={() => setEditando(null)} />
                   </td>
                 </tr>
               ) : (
-                <tr key={c.id}>
+                <tr key={c.docId}>
                   <td>
                     <CentroTag tipo={c.tipo} codigo={c.codigo} />
                   </td>
                   <td style={{ fontWeight: 600 }}>{c.descricao || "—"}</td>
                   <td className="esconde-mob">{c.responsavel || "—"}</td>
+                  <td>
+                    {c.tipo === "CC" ? (
+                      <span className="pill" style={{ background: "#eceeee", color: "var(--color-gray)" }}>
+                        Todos os anos
+                      </span>
+                    ) : (
+                      <span className="pill" style={{ background: "#f1e8fb", color: "#6a3c99" }}>
+                        Só {c.anoFora}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ textAlign: "right" }}>
                     <button type="button" className="link-botao" onClick={() => setEditando(c.docId)}>
                       Editar
@@ -467,15 +489,91 @@ function AbaOdis() {
                 </tr>
               )
             )}
+            {doAnoAnterior.length > 0 && !trazendo && (
+              <tr>
+                <td colSpan={COLS} style={{ fontSize: 13, color: "var(--color-gray)" }}>
+                  {doAnoAnterior.length} {doAnoAnterior.length === 1 ? "ODI fora do orçamento" : "ODIs fora do orçamento"} em {ano - 1} ·{" "}
+                  <button type="button" className="link-botao" onClick={() => setTrazendo(true)}>
+                    Trazer de {ano - 1}
+                  </button>{" "}
+                  (você escolhe quais)
+                </td>
+              </tr>
+            )}
+            {trazendo && (
+              <tr>
+                <td colSpan={COLS} className="editor">
+                  <TrazerDoAnoAnterior uid={user.uid} ano={ano} lista={doAnoAnterior} onFechar={() => setTrazendo(false)} />
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
-      <div className="texto-ajuda">CC é sempre fora do orçamento. Uma ODI cadastrada aqui que depois entrar no orçamento passa a ter controle sozinha. Os CCs e ODIs que estavam dentro dos contratos vêm para cá automaticamente.</div>
+      <div className="texto-ajuda">CC é sempre fora do orçamento. Uma ODI cadastrada aqui que depois entrar no orçamento passa a ter controle sozinha. Os CCs e ODIs que estavam dentro dos contratos vieram para cá automaticamente.</div>
     </>
   );
 }
 
-function EditorCentroFora({ uid, centro, onFechar }) {
+function TrazerDoAnoAnterior({ uid, ano, lista, onFechar }) {
+  const [marcados, setMarcados] = useState(() => new Set(lista.map((o) => o.docId)));
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  async function trazer() {
+    setSalvando(true);
+    try {
+      for (const o of lista.filter((x) => marcados.has(x.docId))) {
+        await salvarCentroFora(uid, null, { tipo: "ODI", codigo: o.codigo, descricao: o.descricao, responsavel: o.responsavel, ano });
+      }
+      onFechar();
+    } catch (e) {
+      console.error(e);
+      setErro("Não deu pra trazer. Tente de novo.");
+      setSalvando(false);
+    }
+  }
+  return (
+    <div role="group" aria-label={`Trazer ODIs de ${ano - 1}`}>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
+        Quais ODIs de {ano - 1} continuam em {ano}?
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {lista.map((o) => (
+          <label key={o.docId} style={{ display: "flex", gap: 8, alignItems: "center", margin: 0, fontWeight: 400 }}>
+            <input
+              type="checkbox"
+              checked={marcados.has(o.docId)}
+              onChange={(e) => {
+                const n = new Set(marcados);
+                if (e.target.checked) n.add(o.docId);
+                else n.delete(o.docId);
+                setMarcados(n);
+              }}
+              style={{ width: "auto", minHeight: 0 }}
+            />
+            <CentroTag tipo="ODI" codigo={o.codigo} />
+            <span style={{ fontSize: 13, color: "var(--color-gray)" }}>{o.descricao}</span>
+          </label>
+        ))}
+      </div>
+      {erro && (
+        <div className="texto-alerta" role="alert" style={{ fontSize: 13, marginTop: 8 }}>
+          {erro}
+        </div>
+      )}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onFechar}>
+          Cancelar
+        </button>
+        <button type="button" className="btn btn-primary btn-sm" onClick={trazer} disabled={salvando || marcados.size === 0}>
+          {salvando ? "Trazendo..." : `Trazer ${marcados.size} para ${ano}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EditorCentroFora({ uid, centro, ano, onFechar }) {
   const [tipo, setTipo] = useState(centro?.tipo || "CC");
   const [codigo, setCodigo] = useState(centro?.codigo || "");
   const [descricao, setDescricao] = useState(centro?.descricao || "");
@@ -487,7 +585,8 @@ function EditorCentroFora({ uid, centro, onFechar }) {
     if (!codigo.trim()) return setErro("Escreva o código.");
     setSalvando(true);
     try {
-      await salvarCentroFora(uid, centro?.docId, { tipo, codigo, descricao, responsavel });
+      // ODI fica no ano dela (a que já existe) ou no ano escolhido em cima (a nova).
+      await salvarCentroFora(uid, centro?.docId, { tipo, codigo, descricao, responsavel, ano: centro?.anoFora || ano });
       onFechar();
     } catch (err) {
       console.error(err);
@@ -529,6 +628,7 @@ function EditorCentroFora({ uid, centro, onFechar }) {
           <input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Quem responde por ele" maxLength={120} />
         </label>
       </div>
+      <div className="texto-ajuda">{tipo === "CC" ? "CC é sempre fora do orçamento e vale para todos os anos." : `Esta ODI vale só para ${centro?.anoFora || ano}. Se ela depois entrar no orçamento, passa a ter controle sozinha.`}</div>
       {erro && (
         <div className="texto-alerta" role="alert" style={{ fontSize: 13, marginTop: 8 }}>
           {erro}
