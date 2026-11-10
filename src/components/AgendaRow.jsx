@@ -150,7 +150,8 @@ function ItemRow({ entrada, frente, podeEditar, mostrarFrente }) {
           {ehLembrete ? (
             <span>
               Lembrete{item.lembrete.mensagem ? ` de “${item.titulo}”` : ""}
-              <span className="so-mobile">{mostrarFrente && frente ? ` · ${frente.nome}` : ""}</span>
+              {/* Com os botões na linha, a coluna da frente some: ela vem aqui (no celular, sempre). */}
+              <span className={mostrarAcoes ? undefined : "so-mobile"}>{mostrarFrente && frente ? ` · ${frente.nome}` : ""}</span>
             </span>
           ) : (
             <>
