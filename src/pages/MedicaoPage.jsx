@@ -10,6 +10,8 @@ import { formatarData } from "../lib/datas";
 import {
   definirAlocacao,
   dividir,
+  dividirPorHorasFixas,
+  restoDaLinha,
   formatarHoras,
   formatarNumero,
   formatarReais,
@@ -112,7 +114,8 @@ export default function MedicaoPage() {
   const podeEditar = papel === "proprietario" || papel === "editor";
   const linhas = editadas || medicao.linhas || [];
   const porCentro = totaisPorCentro(linhas);
-  const semCentro = linhas.filter((l) => !l.partes?.length).length;
+  // Sem CC/ODI: linhas sem parte nenhuma ou com horas a mais ainda sem lugar.
+  const semCentro = linhas.filter((l) => !l.partes?.length || restoDaLinha(l).horas > 0).length;
   const criadoEm = medicao.criadoEm?.toDate ? medicao.criadoEm.toDate() : null;
 
   async function copiar(chave, valor) {
@@ -421,11 +424,13 @@ export default function MedicaoPage() {
                         equipes={equipes}
                         mes={mes}
                         onCancelar={() => setEditandoAloc(null)}
-                        onSalvo={({ partes, desde }) => {
+                        onSalvo={({ partes, desde, modo }) => {
                           setEditandoAloc(null);
                           // Se a alocação nova vale para o mês desta medição, refaz a
                           // linha e já grava a medição (senão ela só mudaria na tela).
-                          if (desde <= mes) salvarEdicao(editadas.map((x, j) => (j === i ? { ...x, partes: dividir(x, partes, centrosPorId, equipesPorId) } : x)));
+                          // Por horas fixas, o que passar do padrão fica sem CC/ODI na linha (aparece como pendente).
+                          const refazer = (x) => (modo === "horas" ? dividirPorHorasFixas(x, { partes, modo }, centrosPorId, equipesPorId).partes : dividir(x, partes, centrosPorId, equipesPorId));
+                          if (desde <= mes) salvarEdicao(editadas.map((x, j) => (j === i ? { ...x, partes: refazer(x) } : x)));
                         }}
                       />
                     </td>
@@ -463,6 +468,26 @@ export default function MedicaoPage() {
                     editor,
                   ]
                 );
+              }
+              const resto = restoDaLinha(l);
+              if (resto.horas > 0) {
+                return [
+                  <tr key={i} className="falta">
+                    {base}
+                    <td colSpan={2} style={{ fontSize: 12 }}>
+                      {l.partes.map((p, j) => (
+                        <div key={j}>
+                          <CentroTag tipo={p.tipo} codigo={p.codigo} /> <span style={{ color: "var(--color-gray)" }}>{formatarNumero(p.horas, p.horas % 1 ? 2 : 0)} h</span>
+                        </div>
+                      ))}
+                      <div className="texto-alerta" style={{ fontWeight: 600, marginTop: 4 }}>
+                        {formatarNumero(resto.horas, resto.horas % 1 ? 2 : 0)} h a mais ({formatarReais(resto.valor)}) sem CC/ODI
+                      </div>
+                    </td>
+                    {acao}
+                  </tr>,
+                  editor,
+                ];
               }
               if (l.partes.length === 1) {
                 const p = l.partes[0];

@@ -71,9 +71,16 @@ export function proximaAlocacao(recurso, mes) {
 }
 
 // Grava (ou troca) a alocação que começa no mês "desde".
-export function definirAlocacao(recurso, desde, partes) {
+// modo "horas": cada parte tem horasFixas (a divisão vale para aquela quantidade
+// de horas); sem modo, a divisão é por % e vale para qualquer quantidade.
+export function definirAlocacao(recurso, desde, partes, modo) {
   const outras = (recurso?.alocacoes || []).filter((a) => a.desde !== desde);
-  return [...outras, { desde, partes }].sort((a, b) => a.desde.localeCompare(b.desde));
+  return [...outras, { desde, partes, ...(modo === "horas" ? { modo: "horas" } : {}) }].sort((a, b) => a.desde.localeCompare(b.desde));
+}
+
+// Total de horas do padrão de uma alocação por horas fixas.
+export function horasDoPadrao(alocacao) {
+  return deCentavos((alocacao?.partes || []).reduce((s, p) => s + centavos(Number(p.horasFixas) || 0), 0));
 }
 
 // Histórico para mostrar: do mais recente ao mais antigo, com o mês final de cada período.
@@ -85,7 +92,7 @@ export function historicoDeAlocacoes(recurso) {
 }
 
 export function somaPct(partes) {
-  return Math.round((partes || []).reduce((s, p) => s + (Number(p.pct) || 0), 0) * 100) / 100;
+  return Math.round((partes || []).reduce((s, p) => s + (lerNumero(p.pct) || 0), 0) * 100) / 100;
 }
 
 // ---------- Números da planilha ----------
@@ -260,7 +267,7 @@ export function dividir(linha, partes, centrosPorId, equipesPorId = {}) {
 
 // Divide pelas horas de cada parte: o valor sai proporcional às horas, e o %
 // é calculado (com 2 casas; a última parte fecha os 100%).
-export function dividirPorHoras(linha, partes, centrosPorId, equipesPorId = {}) {
+export function dividirPorHoras(linha, partes, centrosPorId, equipesPorId = {}, { fechar = true } = {}) {
   const validas = (partes || []).filter((p) => resolverCentro(p, centrosPorId) && Number(p.horas) > 0);
   if (!validas.length) return [];
   const totalC = centavos(linha.valorTotal);
@@ -268,7 +275,8 @@ export function dividirPorHoras(linha, partes, centrosPorId, equipesPorId = {}) 
   let restoV = totalC;
   let restoPct = 10000;
   return validas.map((p, i) => {
-    const ultima = i === validas.length - 1;
+    // fechar=false: as partes não cobrem a linha toda (sobra para decidir).
+    const ultima = fechar && i === validas.length - 1;
     const hC = centavos(Number(p.horas));
     const v = ultima ? restoV : horasTotalC ? Math.round((totalC * hC) / horasTotalC) : 0;
     const pctC = ultima ? restoPct : horasTotalC ? Math.round((hC * 10000) / horasTotalC) : 0;
@@ -307,11 +315,42 @@ export function preencherLinhas(linhas, recursos, centros, mes, equipes = []) {
     const recurso = porNome[normalizarNome(linha.recurso)] || null;
     const alocacao = recurso ? alocacaoNoMes(recurso, mes) : null;
     // Recurso tirado do contrato neste mês: a linha fica sem CC/ODI (precisa de você).
-    const partes = alocacao && !alocacao.fora ? dividir(linha, alocacao.partes, centrosPorId, equipesPorId) : [];
+    let partes = [];
+    let horasFixas = null;
+    if (alocacao && !alocacao.fora) {
+      if (alocacao.modo === "horas") {
+        horasFixas = dividirPorHorasFixas(linha, alocacao, centrosPorId, equipesPorId);
+        partes = horasFixas.partes;
+      } else partes = dividir(linha, alocacao.partes, centrosPorId, equipesPorId);
+    }
     const valorCadastrado = recurso?.valorHH != null && recurso.valorHH !== "" ? Number(recurso.valorHH) : null;
     const valorDiferente = valorCadastrado != null && linha.valorHH != null && Math.abs(valorCadastrado - linha.valorHH) > 0.005;
-    return { ...linha, recursoId: recurso?.id || null, partes, valorCadastrado: valorDiferente ? valorCadastrado : null };
+    const extra = horasFixas ? { padraoHoras: horasFixas.padrao, horasAMais: horasFixas.aMais, horasAMenos: horasFixas.aMenos } : {};
+    return { ...linha, recursoId: recurso?.id || null, partes, valorCadastrado: valorDiferente ? valorCadastrado : null, ...extra };
   });
+}
+
+// Alocação por horas fixas: com as mesmas horas do padrão, cada parte fica com
+// as suas; com mais, as horas do padrão vão como estão e o resto fica para
+// decidir (aMais); com menos, divide proporcional e pede para ajustar (aMenos).
+export function dividirPorHorasFixas(linha, alocacao, centrosPorId, equipesPorId = {}) {
+  const padrao = horasDoPadrao(alocacao);
+  const horas = Number(linha.horas) || 0;
+  const comHoras = (alocacao.partes || []).map((p) => ({ ...p, horas: Number(p.horasFixas) || 0 }));
+  const dif = Math.round((horas - padrao) * 100) / 100;
+  if (!padrao) return { partes: [], padrao, aMais: 0, aMenos: 0 };
+  if (Math.abs(dif) < 0.005) return { partes: dividirPorHoras(linha, comHoras, centrosPorId, equipesPorId), padrao, aMais: 0, aMenos: 0 };
+  if (dif > 0) return { partes: dividirPorHoras(linha, comHoras, centrosPorId, equipesPorId, { fechar: false }), padrao, aMais: dif, aMenos: 0 };
+  const proporcional = comHoras.map((p) => ({ ...p, pct: (p.horas / padrao) * 100 }));
+  return { partes: dividir(linha, proporcional, centrosPorId, equipesPorId), padrao, aMais: 0, aMenos: -dif };
+}
+
+// O que da linha não está em nenhuma parte (horas a mais ainda sem lugar).
+export function restoDaLinha(l) {
+  if (!l.partes?.length) return { horas: Number(l.horas) || 0, valor: Number(l.valorTotal) || 0 };
+  const h = centavos(l.horas) - l.partes.reduce((s, p) => s + centavos(p.horas), 0);
+  const v = centavos(l.valorTotal) - l.partes.reduce((s, p) => s + centavos(p.valor), 0);
+  return { horas: h > 0 ? deCentavos(h) : 0, valor: v > 0 ? deCentavos(v) : 0 };
 }
 
 export function totaisDaMedicao(linhas) {
@@ -331,7 +370,11 @@ export function totaisPorCentro(linhas) {
   };
   for (const l of linhas) {
     if (!l.partes?.length) somar("sem", { centroId: null, tipo: "", codigo: "" }, l.horas, l.valorTotal);
-    else for (const p of l.partes) somar(chaveParte(p), { centroId: chaveParte(p), tipo: p.tipo, codigo: p.codigo }, p.horas, p.valor);
+    else {
+      for (const p of l.partes) somar(chaveParte(p), { centroId: chaveParte(p), tipo: p.tipo, codigo: p.codigo }, p.horas, p.valor);
+      const resto = restoDaLinha(l);
+      if (resto.valor > 0 || resto.horas > 0) somar("sem", { centroId: null, tipo: "", codigo: "" }, resto.horas, resto.valor);
+    }
   }
   return [...mapa.values()]
     .map(({ horasC, valorC, ...resto }) => ({ ...resto, horas: deCentavos(horasC), valor: deCentavos(valorC) }))

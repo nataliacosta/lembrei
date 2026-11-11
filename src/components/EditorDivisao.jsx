@@ -14,6 +14,7 @@ export function parteComCodigo(p, centros, extra = {}) {
   const c = resolverCentro(p, porIdDe(centros));
   if (!c) return null;
   const v = { centroId: chaveCentro(c.tipo, c.codigo), tipo: c.tipo, codigo: c.codigo, ...extra };
+  if (p.horasFixas != null && v.horasFixas == null) v.horasFixas = p.horasFixas;
   if (p.equipeId) v.equipeId = p.equipeId;
   if (p.equipeId && p.frenteId) v.frenteId = p.frenteId;
   return v;
@@ -72,14 +73,52 @@ export function CabecalhoPartes({ classe, ultima = "%", extra = null }) {
 
 const quase = (a, b) => Math.abs(a - b) < 0.005;
 
-// Divide uma linha da medição em partes, por % ou por horas.
-export default function EditorDivisao({ linha, centros, equipes, partesIniciais, mes, permitirSalvarAlocacao, onAplicar, onCancelar }) {
-  const [modo, setModo] = useState("pct");
-  const [partes, setPartes] = useState(() =>
-    partesIniciais?.length
-      ? partesIniciais.map((p) => ({ centroId: p.centroId || "", tipo: p.tipo, codigo: p.codigo, equipeId: p.equipeId || "", frenteId: p.frenteId || "", valor: formatarNumero(p.pct, p.pct % 1 ? 2 : 0) }))
-      : [{ centroId: "", equipeId: "", frenteId: "", valor: "100" }]
+// "% (vale para qualquer quantidade de horas)" ou "horas fixas por CC/ODI".
+export function EscolhaModoAlocacao({ modo, onTrocar }) {
+  return (
+    <span className="chips-row" role="group" aria-label="Dividir por" style={{ alignItems: "center" }}>
+      <span style={{ fontSize: 12, color: "var(--color-gray)" }}>Dividir por:</span>
+      <button type="button" className="chip" aria-pressed={modo !== "horas"} onClick={() => onTrocar("pct")}>
+        %
+      </button>
+      <button type="button" className="chip" aria-pressed={modo === "horas"} onClick={() => onTrocar("horas")}>
+        Horas fixas
+      </button>
+    </span>
   );
+}
+
+// Partes do editor (texto) → partes da alocação: % ou horas fixas (com o % calculado).
+export function partesDaAlocacao(partes, modo, centros) {
+  const num = (v) => lerNumero(v) || 0;
+  const total = partes.reduce((s, p) => s + num(p.horas), 0);
+  return partes.map((p) =>
+    modo === "horas"
+      ? parteComCodigo(p, centros, { horasFixas: num(p.horas), pct: total ? Math.round((num(p.horas) / total) * 10000) / 100 : 0 })
+      : parteComCodigo(p, centros, { pct: num(p.pct) })
+  );
+}
+
+// Valores iniciais do editor a partir de uma alocação salva.
+export function partesParaEditar(alocacao, fallback = []) {
+  const base = alocacao?.partes?.length ? alocacao.partes : fallback;
+  const fmt = (v) => (v == null || v === "" ? "" : formatarNumero(Number(v), Number(v) % 1 ? 2 : 0));
+  return base.length
+    ? base.map((p) => ({ centroId: p.centroId || "", tipo: p.tipo, codigo: p.codigo, equipeId: p.equipeId || "", frenteId: p.frenteId || "", pct: fmt(p.pct), horas: fmt(p.horasFixas) }))
+    : [{ centroId: "", equipeId: "", frenteId: "", pct: "100", horas: "" }];
+}
+
+// Divide uma linha da medição em partes, por % ou por horas.
+export default function EditorDivisao({ linha, centros, equipes, partesIniciais, mes, permitirSalvarAlocacao, onAplicar, onCancelar, modoInicial = "pct" }) {
+  const [modo, setModo] = useState(modoInicial);
+  const [partes, setPartes] = useState(() => {
+    if (!partesIniciais?.length) return [{ centroId: "", equipeId: "", frenteId: "", valor: modoInicial === "horas" ? formatarNumero(Number(linha.horas) || 0) : "100" }];
+    const fmt = (v) => formatarNumero(Number(v) || 0, (Number(v) || 0) % 1 ? 2 : 0);
+    const lista = partesIniciais.map((p) => ({ centroId: p.centroId || "", tipo: p.tipo, codigo: p.codigo, equipeId: p.equipeId || "", frenteId: p.frenteId || "", valor: fmt(modoInicial === "horas" ? p.horas : p.pct) }));
+    // Em horas, se as partes não cobrem a linha toda, já sugere uma parte com o que sobra.
+    const sobra = modoInicial === "horas" ? Math.round(((Number(linha.horas) || 0) - partesIniciais.reduce((s, p) => s + (Number(p.horas) || 0), 0)) * 100) / 100 : 0;
+    return sobra > 0 ? [...lista, { centroId: "", equipeId: "", frenteId: "", valor: fmt(sobra) }] : lista;
+  });
   const [salvarAlocacao, setSalvarAlocacao] = useState(false);
   const [erro, setErro] = useState("");
   const primeiro = (linha.recurso || "").split(" ")[0];
@@ -209,16 +248,14 @@ export default function EditorDivisao({ linha, centros, equipes, partesIniciais,
 // cria com os dados da linha.
 export function EditorAlocacao({ contratoId, recurso, linha, centros, equipes, mes, onSalvo, onCancelar }) {
   const [desde, setDesde] = useState(mes);
-  const [partes, setPartes] = useState(() => {
-    const a = recurso ? alocacaoNoMes(recurso, mes) : null;
-    const base = a?.partes?.length ? a.partes : partesParaAlocacao(linha.partes);
-    return base.length ? base.map((p) => ({ centroId: p.centroId || "", tipo: p.tipo, codigo: p.codigo, equipeId: p.equipeId || "", frenteId: p.frenteId || "", pct: formatarNumero(p.pct, p.pct % 1 ? 2 : 0) })) : [{ centroId: "", equipeId: "", frenteId: "", pct: "100" }];
-  });
+  const alocAtual = recurso ? alocacaoNoMes(recurso, mes) : null;
+  const [modo, setModo] = useState(alocAtual?.modo === "horas" ? "horas" : "pct");
+  const [partes, setPartes] = useState(() => partesParaEditar(alocAtual?.fora ? null : alocAtual, partesParaAlocacao(linha.partes)));
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const num = (v) => lerNumero(v) || 0;
-  const soma = Math.round(partes.reduce((s, p) => s + num(p.pct), 0) * 100) / 100;
-  const somaOk = Math.abs(soma - 100) < 0.005;
+  const soma = Math.round(partes.reduce((s, p) => s + num(modo === "horas" ? p.horas : p.pct), 0) * 100) / 100;
+  const somaOk = modo === "horas" ? soma > 0 : Math.abs(soma - 100) < 0.005;
   const nome = recurso?.nome || linha.recurso;
   const primeiro = nome.split(" ")[0];
   const meses = [];
@@ -232,19 +269,20 @@ export function EditorAlocacao({ contratoId, recurso, linha, centros, equipes, m
   async function salvar() {
     setErro("");
     if (partes.some((p) => !p.centroId)) return setErro("Escolha o CC/ODI de cada parte.");
+    if (modo === "horas" && partes.some((p) => num(p.horas) <= 0)) return setErro("Cada CC/ODI precisa de horas maiores que zero.");
     if (!somaOk) return setErro("A soma dos percentuais precisa dar 100%.");
-    const validas = partes.map((p) => parteComCodigo(p, centros, { pct: num(p.pct) }));
+    const validas = partesDaAlocacao(partes, modo, centros);
     if (validas.some((v) => !v)) return setErro("Escolha o CC/ODI de cada parte.");
     const chaves = validas.map((p) => `${p.centroId}|${p.equipeId || ""}|${p.frenteId || ""}`);
     if (new Set(chaves).size !== chaves.length) return setErro("A mesma combinação de CC/ODI, equipe e frente aparece duas vezes.");
     setSalvando(true);
     try {
       if (recurso) {
-        await salvarRecurso(contratoId, recurso.id, { ...recurso, alocacoes: definirAlocacao(recurso, desde, validas) });
+        await salvarRecurso(contratoId, recurso.id, { ...recurso, alocacoes: definirAlocacao(recurso, desde, validas, modo) });
       } else {
-        await salvarRecurso(contratoId, null, { nome: linha.recurso, perfil: linha.perfil, valorHH: linha.valorHH, alocacoes: [{ desde, partes: validas }] });
+        await salvarRecurso(contratoId, null, { nome: linha.recurso, perfil: linha.perfil, valorHH: linha.valorHH, alocacoes: definirAlocacao(null, desde, validas, modo) });
       }
-      onSalvo({ partes: validas, desde });
+      onSalvo({ partes: validas, desde, modo });
     } catch (e) {
       console.error(e);
       setErro("Não deu pra salvar a alocação. Tente de novo.");
@@ -270,13 +308,24 @@ export function EditorAlocacao({ contratoId, recurso, linha, centros, equipes, m
           </select>
         </label>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-        <CabecalhoPartes classe="com-equipe" />
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+        <EscolhaModoAlocacao modo={modo} onTrocar={setModo} />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+        <CabecalhoPartes classe="com-equipe" ultima={modo === "horas" ? "Horas no mês" : "%"} />
         {partes.map((p, i) => (
           <div key={i} className="linha-partes com-equipe">
             <SeletoresParte parte={p} centros={centros} equipes={equipes} indice={i} onMudar={(m) => mudar(i, m)} mes={desde} />
             <label style={{ display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
-              <input value={p.pct} onChange={(e) => mudar(i, { pct: e.target.value })} inputMode="decimal" aria-label={`Percentual ${i + 1}`} style={{ width: 64 }} />%
+              {modo === "horas" ? (
+                <>
+                  <input value={p.horas} onChange={(e) => mudar(i, { horas: e.target.value })} inputMode="decimal" aria-label={`Horas ${i + 1}`} style={{ width: 64 }} />h
+                </>
+              ) : (
+                <>
+                  <input value={p.pct} onChange={(e) => mudar(i, { pct: e.target.value })} inputMode="decimal" aria-label={`Percentual ${i + 1}`} style={{ width: 64 }} />%
+                </>
+              )}
             </label>
             <button type="button" className="btn btn-ghost" style={{ padding: 0, width: 40 }} aria-label={`Remover parte ${i + 1}`} onClick={() => setPartes(partes.filter((_, j) => j !== i))} disabled={partes.length === 1}>
               ×
@@ -287,15 +336,16 @@ export function EditorAlocacao({ contratoId, recurso, linha, centros, equipes, m
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 8 }}>
         <button
           type="button"
-          onClick={() => setPartes([...partes, { centroId: "", equipeId: "", frenteId: "", pct: formatarNumero(Math.max(0, Math.round((100 - soma) * 100) / 100), (100 - soma) % 1 ? 2 : 0) }])}
+          onClick={() => setPartes([...partes, { centroId: "", equipeId: "", frenteId: "", horas: "", pct: modo === "horas" ? "" : formatarNumero(Math.max(0, Math.round((100 - soma) * 100) / 100), (100 - soma) % 1 ? 2 : 0) }])}
           style={{ background: "none", border: "1px dashed var(--color-gray-light)", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, color: "var(--color-primary)", minHeight: 36 }}
         >
           + Dividir com outro CC/ODI
         </button>
         <span style={{ fontSize: 12, fontWeight: 600, color: somaOk ? "var(--color-primary-dark)" : "var(--color-orange)" }}>
-          Soma: {formatarNumero(soma, soma % 1 ? 2 : 0)}%{somaOk ? " ✓" : ""}
+          {modo === "horas" ? `${formatarNumero(soma, soma % 1 ? 2 : 0)} h por mês no padrão` : `Soma: ${formatarNumero(soma, soma % 1 ? 2 : 0)}%${somaOk ? " ✓" : ""}`}
         </span>
       </div>
+      {modo === "horas" && <div className="texto-ajuda">Na medição: vindo exatamente essas horas, cada CC/ODI fica com as suas. Vindo mais, o que passar fica para você decidir; vindo menos, a linha pede para ajustar a divisão.</div>}
       <div className="texto-ajuda">
         Muda o cadastro de {primeiro} a partir do mês escolhido (os meses anteriores continuam como estavam). Ao salvar, esta linha da medição é preenchida de novo com a alocação nova.
       </div>
