@@ -12,6 +12,7 @@ import {
   alocacaoNoMes,
   definirAlocacao,
   dividir,
+  dividirPorHoras,
   formatarHoras,
   formatarNumero,
   formatarReais,
@@ -119,6 +120,13 @@ export default function SubirMedicaoPage() {
     if (!lidasAtuais) return [];
     return preencherLinhas(lidasAtuais, recursos, centros, mes, equipes).map((l, i) => {
       if (divisoes[i]) return { ...l, partes: divisoes[i].partes, dividida: true };
+      // Alocação por horas fixas com horas a mais: o que passar vai para o CC/ODI escolhido aqui.
+      if (l.horasAMais) {
+        const e = escolhas[i];
+        if (!e?.centroId) return { ...l, pendenteAMais: true };
+        return { ...l, partes: dividirPorHoras(l, [...l.partes, { ...e, horas: l.horasAMais }], centrosPorId, equipesPorId), aMaisEscolhido: true };
+      }
+      if (l.horasAMenos) return { ...l, pendenteAMenos: true };
       const e = escolhas[i];
       if (l.partes.length || !e) return l;
       if (!e.centroId) return { ...l, escolhida: true };
@@ -161,8 +169,9 @@ export default function SubirMedicaoPage() {
     setLendo(false);
   }
 
-  const semCentro = linhas.filter((l) => !l.partes.length).length;
-  const preenchidas = linhas.filter((l) => l.partes.length && !l.escolhida && !l.dividida).length;
+  const pendentesHoras = linhas.filter((l) => l.pendenteAMais || l.pendenteAMenos).length;
+  const semCentro = linhas.filter((l) => !l.partes.length).length + pendentesHoras;
+  const preenchidas = linhas.filter((l) => l.partes.length && !l.escolhida && !l.dividida && !l.pendenteAMais && !l.pendenteAMenos).length;
   const totais = totaisDaMedicao(linhas);
   const porCentro = totaisPorCentro(linhas);
   // Qual medição do mês (contratos com várias) ou uma extra, com nome.
@@ -406,7 +415,7 @@ export default function SubirMedicaoPage() {
             {semCentro > 0 && (
               <>
                 {" "}
-                · <b className="texto-alerta">{semCentro} {semCentro === 1 ? "precisa" : "precisam"} de você</b> (recurso sem alocação)
+                · <b className="texto-alerta">{semCentro} {semCentro === 1 ? "precisa" : "precisam"} de você</b> ({pendentesHoras ? "horas diferentes do padrão ou recurso sem alocação" : "recurso sem alocação"})
               </>
             )}
           </div>
@@ -483,7 +492,8 @@ export default function SubirMedicaoPage() {
                           linha={l}
                           centros={centros}
                           equipes={equipes}
-                          partesIniciais={l.partes}
+                          partesIniciais={l.horasAMais && !l.dividida ? linhas[i].partes.slice(0, l.partes.length - (l.aMaisEscolhido ? 1 : 0)) : l.partes}
+                          modoInicial={l.horasAMais || l.horasAMenos ? "horas" : "pct"}
                           mes={mes}
                           permitirSalvarAlocacao
                           onCancelar={() => setDividindo(null)}
@@ -639,6 +649,59 @@ function LinhaPrevia({ linha, mes, centros, equipes, escolha, onEscolher, guarda
               <input type="checkbox" checked={guardar} onChange={(e) => onGuardar(e.target.checked)} style={{ width: "auto" }} />
               Salvar como alocação de {primeiro}
             </label>
+          )}
+        </td>
+        {acao}
+      </tr>
+    );
+  }
+
+  // Alocação por horas fixas com horas diferentes do padrão.
+  if ((l.horasAMais || l.horasAMenos) && !l.dividida) {
+    const valorHora = l.horas ? Number(l.valorTotal) / Number(l.horas) : 0;
+    return (
+      <tr className={l.pendenteAMais || l.pendenteAMenos ? "falta" : ""}>
+        {colunasBase}
+        <td colSpan={2} style={{ minWidth: 280 }}>
+          <div style={{ fontSize: 12, color: "var(--color-gray)", marginBottom: 4 }}>
+            padrão: {formatarNumero(l.padraoHoras, l.padraoHoras % 1 ? 2 : 0)} h · vieram {formatarNumero(l.horas, l.horas % 1 ? 2 : 0)} h
+          </div>
+          {(l.aMaisEscolhido ? l.partes.slice(0, -1) : l.partes).map((p, j) => (
+            <div key={j} style={{ marginBottom: 2 }}>
+              <CentroTag tipo={p.tipo} codigo={p.codigo} />{" "}
+              <span style={{ fontSize: 12, color: "var(--color-gray)" }}>
+                {formatarNumero(p.horas, p.horas % 1 ? 2 : 0)} h · {formatarReais(p.valor)}
+              </span>
+            </div>
+          ))}
+          {l.horasAMais ? (
+            <div className="caixa-horas-a-mais">
+              <b className={l.pendenteAMais ? "texto-alerta" : ""} style={{ fontSize: 13 }}>
+                {formatarNumero(l.horasAMais, l.horasAMais % 1 ? 2 : 0)} h a mais ({formatarReais(l.horasAMais * valorHora)}) · onde alocar?
+              </b>
+              <div className={`escolha-rapida ${l.pendenteAMais ? "pendente" : ""}`} role="group" aria-label={`Horas a mais de ${l.recurso}`} style={{ marginTop: 6 }}>
+                <SeletoresParte parte={escolha} centros={centros} equipes={equipes} indice={0} onMudar={onEscolher} mes={mes} />
+              </div>
+              {onDividir && (
+                <button type="button" className="link-botao" style={{ fontSize: 12, marginTop: 6 }} onClick={onDividir}>
+                  Dividir as horas a mais em vários CCs/ODIs
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="caixa-horas-a-mais">
+              <b className="texto-alerta" style={{ fontSize: 13 }}>
+                {formatarNumero(l.horasAMenos, l.horasAMenos % 1 ? 2 : 0)} h a menos que o padrão
+              </b>
+              <div style={{ fontSize: 12, color: "var(--color-gray)", marginTop: 2 }}>
+                Por enquanto ficou proporcional.{" "}
+                {onDividir && (
+                  <button type="button" className="link-botao" style={{ fontSize: 12 }} onClick={onDividir}>
+                    Ajustar a divisão
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </td>
         {acao}

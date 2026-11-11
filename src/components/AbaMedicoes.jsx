@@ -34,7 +34,7 @@ import {
   watchMedicoes,
   watchRecursos,
 } from "../lib/medicoesContrato";
-import { CabecalhoPartes, parteComCodigo, porIdDe, SeletoresParte } from "./EditorDivisao";
+import { CabecalhoPartes, EscolhaModoAlocacao, parteComCodigo, partesDaAlocacao, partesParaEditar, porIdDe, SeletoresParte } from "./EditorDivisao";
 import { useCentrosDisponiveis } from "../hooks/useCentrosDisponiveis";
 
 export function CentroTag({ tipo, codigo }) {
@@ -72,7 +72,8 @@ function Partes({ partes, centrosPorId, equipesPorId = {}, empilhar = true }) {
         return (
           <span key={i}>
             <span style={{ whiteSpace: "nowrap" }}>
-              <CentroTag tipo={c?.tipo} codigo={c?.codigo || "(sem código)"} /> <span style={{ color: "var(--color-gray)", fontSize: 12 }}>{formatarNumero(p.pct, p.pct % 1 ? 2 : 0)}%</span>
+              <CentroTag tipo={c?.tipo} codigo={c?.codigo || "(sem código)"} />{" "}
+              <span style={{ color: "var(--color-gray)", fontSize: 12 }}>{p.horasFixas != null ? `${formatarNumero(p.horasFixas, p.horasFixas % 1 ? 2 : 0)} h` : `${formatarNumero(p.pct, p.pct % 1 ? 2 : 0)}%`}</span>
             </span>
             <EquipeFrente {...nomesEquipeFrente(p, equipesPorId)} />
           </span>
@@ -543,16 +544,15 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
   const [perfil, setPerfil] = useState(recurso?.perfil || "");
   const [valorHH, setValorHH] = useState(recurso?.valorHH != null ? formatarNumero(recurso.valorHH) : "");
   const [desde, setDesde] = useState(mesInicial);
-  const [partes, setPartes] = useState(() => {
-    const a = recurso ? alocacaoNoMes(recurso, mesInicial) : null;
-    return a ? a.partes.map((p) => ({ equipeId: "", frenteId: "", ...p })) : [{ centroId: "", equipeId: "", frenteId: "", pct: 100 }];
-  });
+  const alocAtual = recurso ? alocacaoNoMes(recurso, mesInicial) : null;
+  const [modo, setModo] = useState(alocAtual?.modo === "horas" ? "horas" : "pct");
+  const [partes, setPartes] = useState(() => partesParaEditar(alocAtual?.fora ? null : alocAtual));
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const historico = recurso ? historicoDeAlocacoes(recurso) : [];
   const centrosPorId = porIdDe(centros);
   const equipesPorId = Object.fromEntries(equipes.map((e) => [e.id, e]));
-  const soma = somaPct(partes.filter((p) => p.centroId));
+  const soma = modo === "horas" ? Math.round(partes.filter((p) => p.centroId).reduce((s2, p) => s2 + (lerNumero(p.horas) || 0), 0) * 100) / 100 : somaPct(partes.filter((p) => p.centroId));
   const primeiroNome = (nome || "").trim().split(" ")[0];
 
   function mudarParte(i, mudanca) {
@@ -565,11 +565,13 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
     if (!nome.trim()) return setErro("Escreva o nome do recurso.");
     const repetido = recursos.find((r) => r.id !== recurso?.id && normalizarNome(r.nome) === normalizarNome(nome));
     if (repetido) return setErro(`Já existe um recurso chamado “${repetido.nome}” neste contrato.`);
-    const validas = partes.filter((p) => p.centroId || p.codigo).map((p) => parteComCodigo(p, centros, { pct: Number(String(p.pct).replace(",", ".")) || 0 })).filter(Boolean);
-    if (validas.length && Math.abs(somaPct(validas) - 100) > 0.001) return setErro("A soma dos percentuais precisa dar 100%.");
+    const comCentro = partes.filter((p) => p.centroId || p.codigo);
+    if (modo === "horas" && comCentro.some((p) => !(lerNumero(p.horas) > 0))) return setErro("Cada CC/ODI precisa de horas maiores que zero.");
+    const validas = partesDaAlocacao(comCentro, modo, centros).filter(Boolean);
+    if (modo !== "horas" && validas.length && Math.abs(somaPct(validas) - 100) > 0.001) return setErro("A soma dos percentuais precisa dar 100%.");
     const ids = validas.map((p) => `${p.centroId}|${p.equipeId || ""}|${p.frenteId || ""}`);
     if (new Set(ids).size !== ids.length) return setErro("A mesma combinação de CC/ODI, equipe e frente aparece duas vezes.");
-    const alocacoes = validas.length ? definirAlocacao(recurso, desde, validas) : recurso?.alocacoes || [];
+    const alocacoes = validas.length ? definirAlocacao(recurso, desde, validas, modo) : recurso?.alocacoes || [];
     setSalvando(true);
     try {
       await salvarRecurso(contratoId, recurso?.id, { nome, perfil, valorHH: lerNumero(valorHH), alocacoes });
@@ -646,14 +648,25 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
               Os meses anteriores continuam com a alocação antiga.
             </div>
           </div>
-          <span style={{ ...rotulo, marginTop: 14 }}>Para onde vai</span>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <CabecalhoPartes classe="com-equipe" />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+            <span style={{ ...rotulo, margin: 0 }}>Para onde vai</span>
+            <EscolhaModoAlocacao modo={modo} onTrocar={setModo} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+            <CabecalhoPartes classe="com-equipe" ultima={modo === "horas" ? "Horas no mês" : "%"} />
             {partes.map((p, i) => (
               <div key={i} className="linha-partes com-equipe">
                 <SeletoresParte parte={p} centros={centros} equipes={equipes} indice={i} onMudar={(m) => mudarParte(i, m)} mes={desde} />
                 <label style={{ display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
-                  <input value={p.pct} onChange={(e) => mudarParte(i, { pct: e.target.value })} inputMode="decimal" aria-label={`Percentual ${i + 1}`} style={{ width: 64 }} />%
+                  {modo === "horas" ? (
+                    <>
+                      <input value={p.horas ?? ""} onChange={(e) => mudarParte(i, { horas: e.target.value })} inputMode="decimal" aria-label={`Horas ${i + 1}`} style={{ width: 64 }} />h
+                    </>
+                  ) : (
+                    <>
+                      <input value={p.pct} onChange={(e) => mudarParte(i, { pct: e.target.value })} inputMode="decimal" aria-label={`Percentual ${i + 1}`} style={{ width: 64 }} />%
+                    </>
+                  )}
                 </label>
                 <button type="button" className="btn btn-ghost" style={{ padding: 0, width: 40 }} aria-label={`Remover parte ${i + 1}`} onClick={() => setPartes(partes.filter((_, j) => j !== i))} disabled={partes.length === 1}>
                   ×
@@ -667,15 +680,24 @@ function EditorRecurso({ contratoId, recurso, recursos, centros, equipes, mesIni
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 8 }}>
             <button
               type="button"
-              onClick={() => setPartes([...partes, { centroId: "", equipeId: "", frenteId: "", pct: Math.max(0, Math.round((100 - soma) * 100) / 100) }])}
+              onClick={() => setPartes([...partes, { centroId: "", equipeId: "", frenteId: "", horas: "", pct: modo === "horas" ? "" : formatarNumero(Math.max(0, Math.round((100 - soma) * 100) / 100), (100 - soma) % 1 ? 2 : 0) }])}
               style={{ background: "none", border: "1px dashed var(--color-gray-light)", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, color: "var(--color-primary)", minHeight: 36 }}
             >
               + Dividir com outro CC/ODI
             </button>
-            <span style={{ fontSize: 12, fontWeight: 600, color: Math.abs(soma - 100) < 0.001 ? "var(--color-primary-dark)" : "var(--color-orange)" }}>
-              Soma: {formatarNumero(soma, 0)}%{Math.abs(soma - 100) < 0.001 ? " ✓" : ""}
-            </span>
+            {modo === "horas" ? (
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-primary-dark)" }}>{formatarNumero(soma, soma % 1 ? 2 : 0)} h por mês no padrão</span>
+            ) : (
+              <span style={{ fontSize: 12, fontWeight: 600, color: Math.abs(soma - 100) < 0.001 ? "var(--color-primary-dark)" : "var(--color-orange)" }}>
+                Soma: {formatarNumero(soma, soma % 1 ? 2 : 0)}%{Math.abs(soma - 100) < 0.001 ? " ✓" : ""}
+              </span>
+            )}
           </div>
+          {modo === "horas" && (
+            <div className="texto-ajuda">
+              Na medição: vindo exatamente essas horas, cada CC/ODI fica com as suas. Vindo mais, as horas do padrão vão como estão e o que passar fica para você decidir (um ou vários CCs/ODIs). Vindo menos, a linha pede para você ajustar a divisão.
+            </div>
+          )}
         </>
       )}
 
