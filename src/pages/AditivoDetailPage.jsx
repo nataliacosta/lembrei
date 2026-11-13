@@ -9,6 +9,8 @@ import { formatarData } from "../lib/datas";
 import { finalizarAditivo, watchAditivo, watchContrato } from "../lib/contratos";
 import { watchItensDoContrato } from "../lib/firestore";
 import ItensDoContrato from "../components/ItensDoContrato";
+import Documentos from "../components/Documentos";
+import { watchDocumentos } from "../lib/documentos";
 
 export default function AditivoDetailPage() {
   const { contratoId, aditivoId } = useParams();
@@ -29,6 +31,8 @@ export default function AditivoDetailPage() {
   const membros = useUsuarios(contrato?.membrosUids || []);
   const [itens, setItens] = useState([]);
   useEffect(() => watchItensDoContrato(contratoId, (todos) => setItens(todos.filter((i) => i.aditivoId === aditivoId))), [contratoId, aditivoId]);
+  const [documentos, setDocumentos] = useState([]);
+  useEffect(() => watchDocumentos(contratoId, (todos) => setDocumentos(todos.filter((d) => d.aditivoId === aditivoId))), [contratoId, aditivoId]);
 
   if (contrato === undefined || aditivo === undefined) return <div className="spinner-wrap">Carregando...</div>;
   if (!contrato || !aditivo) return <div className="spinner-wrap">Aditivo não encontrado.</div>;
@@ -88,6 +92,18 @@ export default function AditivoDetailPage() {
         )}
 
         <div style={{ marginTop: 28 }}>
+          <Documentos
+            contratoId={contratoId}
+            aditivoId={aditivoId}
+            documentos={documentos}
+            podeEditar={podeEditar}
+            titulo="Documentos do aditivo"
+            nomeZip={`Aditivo ${(aditivo.tipo || []).join(", ")} - ${contrato.titulo || "contrato"}`}
+            Cabecalho={CabecalhoSecao}
+          />
+        </div>
+
+        <div style={{ marginTop: 28 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <SectionTitle>Itens do aditivo · {itens.length}</SectionTitle>
             {podeEditar && (
@@ -127,6 +143,15 @@ function SectionTitle({ children }) {
   return (
     <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-gray)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>
       {children}
+    </div>
+  );
+}
+
+function CabecalhoSecao({ titulo, acao }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-gray)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{titulo}</div>
+      {acao}
     </div>
   );
 }

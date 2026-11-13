@@ -158,6 +158,25 @@ service cloud.firestore {
         }
       }
 
+      // Documentos (minuta, anexos, arquivos do aditivo). O arquivo fica no
+      // Storage (ver storage.rules); aqui ficam nome, tamanho e quem enviou.
+      match /documentos/{documentoId} {
+        allow read: if ehMembroContrato(contratoId);
+        allow create: if podeEditarContrato(contratoId)
+          && request.resource.data.keys().hasOnly(['nome', 'tamanho', 'tipo', 'caminho', 'aditivoId', 'enviadoPor', 'enviadoPorNome', 'enviadoEm'])
+          && request.resource.data.nome is string
+          && request.resource.data.nome.size() > 0
+          && request.resource.data.nome.size() <= 200
+          && request.resource.data.tamanho is int
+          && request.resource.data.tamanho <= 26214400
+          && request.resource.data.caminho is string
+          && request.resource.data.caminho.matches('^contratos/' + contratoId + '/documentos/' + documentoId + '/[^/]+$')
+          && (request.resource.data.aditivoId == null || request.resource.data.aditivoId is string)
+          && request.resource.data.enviadoPor == request.auth.uid
+          && request.resource.data.enviadoEm == request.time;
+        allow delete: if podeEditarContrato(contratoId);
+      }
+
       match /cancelamentos/{cancelamentoId} {
         allow read: if ehMembroContrato(contratoId);
         allow create, update, delete: if podeEditarContrato(contratoId);

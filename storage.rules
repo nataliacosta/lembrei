@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Arquivos dos contratos: só quem participa do contrato baixa; só quem pode
+// editar envia ou apaga. Tudo o mais fica fechado.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /contratos/{contratoId}/documentos/{documentoId}/{nome} {
+      function contrato() {
+        return firestore.get(/databases/(default)/documents/contratos/$(contratoId)).data;
+      }
+      function podeEditar() {
+        return request.auth != null && contrato().membros.get(request.auth.uid, '') in ['proprietario', 'editor'];
+      }
+      allow read: if request.auth != null && request.auth.uid in contrato().membrosUids;
+      allow create: if podeEditar() && request.resource.size <= 25 * 1024 * 1024;
+      allow delete: if podeEditar();
+    }
+  }
+}
