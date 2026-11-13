@@ -16,6 +16,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { excluirArquivosDoContrato } from "./documentos";
 import { avisarConviteResgatado, proprietarioDe } from "./notificacoes";
 
 function contratosRef() {
@@ -77,7 +78,8 @@ export async function atualizarContrato(contratoId, dados) {
 }
 
 export async function excluirContrato(contratoId) {
-  const subcolecoes = ["aditivos", "cancelamentos", "centros", "equipes", "recursos", "medicoes"];
+  await excluirArquivosDoContrato(contratoId);
+  const subcolecoes = ["aditivos", "cancelamentos", "centros", "equipes", "recursos", "medicoes", "documentos"];
   const snaps = await Promise.all(subcolecoes.map((s) => getDocs(collection(db, "contratos", contratoId, s))));
   // Em lotes de até 450 (o limite do Firestore é 500 por lote).
   const refs = snaps.flatMap((snap) => snap.docs.map((d) => d.ref));

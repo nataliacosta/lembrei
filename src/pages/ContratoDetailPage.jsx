@@ -7,6 +7,8 @@ import { BotaoVoltar } from "../contexts/HistoricoContext";
 
 import { useUsuarios } from "../hooks/useUsuarios";
 import ItensDoContrato from "../components/ItensDoContrato";
+import Documentos from "../components/Documentos";
+import { watchDocumentos } from "../lib/documentos";
 import AbaMedicoes from "../components/AbaMedicoes";
 import { AbasContrato } from "../components/CabecalhoContrato";
 import { useDados } from "../contexts/DadosContext";
@@ -51,6 +53,8 @@ export default function ContratoDetailPage({ aba = "resumo" }) {
   }, [contratoId]);
 
   useEffect(() => watchItensDoContrato(contratoId, setItensVinculados), [contratoId]);
+  const [documentos, setDocumentos] = useState([]);
+  useEffect(() => watchDocumentos(contratoId, setDocumentos), [contratoId]);
 
   const membros = useUsuarios(contrato?.membrosUids || []);
   const { ehSoMedicao } = useDados();
@@ -235,6 +239,10 @@ export default function ContratoDetailPage({ aba = "resumo" }) {
                           const abertos = itensVinculados.filter((i) => i.aditivoId === a.id && !i.concluido).length;
                           return abertos ? ` · ${abertos} ${abertos === 1 ? "item aberto" : "itens abertos"}` : "";
                         })()}
+                        {(() => {
+                          const n = documentos.filter((d) => d.aditivoId === a.id).length;
+                          return n ? ` · ${n} ${n === 1 ? "documento" : "documentos"}` : "";
+                        })()}
                         {a.motivo && ` · ${a.motivo}`}
                       </div>
                     </div>
@@ -253,6 +261,14 @@ export default function ContratoDetailPage({ aba = "resumo" }) {
               </div>
             </>
           )}
+
+          <Documentos
+            contratoId={contratoId}
+            documentos={documentos.filter((d) => !d.aditivoId)}
+            podeEditar={podeEditar}
+            nomeZip={`Documentos - ${contrato.titulo || "contrato"}`}
+            Cabecalho={SecaoCabecalho}
+          />
 
           <SecaoCabecalho
             titulo={`Itens · ${itensVinculados.length}`}
